@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord — Christian Media House & Historical Archive</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar {
+            position: relative;
+        }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Header / Navigation -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="#" class="flex items-center space-x-3 group">
+                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <span class="font-bold text-xl tracking-tighter">Ac</span>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Official Archive & Library</p>
+                </div>
+            </a>
+
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center space-x-8">
+                <a href="#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
+                <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
+                <a href="#submit" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</a>
+                <button onclick="openBookmarksModal()" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors">
+                    <i class="fa-solid fa-bookmark text-lg"></i>
+                    <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                </button>
+            </nav>
+
+            <!-- CTA Button -->
+            <div class="flex items-center space-x-3">
+                <a href="#library" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all transform active:scale-95">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>Explore Books</span>
+                </a>
+                <!-- Mobile menu toggle -->
+                <button onclick="toggleMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Dropdown -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
+            <a href="#library" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
+            <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
+            <a href="#submit" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Contribute Archive</a>
+            <button onclick="openBookmarksModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
+                <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow">
+
+        <!-- Hero Section -->
+        <section class="relative overflow-hidden bg-gradient-to-b from-blue-50/50 via-white to-accord-bg py-16 lg:py-24 border-b border-slate-200/60">
+            <div class="absolute -top-24 -right-24 w-96 h-96 bg-accord-blue/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-accord-gold/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                    
+                    <!-- Hero Left Content -->
+                    <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
+                        <div class="inline-flex items-center space-x-2 bg-accord-lightBlue text-accord-blue px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider border border-blue-200">
+                            <i class="fa-solid fa-feather-pointed"></i>
+                            <span>Christian Media & Historical Archive</span>
+                        </div>
+                        
+                        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-accord-slate leading-[1.15]">
+                            Collecting History in <span class="text-accord-blue relative inline-block">Connection to God<span class="absolute bottom-1 left-0 w-full h-2 bg-accord-gold/30 -z-10 rounded"></span></span>
+                        </h1>
+                        
+                        <p class="text-lg sm:text-xl text-accord-muted max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
+                            Welcome to <strong>Accord</strong>. We archive, organize, and freely disseminate foundational stories, church histories, biographies of men of God, and chronicles shaping nations and world leaders.
+                        </p>
+
+                        <!-- Hero Action Buttons -->
+                        <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
+                            <a href="#library" class="w-full sm:w-auto inline-flex items-center justify-center space-x-3 bg-accord-blue hover:bg-accord-darkBlue text-white font-semibold px-8 py-4 rounded-2xl shadow-xl shadow-blue-500/25 transition-all transform hover:-translate-y-0.5">
+                                <i class="fa-solid fa-download text-accord-gold"></i>
+                                <span>Browse Free Archives</span>
+                            </a>
+                            <a href="#submit" class="w-full sm:w-auto inline-flex items-center justify-center space-x-3 bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-semibold px-8 py-4 rounded-2xl shadow-sm transition-all">
+                                <i class="fa-solid fa-file-arrow-up text-accord-blue"></i>
+                                <span>Submit Manuscript</span>
+                            </a>
+                        </div>
+
+                        <!-- Stats Banner -->
+                        <div class="grid grid-cols-3 gap-4 pt-8 border-t border-slate-200/80 max-w-lg mx-auto lg:mx-0">
+                            <div>
+                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">120+</p>
+                                <p class="text-xs text-accord-muted font-medium">Archived Books</p>
+                            </div>
+                            <div>
+                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">45k</p>
+                                <p class="text-xs text-accord-muted font-medium">Global Readers</p>
+                            </div>
+                            <div>
+                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">4</p>
+                                <p class="text-xs text-accord-muted font-medium">Core Categories</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hero Right Featured Book Showcase -->
+                    <div class="lg:col-span-5 flex justify-center">
+                        <div class="relative w-full max-w-sm">
+                            <!-- Glow Behind Card -->
+                            <div class="absolute inset-0 bg-gradient-to-tr from-accord-blue to-accord-gold rounded-3xl blur-2xl opacity-20 transform rotate-3"></div>
+                            
+                            <!-- Featured Book Card -->
+                            <div class="relative bg-white border border-slate-200/80 rounded-3xl p-6 shadow-2xl space-y-6">
+                                <div class="flex items-center justify-between">
+                                    <span class="bg-accord-goldLight text-accord-gold font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider flex items-center space-x-1">
+                                        <i class="fa-solid fa-star text-[10px]"></i>
+                                        <span>Featured Archive</span>
+                                    </span>
+                                    <span class="text-xs font-semibold text-accord-muted">Pub. 1954</span>
+                               </div>
+
+                               <!-- Book Cover Mockup -->
+                               <div class="h-64 rounded-2xl bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 p-6 flex flex-col justify-between text-white shadow-inner relative overflow-hidden group">
+                                    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                                    <div class="absolute top-0 right-0 w-32 h-32 bg-accord-gold/20 rounded-full blur-xl"></div>
+                                    
+                                    <div class="relative z-10">
+                                        <p class="text-[10px] uppercase tracking-widest text-accord-gold font-bold">Accord Historical Press</p>
+                                        <h3 class="serif-heading text-xl font-bold mt-1 leading-snug">The Great Welsh Revival & Beyond</h3>
+                                    </div>
+                                    
+                                    <div class="relative z-10 flex items-end justify-between">
+                                        <div>
+                                            <p class="text-xs text-slate-300">By Dr. Arthur Roberts</p>
+                                            <p class="text-[11px] text-accord-blue bg-white/90 px-2 py-0.5 rounded font-bold inline-block mt-1">Church History</p>
+                                        </div>
+                                        <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-white">
+                                            <i class="fa-solid fa-book-bookmark"></i>
+                                        </div>
+                                    </div>
+                               </div>
+
+                               <div class="space-y-2">
+                                    <h4 class="font-bold text-accord-slate text-base">The Fires of 1904: Eyewitness Accounts</h4>
+                                    <p class="text-xs text-accord-muted line-clamp-2">An exhaustive collection of original diary entries, newspaper cuttings, and theological letters documenting the spiritual awakening across Wales.</p>
+                               </div>
+
+                               <div class="flex items-center space-x-3 pt-2">
+                                    <button onclick="triggerSimulatedDownload()" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-2">
+                                        <i class="fa-solid fa-download"></i>
+                                        <span>Download</span>
+                                    </button>
+                                    <button onclick="toggleBookmark(this, 'The Great Welsh Revival & Beyond')" class="p-3 border border-slate-200 hover:border-accord-blue text-accord-slate hover:text-accord-blue rounded-xl transition-all">
+                                        <i class="fa-regular fa-bookmark"></i>
+                                    </button>
+                               </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Library Section & Search Filter -->
+        <section id="library" class="py-16 lg:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-accord-blue">Curated Catalog</span>
+                    <h2 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate mt-1">Explore Historical Publications</h2>
+                </div>
+                <p class="text-sm text-accord-muted mt-2 md:mt-0 max-w-md">
+                    All manuscripts, books, and historical journals on Accord are open-access and free to read or download for spiritual edification and research.
+                </p>
+            </div>
+
+            <!-- Search and Filter Bar -->
+            <div class="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm mb-10 space-y-4">
+                <div class="flex flex-col lg:flex-row items-center gap-4">
+                    <!-- Search Input -->
+                    <div class="relative flex-1 w-full">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-accord-muted"></i>
+                        <input type="text" id="search-input" oninput="filterBooks()" placeholder="Search by title, author, or keyword (e.g., Revival, Leaders, Scotland)..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white transition-all">
+                    </div>
+
+                    <!-- Category Selector Dropdown for Mobile -->
+                    <div class="w-full lg:w-auto flex items-center space-x-2 overflow-x-auto pb-2 lg:pb-0">
+                        <button onclick="setCategory('All')" id="cat-btn-All" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-md shadow-blue-500/20">All Archives</button>
+                        <button onclick="setCategory('Church History')" id="cat-btn-Church History" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Church History</button>
+                        <button onclick="setCategory('Biographies')" id="cat-btn-Biographies" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Biographies</button>
+                        <button onclick="setCategory('Nations & Leadership')" id="cat-btn-Nations & Leadership" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Nations & Leadership</button>
+                        <button onclick="setCategory('Christian Chronicles')" id="cat-btn-Christian Chronicles" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Chronicles</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Book Grid -->
+            <div id="books-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Books injected dynamically via JS -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden text-center py-16">
+                <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-accord-blue text-2xl mb-4">
+                    <i class="fa-solid fa-book-tanakh"></i>
+                </div>
+                <h3 class="text-lg font-bold text-accord-slate">No historical documents found</h3>
+                <p class="text-sm text-accord-muted mt-1">Try adjusting your search query or selecting a different category filter.</p>
+                <button onclick="resetFilters()" class="mt-4 bg-accord-blue text-white text-xs font-bold px-5 py-2.5 rounded-xl">Reset Filters</button>
+            </div>
+        </section>
+
+        <!-- Mission Statement Section -->
+        <section id="mission" class="bg-slate-900 text-white py-20 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#F5A623_1px,transparent_1px)] [background-size:24px_24px]"></div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="max-w-3xl mx-auto text-center space-y-6">
+                    <span class="bg-accord-blue/30 text-accord-lightBlue font-bold text-xs px-4 py-1.5 rounded-full uppercase tracking-widest border border-blue-500/30">
+                        The Accord Vision
+                    </span>
+                    <h2 class="serif-heading text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
+                        Preserving the Footsteps of God in Human History
+                    </h2>
+                    <p class="text-slate-300 text-base sm:text-lg leading-relaxed">
+                        History is not merely a sequence of political epochs; it is the arena where divine providence intersects with human agency. Accord was founded with a singular mandate: to collect, meticulously organize, and freely disseminate the documented accounts of churches, spiritual awakenings, exemplary men and women of God, and the destinies of nations.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8 text-left">
+                        <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700">
+                            <div class="w-10 h-10 rounded-xl bg-accord-blue/20 text-accord-blue flex items-center justify-center mb-4 text-lg">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-base">Uncompromising Accuracy</h3>
+                            <p class="text-xs text-slate-400 mt-2">Rigorous fact-checking and primary source authentication for every manuscript published.</p>
+                        </div>
+                        <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700">
+                            <div class="w-10 h-10 rounded-xl bg-accord-gold/20 text-accord-gold flex items-center justify-center mb-4 text-lg">
+                                <i class="fa-solid fa-globe"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-base">Global Dissemination</h3>
+                            <p class="text-xs text-slate-400 mt-2">Open access model ensuring researchers and believers worldwide can read without barriers.</p>
+                        </div>
+                        <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 text-lg">
+                                <i class="fa-solid fa-book-bible"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-base">Generational Legacy</h3>
+                            <p class="text-xs text-slate-400 mt-2">Equipping future leaders with the wisdom and testimonies of past spiritual giants.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Archive Contribution Form Section -->
+        <section id="submit" class="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-64 h-64 bg-accord-gold/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="text-center max-w-xl mx-auto mb-10">
+                    <span class="bg-accord-goldLight text-accord-gold font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider">Community Archives</span>
+                    <h2 class="serif-heading text-3xl font-bold text-accord-slate mt-2">Submit a Historical Manuscript</h2>
+                    <p class="text-sm text-accord-muted mt-2">
+                        Do you possess historical church records, missionary journals, biographies, or national chronicles that deserve preservation? Submit them for editorial review.
+                    </p>
+                </div>
+
+                <form id="contribution-form" onsubmit="handleFormSubmit(event)" class="space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-2">Your Full Name</label>
+                            <input type="text" id="sub-name" required placeholder="e.g., Dr. Samuel Vance" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-2">Email Address</label>
+                            <input type="email" id="sub-email" required placeholder="samuel@accordarchive.org" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-2">Document / Book Title</label>
+                            <input type="text" id="sub-title" required placeholder="e.g., The East African Revival Diaries" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-2">Archive Category</label>
+                            <select id="sub-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                                <option>Church History</option>
+                                <option>Biographies</option>
+                                <option>Nations & Leadership</option>
+                                <option>Christian Chronicles</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-2">Historical Summary & Provenance</label>
+                        <textarea id="sub-desc" rows="4" required placeholder="Provide background on the origin of the document, author, dates, and historical significance..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Submit for Editorial Review</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold">Ac</div>
+                <div>
+                    <span class="font-extrabold text-accord-slate tracking-tight">Accord</span>
+                    <p class="text-xs text-accord-muted">© 2026 Accord Media House. All rights reserved.</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
+                <a href="#library" class="hover:text-accord-blue transition-colors">Library</a>
+                <a href="#mission" class="hover:text-accord-blue transition-colors">Mission</a>
+                <a href="#submit" class="hover:text-accord-blue transition-colors">Submit Manuscript</a>
+                <a href="#" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <a href="#" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-accord-blue flex items-center justify-center text-slate-600 transition-colors"><i class="fa-brands fa-youtube"></i></a>
+                <a href="#" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-accord-blue flex items-center justify-center text-slate-600 transition-colors"><i class="fa-brands fa-twitter"></i></a>
+                <a href="#" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-50 hover:text-accord-blue flex items-center justify-center text-slate-600 transition-colors"><i class="fa-brands fa-spotify"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Saved Bookmarks Drawer Modal -->
+    <div id="bookmarks-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4 sm:p-6">
+        <div class="bg-white rounded-3xl max-w-lg w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 class="font-bold text-accord-slate text-lg flex items-center space-x-2">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved Reading List</span>
+                </h3>
+                <button onclick="closeBookmarksModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="bookmarks-list" class="p-6 overflow-y-auto space-y-4 flex-grow">
+                <!-- Bookmarks injected here -->
+            </div>
+            <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 text-center">
+                <button onclick="closeBookmarksModal()" class="w-full bg-accord-slate text-white text-xs font-bold py-3 rounded-xl">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script src="index.js"></script>
+    
+</body>
+</html>

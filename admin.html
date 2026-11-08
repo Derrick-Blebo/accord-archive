@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Admin Dashboard — Library & Archive Management</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar {
+            position: relative;
+        }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Are you sure?</h3>
+            <p id="confirm-text" class="text-xs text-accord-muted">This action cannot be undone. The document will be permanently deleted from the Accord archive.</p>
+            <div class="flex items-center space-x-3 pt-2">
+                <button onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                <button id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Delete Archive</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header / Admin Navigation -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="#" class="flex items-center space-x-3 group">
+                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <span class="font-bold text-xl tracking-tighter">Ac</span>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Admin Control Center</p>
+                </div>
+            </a>
+
+            <!-- Navigation Tabs -->
+            <nav class="hidden md:flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl">
+                <button onclick="switchTab('catalog')" id="nav-tab-catalog" class="px-5 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
+                    <i class="fa-solid fa-book-bookmark mr-1.5"></i> Archive Catalog
+                </button>
+                <button onclick="switchTab('submissions')" id="nav-tab-submissions" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                    <i class="fa-solid fa-inbox mr-1.5"></i> Pending Submissions <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">2</span>
+                </button>
+            </nav>
+
+            <!-- Admin Profile / Actions -->
+            <div class="flex items-center space-x-3">
+                <button onclick="openArchiveModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add New Archive</span>
+                </button>
+                <div class="hidden sm:flex items-center space-x-2 pl-3 border-l border-slate-200">
+                    <div class="w-9 h-9 rounded-full bg-accord-goldLight text-accord-gold font-bold flex items-center justify-center border border-amber-200">AD</div>
+                    <div class="text-left">
+                        <p class="text-xs font-bold text-accord-slate">Archivist Admin</p>
+                        <p class="text-[10px] text-accord-muted">Superuser</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Admin Dashboard Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
+
+        <!-- Summary Statistics Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-book-tanakh"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Archives</p>
+                    <h3 id="stat-total" class="text-2xl font-extrabold text-accord-slate mt-0.5">6</h3>
+                    <p class="text-[11px] text-emerald-600 font-semibold mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> +12% this month</p>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-inbox"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Pending Reviews</p>
+                    <h3 id="stat-pending" class="text-2xl font-extrabold text-accord-slate mt-0.5">2</h3>
+                    <p class="text-[11px] text-amber-600 font-semibold mt-0.5">Requires editorial attention</p>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-download"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
+                    <h3 class="text-2xl font-extrabold text-accord-slate mt-0.5">45,820</h3>
+                    <p class="text-[11px] text-purple-600 font-semibold mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> Global readership</p>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">System Security</p>
+                    <h3 class="text-2xl font-extrabold text-accord-slate mt-0.5">Secure</h3>
+                    <p class="text-[11px] text-emerald-600 font-semibold mt-0.5">Backup active (2h ago)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 1: Archive Catalog Management Section -->
+        <section id="section-catalog" class="space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Archive Catalog Management</h2>
+                    <p class="text-xs text-accord-muted mt-1">View, edit, or delete existing publications in the Accord digital library.</p>
+                </div>
+
+                <!-- Search & Filter Controls -->
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
+                        <input type="text" id="admin-search" oninput="filterAdminBooks()" placeholder="Search catalog..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-60">
+                    </div>
+                    <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue">
+                        <option value="All">All Categories</option>
+                        <option value="Church History">Church History</option>
+                        <option value="Biographies">Biographies</option>
+                        <option value="Nations & Leadership">Nations & Leadership</option>
+                        <option value="Christian Chronicles">Christian Chronicles</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                <th class="py-4 px-6">Book / Archive Title</th>
+                                <th class="py-4 px-6">Author</th>
+                                <th class="py-4 px-6">Category</th>
+                                <th class="py-4 px-6 text-center">Pub. Year</th>
+                                <th class="py-4 px-6 text-center">Pages</th>
+                                <th class="py-4 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-book-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Pending Submissions Management Section -->
+        <section id="section-submissions" class="space-y-6 hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Submitted Manuscripts & Archives</h2>
+                    <p class="text-xs text-accord-muted mt-1">Review user-submitted historical records and approve them to add directly to the catalog.</p>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                <th class="py-4 px-6">Submitter</th>
+                                <th class="py-4 px-6">Proposed Title</th>
+                                <th class="py-4 px-6">Category</th>
+                                <th class="py-4 px-6">Summary / Provenance</th>
+                                <th class="py-4 px-6 text-right">Editorial Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="submissions-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Admin Center</span>
+                <span>• Secure CMS v2.4</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Add / Edit Archive Modal Form -->
+    <div id="archive-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden my-8 transform scale-95 transition-transform duration-300" id="archive-modal-box">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 id="modal-heading" class="font-bold text-accord-slate text-base">Add New Archive Item</h3>
+                <button onclick="closeArchiveModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="archive-form" onsubmit="handleArchiveSubmit(event)" class="p-6 sm:p-8 space-y-4">
+                <input type="hidden" id="edit-book-id">
+                
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Document / Book Title</label>
+                    <input type="text" id="form-title" required placeholder="e.g., The Great Welsh Revival & Beyond" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Author / Source</label>
+                        <input type="text" id="form-author" required placeholder="e.g., Dr. Arthur Roberts" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category</label>
+                        <select id="form-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                            <option>Church History</option>
+                            <option>Biographies</option>
+                            <option>Nations & Leadership</option>
+                            <option>Christian Chronicles</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Publication Year</label>
+                        <input type="text" id="form-year" required placeholder="e.g., 1954" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    
+                    <!-- DOWNLOAD LINK -->
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Download / PDF URL</label>
+                        <input type="url" id="form-download" placeholder="e.g., https://example.com/book.pdf or /assets/books/sample.pdf" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Page Count</label>
+                        <input type="text" id="form-pages" required placeholder="e.g., 342" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Historical Summary & Description</label>
+                    <textarea id="form-description" rows="3" required placeholder="Provide synopsis and provenance..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center space-x-3">
+                    <button type="button" onclick="closeArchiveModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3.5 rounded-xl transition-all">Cancel</button>
+                    <button type="submit" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 rounded-xl shadow-md transition-all">Save Archive</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+   <!-- JavaScript Admin Logic -->
+    <script src="admin.js"></script>
+</body>
+</html>
+</body>
+</html>
