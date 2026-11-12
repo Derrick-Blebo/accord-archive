@@ -37,6 +37,9 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- PDF.js for Automatic Page Counting -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -299,6 +302,23 @@
                     </div>
                     <!-- Hidden input for auto-calculated page count -->
                     <input type="hidden" id="form-pages" value="TBD">
+                </div>
+
+                <!-- 1B. BOOK COVER UPLOAD -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload Book Cover (Optional)</label>
+                    <div class="relative group">
+                        <input type="file" id="form-cover" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div id="cover-upload-ui" class="flex items-center space-x-3 w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-3 text-left group-hover:border-accord-blue group-hover:bg-accord-lightBlue transition-all">
+                            <div id="cover-preview-box" class="w-10 h-14 rounded-lg bg-slate-200 text-accord-slate flex items-center justify-center overflow-hidden shrink-0">
+                                <i class="fa-regular fa-image"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate">Click to select cover image</p>
+                                <p id="cover-name-display" class="text-[10px] text-accord-muted mt-0.5 max-w-[220px] truncate">JPG, PNG, WebP (Auto-optimized)</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 2. DOCUMENT TITLE -->

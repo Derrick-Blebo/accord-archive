@@ -1,30 +1,40 @@
-// Default Initial Data
-const defaultCatalog = [
-    { id: 1, title: "The Great Welsh Revival & Beyond", author: "Dr. Arthur Roberts", category: "Church History", year: "1954", pages: "342", downloadUrl: "", description: "An exhaustive collection of original diary entries, newspaper cuttings, and theological letters documenting the spiritual awakening across Wales.", gradient: "from-blue-900 via-blue-800 to-indigo-950" },
-    { id: 2, title: "Apostle of Faith: The Life of John Wesley", author: "Elizabeth Montgomery", category: "Biographies", year: "1978", pages: "418", downloadUrl: "", description: "Tracing the relentless horseback journeys, diary reflections, and theological footprint of the man who ignited the Methodist movement.", gradient: "from-amber-900 via-amber-800 to-stone-900" }
-];
+// 1. Initialize Supabase
+const SUPABASE_URL = 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP';
+const SUPABASE_ANON_KEY = 'sb_secret_oVLKgMAA9O0vox1K4kvSgA_SkPhzoPT';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const defaultSubmissions = [
-    { id: 101, name: "Dr. Samuel Vance", email: "samuel@accordarchive.org", title: "The East African Revival Diaries", category: "Church History", description: "Unpublished missionary notes and testimonies from East Africa during the mid-20th century awakening." }
-];
-
-// Load State from LocalStorage
-let catalogData = JSON.parse(localStorage.getItem('accord_books')) || defaultCatalog;
-let submissionsData = JSON.parse(localStorage.getItem('accord_submissions')) || defaultSubmissions;
+let catalogData = [];
+let submissionsData = [];
 let deleteTargetId = null;
-
-// Save State to LocalStorage
-function saveState() {
-    localStorage.setItem('accord_books', JSON.stringify(catalogData));
-    localStorage.setItem('accord_submissions', JSON.stringify(submissionsData));
-}
+let currentCompressedCover = "";
 
 // Initialize App
-window.onload = function() {
-    renderCatalogTable(catalogData);
-    renderSubmissionsTable();
-    updateStats();
+window.onload = async function() {
+    await fetchAllData();
 };
+
+async function fetchAllData() {
+    const { data: books, error: booksErr } = await supabaseClient
+        .from('books')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (!booksErr && books) {
+        catalogData = books;
+        renderCatalogTable(catalogData);
+        updateStats();
+    }
+
+    const { data: subs, error: subsErr } = await supabaseClient
+        .from('submissions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (!subsErr && subs) {
+        submissionsData = subs;
+        renderSubmissionsTable();
+    }
+}
 
 // Tab Switching
 function switchTab(tabName) {
@@ -46,7 +56,7 @@ function switchTab(tabName) {
     }
 }
 
-// Render Catalog Table
+// Render Catalog Table with Status Badges, Cover Thumbnails & Reader Button
 function renderCatalogTable(list) {
     const tbody = document.getElementById('admin-book-table-body');
     tbody.innerHTML = '';
@@ -59,16 +69,43 @@ function renderCatalogTable(list) {
     list.forEach(book => {
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+
+        // Status Indicator Badge
+        let statusBadge = '';
+        if (book.status === 'uploading') {
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 mt-0.5"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Uploading to Mega...</span>`;
+        } else if (book.status === 'failed') {
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600 mt-0.5"><i class="fa-solid fa-circle-exclamation mr-1"></i> Upload Failed</span>`;
+        } else if (book.download_url) {
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-600 mt-0.5"><i class="fa-solid fa-circle-check mr-1"></i> Upload Successful</span>`;
+        } else {
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 mt-0.5">No PDF Linked</span>`;
+        }
+
+        // Cover Thumbnail
+        const thumb = book.cover_url
+            ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
+            : `<div class="w-9 h-12 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
+
+        // View / Read PDF Button
+        const viewBtn = book.download_url
+            ? `<a href="${book.download_url}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+            : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
+
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-book"></i></div>
-                <span>${book.title}</span>
+                ${thumb}
+                <div>
+                    <p class="leading-snug">${book.title}</p>
+                    ${statusBadge}
+                </div>
             </td>
             <td class="py-4 px-6 text-accord-muted">${book.author}</td>
-            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-full">${book.category}</span></td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block leading-tight">${book.category}</span></td>
             <td class="py-4 px-6 text-center text-accord-muted">${book.year}</td>
-            <td class="py-4 px-6 text-center text-accord-muted">${book.pages} p.</td>
-            <td class="py-4 px-6 text-right space-x-2">
+            <td class="py-4 px-6 text-center text-accord-muted">${book.pages || 'TBD'} p.</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                ${viewBtn}
                 <button onclick="openArchiveModal('edit', ${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Edit Archive"><i class="fa-solid fa-pen text-xs"></i></button>
                 <button onclick="promptDelete(${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete Archive"><i class="fa-solid fa-trash text-xs"></i></button>
             </td>
@@ -90,49 +127,26 @@ function filterAdminBooks() {
     renderCatalogTable(filtered);
 }
 
-// Render Submissions Table
-function renderSubmissionsTable() {
-    const tbody = document.getElementById('submissions-table-body');
-    tbody.innerHTML = '';
-    document.getElementById('pending-badge').innerText = submissionsData.length;
-    document.getElementById('stat-pending').innerText = submissionsData.length;
-
-    if (submissionsData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No pending manuscript submissions at this time.</td></tr>`;
-        return;
-    }
-
-    submissionsData.forEach(sub => {
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
-        tr.innerHTML = `
-            <td class="py-4 px-6">
-                <p class="font-bold text-accord-slate">${sub.name}</p>
-                <p class="text-[10px] text-accord-muted">${sub.email}</p>
-            </td>
-            <td class="py-4 px-6 font-bold text-accord-slate">${sub.title}</td>
-            <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-full">${sub.category}</span></td>
-            <td class="py-4 px-6 text-accord-muted max-w-xs truncate">${sub.description}</td>
-            <td class="py-4 px-6 text-right space-x-2">
-                <button onclick="approveSubmission(${sub.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
-                <button onclick="rejectSubmission(${sub.id})" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// Modal Controls (Add / Edit)
+// Modal Controls
 function openArchiveModal(mode, id = null) {
     const modal = document.getElementById('archive-modal');
     const heading = document.getElementById('modal-heading');
     document.getElementById('archive-form').reset();
     document.getElementById('edit-book-id').value = '';
+    currentCompressedCover = "";
 
     // Reset Upload UI
     document.getElementById('file-name-display').textContent = "Max size: 50MB";
     document.getElementById('file-name-display').classList.remove('text-accord-blue', 'font-bold');
     document.getElementById('upload-ui').classList.remove('border-accord-blue', 'bg-accord-lightBlue');
+
+    const coverPreview = document.getElementById('cover-preview-box');
+    const coverName = document.getElementById('cover-name-display');
+    if (coverPreview) coverPreview.innerHTML = `<i class="fa-regular fa-image"></i>`;
+    if (coverName) {
+        coverName.textContent = "JPG, PNG, WebP (Auto-optimized)";
+        coverName.classList.remove('text-accord-blue', 'font-bold');
+    }
 
     if (mode === 'edit' && id !== null) {
         heading.innerText = "Edit Archive Item";
@@ -145,6 +159,9 @@ function openArchiveModal(mode, id = null) {
             document.getElementById('form-year').value = book.year;
             document.getElementById('form-pages').value = book.pages;
             document.getElementById('form-description').value = book.description;
+            if (book.cover_url && coverPreview) {
+                coverPreview.innerHTML = `<img src="${book.cover_url}" class="w-full h-full object-cover">`;
+            }
         }
     } else {
         heading.innerText = "Add New Archive Item";
@@ -169,47 +186,14 @@ function closeArchiveModal() {
     }, 200);
 }
 
-// Handle Add / Edit Submission (Upload & Save)
+// Handle Add / Edit Submission with Instant Modal Close & Live Upload Status
 async function handleArchiveSubmit(e) {
     e.preventDefault();
-    
+
     const fileInput = document.getElementById('form-file');
-    let downloadUrl = "";
+    const selectedFile = fileInput && fileInput.files.length > 0 ? fileInput.files[0] : null;
+    const coverToSave = currentCompressedCover;
 
-    // 1. If a file is selected, upload it to Google Drive first
-    if (fileInput && fileInput.files.length > 0) {
-        showToast("Uploading PDF to Google Drive... Please wait.");
-        
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            });
-            
-            // Catch HTTP errors properly
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(errText);
-            }
-
-            const data = await response.json();
-            
-            if (data.downloadUrl) {
-                downloadUrl = data.downloadUrl; // Save the Google Drive link
-            } else if (data.error) {
-                throw new Error(data.error);
-            }
-        } catch (error) {
-            console.error("Upload Error:", error);
-            alert(`Upload failed! Check terminal for details. Reason: ${error.message}`);
-            return; // Stop the save process if upload fails
-        }
-    }
-
-    // 2. Save book details to database (LocalStorage)
     const editId = document.getElementById('edit-book-id').value;
     const title = document.getElementById('form-title').value;
     const author = document.getElementById('form-author').value;
@@ -218,31 +202,80 @@ async function handleArchiveSubmit(e) {
     const pages = document.getElementById('form-pages').value || "TBD";
     const description = document.getElementById('form-description').value;
 
+    // 1. Immediately close modal box
+    closeArchiveModal();
+
+    // 2. Insert temporary row in dashboard showing "Uploading to Mega..."
+    const tempId = Date.now();
+    const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
+    const tempBook = {
+        id: editId ? Number(editId) : tempId,
+        title, author, category, year, pages, description,
+        cover_url: coverToSave || (existingBook ? existingBook.cover_url : ""),
+        download_url: existingBook ? existingBook.download_url : "",
+        status: selectedFile ? 'uploading' : 'complete'
+    };
+
     if (editId) {
-        const index = catalogData.findIndex(b => b.id == editId);
-        if (index > -1) {
-            // Keep old download URL if a new file wasn't uploaded during edit
-            const finalUrl = downloadUrl || catalogData[index].downloadUrl;
-            catalogData[index] = { ...catalogData[index], title, author, category, year, pages, downloadUrl: finalUrl, description };
-            showToast(`Archive "${title}" updated successfully!`);
-        }
+        const idx = catalogData.findIndex(b => b.id == editId);
+        if (idx > -1) catalogData[idx] = tempBook;
     } else {
-        const newBook = {
-            id: Date.now(),
-            title, author, category, year, pages, downloadUrl, description,
-            gradient: "from-blue-900 via-indigo-900 to-slate-900"
-        };
-        catalogData.unshift(newBook);
-        showToast(`New archive "${title}" added successfully!`);
+        catalogData.unshift(tempBook);
+    }
+    renderCatalogTable(catalogData);
+
+    // 3. Upload PDF to Mega if selected
+    let downloadUrl = existingBook ? existingBook.download_url : "";
+    if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+
+            if (data.downloadUrl) {
+                downloadUrl = data.downloadUrl;
+            } else {
+                throw new Error(data.error || 'Mega upload failed');
+            }
+        } catch (error) {
+            console.error("Upload Error:", error);
+            // Mark row status as Failed in dashboard
+            const target = catalogData.find(b => b.id === tempBook.id);
+            if (target) target.status = 'failed';
+            renderCatalogTable(catalogData);
+            showToast(`Upload failed for "${title}".`);
+            return;
+        }
     }
 
-    saveState();
-    closeArchiveModal();
-    renderCatalogTable(catalogData);
-    updateStats();
+    // 4. Save Final Record to Supabase Database
+    const payload = {
+        title, author, category, year, pages,
+        download_url: downloadUrl,
+        cover_url: tempBook.cover_url,
+        description,
+        gradient: existingBook ? existingBook.gradient : "from-blue-900 via-indigo-900 to-slate-900"
+    };
+
+    if (editId) {
+        await supabaseClient.from('books').update(payload).eq('id', editId);
+        showToast(`Archive "${title}" updated!`);
+    } else {
+        await supabaseClient.from('books').insert([payload]);
+        showToast(`Archive "${title}" uploaded & published!`);
+    }
+
+    await fetchAllData();
 }
 
-// Delete Confirmation Workflow
+// Delete Workflow
 function promptDelete(id) {
     deleteTargetId = id;
     const modal = document.getElementById('confirm-modal');
@@ -260,104 +293,146 @@ function closeConfirmModal() {
     deleteTargetId = null;
 }
 
-function executeDelete(id) {
-    catalogData = catalogData.filter(b => b.id !== id);
-    saveState();
+async function executeDelete(id) {
+    await supabaseClient.from('books').delete().eq('id', id);
     closeConfirmModal();
-    renderCatalogTable(catalogData);
-    updateStats();
+    await fetchAllData();
     showToast("Archive deleted from catalog.");
 }
 
-// Submission Approvals
-function approveSubmission(id) {
+// Submissions Workflow
+function renderSubmissionsTable() {
+    const tbody = document.getElementById('submissions-table-body');
+    tbody.innerHTML = '';
+    document.getElementById('pending-badge').innerText = submissionsData.length;
+    document.getElementById('stat-pending').innerText = submissionsData.length;
+
+    if (submissionsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No pending manuscript submissions at this time.</td></tr>`;
+        return;
+    }
+
+    submissionsData.forEach(sub => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${sub.name}</p>
+                <p class="text-[10px] text-accord-muted">${sub.email}</p>
+            </td>
+            <td class="py-4 px-6 font-bold text-accord-slate">${sub.title}</td>
+            <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${sub.category}</span></td>
+            <td class="py-4 px-6 text-accord-muted max-w-xs truncate">${sub.description}</td>
+            <td class="py-4 px-6 text-right space-x-2">
+                <button onclick="approveSubmission(${sub.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
+                <button onclick="rejectSubmission(${sub.id})" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function approveSubmission(id) {
     const sub = submissionsData.find(s => s.id === id);
     if (sub) {
-        const newBook = {
-            id: Date.now(),
+        await supabaseClient.from('books').insert([{
             title: sub.title,
             author: sub.name,
             category: sub.category,
             year: new Date().getFullYear().toString(),
             pages: "TBD",
-            downloadUrl: "",
+            download_url: "",
+            cover_url: "",
             description: sub.description,
             gradient: "from-blue-900 via-blue-800 to-indigo-950"
-        };
-        catalogData.unshift(newBook);
-        submissionsData = submissionsData.filter(s => s.id !== id);
-        saveState();
-        renderCatalogTable(catalogData);
-        renderSubmissionsTable();
-        updateStats();
-        showToast(`Submission "${sub.title}" approved and added to catalog!`);
+        }]);
+        await supabaseClient.from('submissions').delete().eq('id', id);
+        await fetchAllData();
+        showToast(`Submission "${sub.title}" approved!`);
     }
 }
 
-function rejectSubmission(id) {
-    submissionsData = submissionsData.filter(s => s.id !== id);
-    saveState();
-    renderSubmissionsTable();
+async function rejectSubmission(id) {
+    await supabaseClient.from('submissions').delete().eq('id', id);
+    await fetchAllData();
     showToast("Submission rejected and removed.");
 }
 
-// Update Stats Counter
 function updateStats() {
     document.getElementById('stat-total').innerText = catalogData.length;
 }
 
-// Toast Notification Helper
 function showToast(message) {
     const toast = document.getElementById('toast');
     document.getElementById('toast-message').innerText = message;
     toast.classList.remove('translate-y-24', 'opacity-0');
     toast.classList.add('translate-y-0', 'opacity-100');
-
     setTimeout(() => {
         toast.classList.remove('translate-y-0', 'opacity-100');
         toast.classList.add('translate-y-24', 'opacity-0');
     }, 3500);
 }
 
-// Handle File Selection (UI, Title Auto-fill, & Page Counting)
+// PDF File Selection Listener
 document.getElementById('form-file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     const fileNameDisplay = document.getElementById('file-name-display');
     const uploadUi = document.getElementById('upload-ui');
     const titleInput = document.getElementById('form-title');
     const pageInput = document.getElementById('form-pages');
-    
+
     if (file) {
-        // 1. Update Upload UI
         fileNameDisplay.textContent = file.name;
         fileNameDisplay.classList.add('text-accord-blue', 'font-bold');
         uploadUi.classList.add('border-accord-blue', 'bg-accord-lightBlue');
-        
-        // 2. Auto-fill Document Title
+
         if (!titleInput.value) {
-            const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-            titleInput.value = cleanTitle;
+            titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
         }
 
-        // 3. Auto-detect PDF Page Count via pdf.js
         if (file.type === 'application/pdf') {
             const fileReader = new FileReader();
             fileReader.onload = async function() {
-                const typedarray = new Uint8Array(this.result);
                 try {
-                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    pageInput.value = pdf.numPages; 
-                } catch (error) {
-                    console.error('Error reading PDF:', error);
-                    pageInput.value = 'TBD'; 
+                    const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                    pageInput.value = pdf.numPages;
+                } catch {
+                    pageInput.value = 'TBD';
                 }
             };
             fileReader.readAsArrayBuffer(file);
         }
-    } else {
-        // Reset UI if file selection is canceled
-        fileNameDisplay.textContent = "Max size: 50MB";
-        fileNameDisplay.classList.remove('text-accord-blue', 'font-bold');
-        uploadUi.classList.remove('border-accord-blue', 'bg-accord-lightBlue');
+    }
+});
+
+// Book Cover Selection & Client-Side Image Compression (Saves cleanly into Supabase)
+document.getElementById('form-cover')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const previewBox = document.getElementById('cover-preview-box');
+    const coverName = document.getElementById('cover-name-display');
+
+    if (file) {
+        coverName.textContent = file.name;
+        coverName.classList.add('text-accord-blue', 'font-bold');
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 480;
+                const scale = Math.min(1, MAX_WIDTH / img.width);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                currentCompressedCover = canvas.toDataURL('image/jpeg', 0.82);
+                if (previewBox) {
+                    previewBox.innerHTML = `<img src="${currentCompressedCover}" class="w-full h-full object-cover">`;
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
     }
 });
