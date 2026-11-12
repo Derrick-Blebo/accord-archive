@@ -39,7 +39,12 @@ export default async function handler(req, res) {
                 megaStorage.on('error', reject);
             });
 
-            const fileName = `${Date.now()}_${uploadedFile.originalFilename || 'document.pdf'}`;
+            const originalName = uploadedFile.originalFilename || 'document.pdf';
+            const lastDotIndex = originalName.lastIndexOf('.');
+            const nameWithoutExt = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
+            const fileExtension = lastDotIndex !== -1 ? originalName.substring(lastDotIndex) : '.pdf';
+            const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const fileName = `${cleanName}_acc${Date.now()}${fileExtension}`;
             const stats = fs.statSync(uploadedFile.filepath);
 
             // 2. Stream the file directly into Mega
