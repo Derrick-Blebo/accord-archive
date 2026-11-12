@@ -73,7 +73,7 @@ function renderCatalogTable(list) {
         // Status Indicator Badge
         let statusBadge = '';
         if (book.status === 'uploading') {
-            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 mt-0.5"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Uploading to Mega...</span>`;
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 mt-0.5"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Uploading PDF...</span>`;
         } else if (book.status === 'failed') {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600 mt-0.5"><i class="fa-solid fa-circle-exclamation mr-1"></i> Upload Failed</span>`;
         } else if (book.download_url) {
@@ -89,8 +89,8 @@ function renderCatalogTable(list) {
 
         // View / Read PDF Button
         const viewBtn = book.download_url
-            ? `<a href="${book.download_url}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
-            : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
+    ? `<a href="${book.download_url.split('?')[0]}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+    : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
 
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
@@ -186,7 +186,7 @@ function closeArchiveModal() {
     }, 200);
 }
 
-// Handle Add / Edit Submission with Instant Modal Close & Live Upload Status
+// Handle Add / Edit Submission with Direct Supabase Storage Upload
 async function handleArchiveSubmit(e) {
     e.preventDefault();
 
@@ -205,7 +205,7 @@ async function handleArchiveSubmit(e) {
     // 1. Immediately close modal box
     closeArchiveModal();
 
-    // 2. Insert temporary row in dashboard showing "Uploading to Mega..."
+    // 2. Insert temporary row in dashboard showing "Uploading..."
     const tempId = Date.now();
     const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
     const tempBook = {
@@ -224,33 +224,41 @@ async function handleArchiveSubmit(e) {
     }
     renderCatalogTable(catalogData);
 
-    // 3. Upload PDF to Mega if selected
+    // 3. Upload PDF directly to Supabase Storage if selected
     let downloadUrl = existingBook ? existingBook.download_url : "";
     if (selectedFile) {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-
         try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            });
+            // Format clean filename with unique ID at the end
+            const originalName = selectedFile.name || 'document.pdf';
+            const lastDotIndex = originalName.lastIndexOf('.');
+            const nameWithoutExt = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
+            const fileExtension = lastDotIndex !== -1 ? originalName.substring(lastDotIndex) : '.pdf';
+            const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const fileName = `${cleanName}_acc${Date.now()}${fileExtension}`;
 
-            if (!response.ok) throw new Error(await response.text());
-            const data = await response.json();
+            // Upload directly to 'archive-files' bucket
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('archive-files')
+                .upload(fileName, selectedFile, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
 
-            if (data.downloadUrl) {
-                downloadUrl = data.downloadUrl;
-            } else {
-                throw new Error(data.error || 'Mega upload failed');
-            }
+            if (uploadError) throw uploadError;
+
+            // Get public URL and append ?download= so clicking Download on the homepage downloads immediately!
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('archive-files')
+                .getPublicUrl(uploadData.path);
+
+            downloadUrl = `${publicUrlData.publicUrl}?download=${encodeURIComponent(fileName)}`;
+
         } catch (error) {
-            console.error("Upload Error:", error);
-            // Mark row status as Failed in dashboard
+            console.error("Supabase Storage Upload Error:", error);
             const target = catalogData.find(b => b.id === tempBook.id);
             if (target) target.status = 'failed';
             renderCatalogTable(catalogData);
-            showToast(`Upload failed for "${title}".`);
+            showToast(`Upload failed: ${error.message}`);
             return;
         }
     }
