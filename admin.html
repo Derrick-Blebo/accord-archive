@@ -33,8 +33,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PDF.js for Automatic Page Counting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Playfair Display', serif; }
@@ -259,23 +267,47 @@
     </footer>
 
     <!-- Add / Edit Archive Modal Form -->
-    <div id="archive-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
-        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden my-8 transform scale-95 transition-transform duration-300" id="archive-modal-box">
-            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+    <div id="archive-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        
+        <!-- Modal Container (Restricted Height & Flex Column) -->
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[95vh]" id="archive-modal-box">
+            
+            <!-- Modal Header (Fixed at the top) -->
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
                 <h3 id="modal-heading" class="font-bold text-accord-slate text-base">Add New Archive Item</h3>
-                <button onclick="closeArchiveModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                <button type="button" onclick="closeArchiveModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <form id="archive-form" onsubmit="handleArchiveSubmit(event)" class="p-6 sm:p-8 space-y-4">
+            <!-- Modal Form (Scrollable body) -->
+            <form id="archive-form" onsubmit="handleArchiveSubmit(event)" class="p-6 sm:p-8 space-y-5 overflow-y-auto">
                 <input type="hidden" id="edit-book-id">
                 
+                <!-- 1. FILE UPLOAD -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload PDF Archive</label>
+                    <div class="relative group">
+                        <input type="file" id="form-file" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div id="upload-ui" class="flex flex-col items-center justify-center w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-7 text-center group-hover:border-accord-blue group-hover:bg-accord-lightBlue transition-all">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 text-accord-slate group-hover:bg-accord-blue group-hover:text-white flex items-center justify-center text-lg mb-2 transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <p class="text-xs font-bold text-accord-slate">Click or drag PDF to upload</p>
+                            <p id="file-name-display" class="text-[10px] text-accord-muted mt-1 max-w-[200px] truncate">Max size: 50MB</p>
+                        </div>
+                    </div>
+                    <!-- Hidden input for auto-calculated page count -->
+                    <input type="hidden" id="form-pages" value="TBD">
+                </div>
+
+                <!-- 2. DOCUMENT TITLE -->
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Document / Book Title</label>
                     <input type="text" id="form-title" required placeholder="e.g., The Great Welsh Revival & Beyond" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                 </div>
 
+                <!-- 3. AUTHOR & CATEGORY -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Author / Source</label>
@@ -292,31 +324,22 @@
                     </div>
                 </div>
 
+                <!-- 4. PUBLICATION YEAR (Constrained Width) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Publication Year</label>
                         <input type="text" id="form-year" required placeholder="e.g., 1954" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    
-                    <!-- DOWNLOAD LINK -->
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Download / PDF URL</label>
-                        <input type="url" id="form-download" placeholder="e.g., https://example.com/book.pdf or /assets/books/sample.pdf" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                    </div>
-
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Page Count</label>
-                        <input type="text" id="form-pages" required placeholder="e.g., 342" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                    </div>
                 </div>
 
+                <!-- 5. DESCRIPTION -->
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Historical Summary & Description</label>
                     <textarea id="form-description" rows="3" required placeholder="Provide synopsis and provenance..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
                 </div>
 
-                <div class="pt-2 flex items-center space-x-3">
+                <!-- Action Buttons -->
+                <div class="pt-2 flex items-center space-x-3 shrink-0">
                     <button type="button" onclick="closeArchiveModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3.5 rounded-xl transition-all">Cancel</button>
                     <button type="submit" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 rounded-xl shadow-md transition-all">Save Archive</button>
                 </div>
@@ -326,7 +349,5 @@
 
    <!-- JavaScript Admin Logic -->
     <script src="admin.js"></script>
-</body>
-</html>
 </body>
 </html>

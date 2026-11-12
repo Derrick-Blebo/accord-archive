@@ -1,0 +1,25 @@
+{
+  "name": "accord-archive",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Derrick-Blebo/accord-archive.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Derrick-Blebo/accord-archive/issues"
+  },
+  "homepage": "https://github.com/Derrick-Blebo/accord-archive#readme",
+  "dependencies": {
+    "formidable": "^3.5.4",
+    "googleapis": "^189.0.0"
+  }
+}
