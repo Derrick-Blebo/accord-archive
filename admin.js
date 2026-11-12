@@ -1,6 +1,6 @@
 // 1. Initialize Supabase
 const SUPABASE_URL = 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP';
-const SUPABASE_ANON_KEY = 'sb_secret_oVLKgMAA9O0vox1K4kvSgA_SkPhzoPT';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let catalogData = [];
