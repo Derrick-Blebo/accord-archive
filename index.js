@@ -75,9 +75,10 @@ function renderBooks(filteredList) {
                    </div>
                </div>`;
 
-        // Pill-shaped Download button matching the mockup
+        // Pill-shaped Download button: direct download for Supabase PDFs, new tab for external links
+        const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
         const downloadButton = book.download_url
-            ? `<a href="${book.download_url}" download class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
+            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
                    <i class="fa-solid fa-download text-xs"></i>
                    <span>Download</span>
                </a>`
