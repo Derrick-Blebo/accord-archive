@@ -9,9 +9,57 @@ let submissionsData = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
+// Check Auth Session on Page Load
 window.onload = async function() {
-    await fetchAllData();
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+        unlockDashboard(session.user);
+    }
 };
+
+function unlockDashboard(user) {
+    document.getElementById('auth-gate').classList.add('hidden');
+    document.getElementById('dashboard-wrapper').classList.remove('hidden');
+    const emailLabel = document.getElementById('admin-user-email');
+    if (emailLabel && user?.email) emailLabel.innerText = user.email;
+    fetchAllData();
+}
+
+async function handleAdminLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errorBox = document.getElementById('login-error');
+    const submitBtn = document.getElementById('login-submit-btn');
+
+    errorBox.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Signing in...";
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+    });
+
+    submitBtn.disabled = false;
+    submitBtn.innerText = "Sign In to Dashboard";
+
+    if (error) {
+        errorBox.innerText = error.message || "Invalid email or password.";
+        errorBox.classList.remove('hidden');
+    } else if (data?.user) {
+        unlockDashboard(data.user);
+        showToast("Welcome back to Accord Admin!");
+    }
+}
+
+async function handleAdminLogout() {
+    await supabaseClient.auth.signOut();
+    document.getElementById('dashboard-wrapper').classList.add('hidden');
+    document.getElementById('auth-gate').classList.remove('hidden');
+    document.getElementById('admin-login-form').reset();
+    showToast("Signed out successfully.");
+}
 
 async function fetchAllData() {
     const { data: books, error: booksErr } = await supabaseClient
