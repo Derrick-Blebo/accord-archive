@@ -128,14 +128,17 @@ function renderCatalogTable(list) {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 mt-0.5">No PDF Linked</span>`;
         }
 
-        const visibilityBadge = book.is_visible === false
-            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700 mt-0.5"><i class="fa-solid fa-eye-slash mr-1"></i> Hidden</span>`
-            : '';
+        let visibilityBadge = '';
+        if (book.status === 'draft') {
+            visibilityBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-file-pen mr-1"></i> Draft</span>`;
+        } else if (book.is_visible === false) {
+            visibilityBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700 mt-0.5"><i class="fa-solid fa-eye-slash mr-1"></i> Hidden</span>`;
+        }
 
         const isVisible = book.is_visible !== false;
         const visibilityBtn = isVisible
             ? `<button onclick="toggleBookVisibility(${book.id}, false)" class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-amber-50 text-emerald-600 hover:text-amber-600 transition-all inline-flex items-center justify-center" title="Visible on Homepage (Click to Hide)"><i class="fa-solid fa-eye text-xs"></i></button>`
-            : `<button onclick="toggleBookVisibility(${book.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Hidden from Homepage (Click to Make Visible)"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
+            : `<button onclick="toggleBookVisibility(${book.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Hidden / Draft (Click to Publish)"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
 
         const thumb = book.cover_url
             ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
@@ -176,14 +179,18 @@ function renderCatalogTable(list) {
 }
 
 async function toggleBookVisibility(id, makeVisible) {
+    const updateFields = makeVisible
+        ? { is_visible: true, status: 'published' }
+        : { is_visible: false };
+
     const { error } = await supabaseClient
         .from('books')
-        .update({ is_visible: makeVisible })
+        .update(updateFields)
         .eq('id', id);
 
     if (!error) {
         await fetchAllData();
-        showToast(makeVisible ? "Book is now visible on the homepage." : "Book hidden from the homepage.");
+        showToast(makeVisible ? "Book is now published on the homepage." : "Book hidden from the homepage.");
     } else {
         showToast("Could not update visibility. Please try again.");
     }
@@ -225,12 +232,12 @@ function openArchiveModal(mode, id = null) {
         const book = catalogData.find(b => b.id === id);
         if (book) {
             document.getElementById('edit-book-id').value = book.id;
-            document.getElementById('form-title').value = book.title;
-            document.getElementById('form-author').value = book.author;
+            document.getElementById('form-title').value = book.title === 'Untitled Draft' ? '' : book.title;
+            document.getElementById('form-author').value = book.author === 'TBD' ? '' : book.author;
             document.getElementById('form-category').value = book.category;
-            document.getElementById('form-year').value = book.year;
+            document.getElementById('form-year').value = book.year === 'TBD' ? '' : book.year;
             document.getElementById('form-pages').value = book.pages;
-            document.getElementById('form-description').value = book.description;
+            document.getElementById('form-description').value = book.description === 'Draft in progress.' ? '' : book.description;
 
             const externalInput = document.getElementById('form-external-url');
             if (externalInput && book.download_url && !book.download_url.includes('/archive-files/')) {
@@ -266,7 +273,18 @@ function closeArchiveModal() {
 
 async function handleArchiveSubmit(e) {
     e.preventDefault();
+    await processArchiveSave(false);
+}
 
+async function saveAsDraft() {
+    const titleInput = document.getElementById('form-title');
+    if (!titleInput.value.trim()) {
+        titleInput.value = "Untitled Draft";
+    }
+    await processArchiveSave(true);
+}
+
+async function processArchiveSave(isDraft) {
     const fileInput = document.getElementById('form-file');
     const selectedFile = fileInput && fileInput.files.length > 0 ? fileInput.files[0] : null;
     const externalUrlInput = document.getElementById('form-external-url');
@@ -274,12 +292,12 @@ async function handleArchiveSubmit(e) {
     const coverToSave = currentCompressedCover;
 
     const editId = document.getElementById('edit-book-id').value;
-    const title = document.getElementById('form-title').value;
-    const author = document.getElementById('form-author').value;
+    const title = document.getElementById('form-title').value.trim() || "Untitled Draft";
+    const author = document.getElementById('form-author').value.trim() || "TBD";
     const category = document.getElementById('form-category').value;
-    const year = document.getElementById('form-year').value;
+    const year = document.getElementById('form-year').value.trim() || "TBD";
     const pages = document.getElementById('form-pages').value || "TBD";
-    const description = document.getElementById('form-description').value;
+    const description = document.getElementById('form-description').value.trim() || "Draft in progress.";
 
     closeArchiveModal();
 
@@ -292,7 +310,8 @@ async function handleArchiveSubmit(e) {
         title, author, category, year, pages, description,
         cover_url: coverToSave || (existingBook ? existingBook.cover_url : ""),
         download_url: initialUrl,
-        status: selectedFile ? 'uploading' : 'complete'
+        is_visible: !isDraft,
+        status: selectedFile ? 'uploading' : (isDraft ? 'draft' : 'published')
     };
 
     if (editId) {
@@ -342,15 +361,17 @@ async function handleArchiveSubmit(e) {
         download_url: downloadUrl,
         cover_url: tempBook.cover_url,
         description,
-        gradient: existingBook ? existingBook.gradient : "from-blue-900 via-indigo-900 to-slate-900"
+        gradient: existingBook ? existingBook.gradient : "from-blue-900 via-indigo-900 to-slate-900",
+        is_visible: !isDraft,
+        status: isDraft ? 'draft' : 'published'
     };
 
     if (editId) {
         await supabaseClient.from('books').update(payload).eq('id', editId);
-        showToast(`Archive "${title}" updated!`);
+        showToast(isDraft ? `Draft "${title}" saved!` : `Archive "${title}" published!`);
     } else {
-        await supabaseClient.from('books').insert([{ ...payload, is_visible: true }]);
-        showToast(`Archive "${title}" uploaded & published!`);
+        await supabaseClient.from('books').insert([payload]);
+        showToast(isDraft ? `Saved "${title}" to drafts.` : `Archive "${title}" uploaded & published!`);
     }
 
     await fetchAllData();
@@ -522,7 +543,8 @@ async function approveSubmission(id) {
             cover_url: "",
             description: sub.description,
             gradient: "from-blue-900 via-blue-800 to-indigo-950",
-            is_visible: true
+            is_visible: true,
+            status: 'published'
         }]);
         await supabaseClient.from('submissions').delete().eq('id', id);
         await fetchAllData();
