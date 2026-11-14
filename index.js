@@ -120,7 +120,7 @@ function renderBooks(filteredList) {
                     <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 md:w-auto md:px-3.5 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center gap-1.5 transition-all" title="Copy Book Link">
                         <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
                         <i class="fa-regular fa-copy text-xs hidden md:inline"></i>
-                        <span class="hidden md:inline text-xs font-bold">Copy</span>
+                        
                     </button>
                 </div>
             </div>
