@@ -111,14 +111,16 @@ function renderBooks(filteredList) {
                     </p>
                 </div>
 
-                <!-- Bottom Action Row: Download Pill + Bookmark + Share -->
+                <!-- Bottom Action Row: Download Pill + Bookmark + Share/Copy -->
                 <div class="flex items-center gap-2 pt-1">
                     ${downloadButton}
                     <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-10 h-10 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-2xl flex items-center justify-center transition-all" title="Save Bookmark">
                         <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-xs"></i>
                     </button>
-                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center transition-all" title="Share Book">
-                        <i class="fa-solid fa-share-nodes text-xs"></i>
+                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 md:w-auto md:px-3.5 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center gap-1.5 transition-all" title="Copy Book Link">
+                        <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
+                        <i class="fa-regular fa-copy text-xs hidden md:inline"></i>
+                        <span class="hidden md:inline text-xs font-bold">Copy</span>
                     </button>
                 </div>
             </div>
@@ -127,19 +129,20 @@ function renderBooks(filteredList) {
     });
 }
 
-// Share Book Handler (Shares Direct Book Link via Native Share Sheet or Clipboard)
+// Share Book Handler (Mobile: Native Share Sheet | PC: Copy Direct Book Link)
 async function shareBook(id, title, author) {
     const shareUrl = `${window.location.origin}/?book=${id}`;
-    const shareText = `Check out "${title}" by ${author} on Accord Digital Library.`;
+    const isDesktop = window.innerWidth >= 768;
 
-    if (navigator.share) {
+    if (!isDesktop && navigator.share) {
+        const shareText = `Check out "${title}" by ${author} on Accord Digital Library.`;
         try {
             await navigator.share({ title, text: shareText, url: shareUrl });
         } catch (err) {
             // User cancelled share dialog
         }
     } else {
-        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        await navigator.clipboard.writeText(shareUrl);
         showToast("Book link copied to clipboard!");
     }
 }
