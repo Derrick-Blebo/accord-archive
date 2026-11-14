@@ -6,6 +6,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let catalogData = [];
 let trashData = [];
 let submissionsData = [];
+let categoriesData = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
@@ -75,6 +76,17 @@ async function fetchAllData() {
         updateStats();
     }
 
+    const { data: cats, error: catsErr } = await supabaseClient
+        .from('categories')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (!catsErr && cats) {
+        categoriesData = cats;
+        populateCategoryDropdowns();
+        renderCategoriesTable();
+    }
+
     const { data: subs, error: subsErr } = await supabaseClient
         .from('submissions')
         .select('*')
@@ -86,17 +98,169 @@ async function fetchAllData() {
     }
 }
 
+// Populate both the Catalog Filter Dropdown and the Upload Modal Dropdown
+function populateCategoryDropdowns() {
+    const catNames = categoriesData.map(c => c.name);
+
+    const filterSelect = document.getElementById('admin-cat-filter');
+    if (filterSelect) {
+        const currentFilter = filterSelect.value || 'All';
+        filterSelect.innerHTML = `<option value="All">All Categories</option>` +
+            catNames.map(name => `<option value="${name}">${name}</option>`).join('');
+        filterSelect.value = catNames.includes(currentFilter) ? currentFilter : 'All';
+    }
+
+    const modalSelect = document.getElementById('form-category');
+    if (modalSelect) {
+        const currentModalVal = modalSelect.value;
+        if (catNames.length === 0) {
+            modalSelect.innerHTML = `<option value="Uncategorized">Uncategorized (Add categories in Categories tab)</option>`;
+        } else {
+            modalSelect.innerHTML = catNames.map(name => `<option value="${name}">${name}</option>`).join('');
+            if (catNames.includes(currentModalVal)) {
+                modalSelect.value = currentModalVal;
+            }
+        }
+    }
+}
+
+// Render Categories Management Table
+function renderCategoriesTable() {
+    const tbody = document.getElementById('categories-table-body');
+    const badge = document.getElementById('categories-badge');
+    if (badge) badge.innerText = categoriesData.length;
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (categoriesData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="py-10 text-center text-accord-muted">No categories yet. Add your first category above.</td></tr>`;
+        return;
+    }
+
+    categoriesData.forEach(cat => {
+        const bookCount = catalogData.filter(b => b.category === cat.name).length;
+        const safeName = cat.name.replace(/'/g, "\\'");
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6 font-bold text-accord-slate">
+                <span class="bg-accord-lightBlue text-accord-blue text-xs font-bold px-3 py-1.5 rounded-lg inline-block">${cat.name}</span>
+            </td>
+            <td class="py-4 px-6 text-center text-accord-muted font-semibold">${bookCount}</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                <button onclick="openEditCategoryModal(${cat.id}, '${safeName}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Rename Category">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button onclick="promptDeleteCategory(${cat.id}, '${safeName}', ${bookCount})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete Category">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Add Category
+async function handleAddCategory(e) {
+    e.preventDefault();
+    const input = document.getElementById('new-category-name');
+    const name = input.value.trim();
+    if (!name) return;
+
+    const { error } = await supabaseClient
+        .from('categories')
+        .insert([{ name }]);
+
+    if (error) {
+        showToast(error.code === '23505' ? "That category already exists." : `Could not add category: ${error.message}`);
+        return;
+    }
+
+    input.value = '';
+    await fetchAllData();
+    showToast(`Category "${name}" added!`);
+}
+
+// Edit / Rename Category Modal Controls
+function openEditCategoryModal(id, currentName) {
+    document.getElementById('edit-category-id').value = id;
+    document.getElementById('edit-category-old-name').value = currentName;
+    document.getElementById('edit-category-name').value = currentName;
+    const modal = document.getElementById('edit-category-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeEditCategoryModal() {
+    const modal = document.getElementById('edit-category-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+async function handleRenameCategory(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-category-id').value;
+    const oldName = document.getElementById('edit-category-old-name').value;
+    const newName = document.getElementById('edit-category-name').value.trim();
+
+    if (!newName || newName === oldName) {
+        closeEditCategoryModal();
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('categories')
+        .update({ name: newName })
+        .eq('id', id);
+
+    if (error) {
+        showToast(error.code === '23505' ? "A category with that name already exists." : `Rename failed: ${error.message}`);
+        return;
+    }
+
+    // Also update any books using the old category name
+    await supabaseClient
+        .from('books')
+        .update({ category: newName })
+        .eq('category', oldName);
+
+    closeEditCategoryModal();
+    await fetchAllData();
+    showToast(`Category renamed to "${newName}"!`);
+}
+
+// Delete Category
+function promptDeleteCategory(id, name, bookCount) {
+    document.getElementById('confirm-title').innerText = `Delete "${name}"?`;
+    document.getElementById('confirm-text').innerText = bookCount > 0
+        ? `This category currently has ${bookCount} book(s). Deleting it removes it from the dropdown list, while existing books keep their label until edited.`
+        : "This category will be permanently removed from your dropdown list.";
+
+    const modal = document.getElementById('confirm-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.getElementById('confirm-btn').onclick = async function() {
+        await supabaseClient.from('categories').delete().eq('id', id);
+        closeConfirmModal();
+        await fetchAllData();
+        showToast(`Category "${name}" deleted.`);
+    };
+}
+
 function switchTab(tabName) {
-    const tabs = ['catalog', 'submissions', 'trash'];
+    const tabs = ['catalog', 'categories', 'submissions', 'trash'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`nav-tab-${t}`);
+        if (!sec || !btn) return;
         if (t === tabName) {
             sec.classList.remove('hidden');
-            btn.className = "px-5 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
+            btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
         } else {
             sec.classList.add('hidden');
-            btn.className = "px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+            btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
         }
     });
 }
@@ -192,7 +356,7 @@ async function toggleBookVisibility(id, makeVisible) {
         await fetchAllData();
         showToast(makeVisible ? "Book is now published on the homepage." : "Book hidden from the homepage.");
     } else {
-        showToast("Could not update visibility. Please try again.");
+        showToast(`Could not update visibility: ${error.message}`);
     }
 }
 
@@ -215,6 +379,8 @@ function openArchiveModal(mode, id = null) {
     document.getElementById('edit-book-id').value = '';
     currentCompressedCover = "";
 
+    populateCategoryDropdowns();
+
     document.getElementById('file-name-display').textContent = "Max size: 50MB";
     document.getElementById('file-name-display').classList.remove('text-accord-blue', 'font-bold');
     document.getElementById('upload-ui').classList.remove('border-accord-blue', 'bg-accord-lightBlue');
@@ -234,7 +400,13 @@ function openArchiveModal(mode, id = null) {
             document.getElementById('edit-book-id').value = book.id;
             document.getElementById('form-title').value = book.title === 'Untitled Draft' ? '' : book.title;
             document.getElementById('form-author').value = book.author === 'TBD' ? '' : book.author;
-            document.getElementById('form-category').value = book.category;
+
+            const catSelect = document.getElementById('form-category');
+            if (book.category && ![...catSelect.options].some(o => o.value === book.category)) {
+                catSelect.innerHTML += `<option value="${book.category}">${book.category}</option>`;
+            }
+            catSelect.value = book.category;
+
             document.getElementById('form-year').value = book.year === 'TBD' ? '' : book.year;
             document.getElementById('form-pages').value = book.pages;
             document.getElementById('form-description').value = book.description === 'Draft in progress.' ? '' : book.description;
@@ -294,7 +466,7 @@ async function processArchiveSave(isDraft) {
     const editId = document.getElementById('edit-book-id').value;
     const title = document.getElementById('form-title').value.trim() || "Untitled Draft";
     const author = document.getElementById('form-author').value.trim() || "TBD";
-    const category = document.getElementById('form-category').value;
+    const category = document.getElementById('form-category').value || "Uncategorized";
     const year = document.getElementById('form-year').value.trim() || "TBD";
     const pages = document.getElementById('form-pages').value || "TBD";
     const description = document.getElementById('form-description').value.trim() || "Draft in progress.";
@@ -366,14 +538,22 @@ async function processArchiveSave(isDraft) {
         status: isDraft ? 'draft' : 'published'
     };
 
+    let dbError = null;
     if (editId) {
-        await supabaseClient.from('books').update(payload).eq('id', editId);
-        showToast(isDraft ? `Draft "${title}" saved!` : `Archive "${title}" published!`);
+        const { error } = await supabaseClient.from('books').update(payload).eq('id', editId);
+        dbError = error;
     } else {
-        await supabaseClient.from('books').insert([payload]);
-        showToast(isDraft ? `Saved "${title}" to drafts.` : `Archive "${title}" uploaded & published!`);
+        const { error } = await supabaseClient.from('books').insert([payload]);
+        dbError = error;
     }
 
+    if (dbError) {
+        console.error("Supabase Save Error:", dbError);
+        showToast(`Save failed: ${dbError.message}`);
+        return;
+    }
+
+    showToast(isDraft ? `Draft "${title}" saved!` : `Archive "${title}" published!`);
     await fetchAllData();
 }
 

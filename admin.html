@@ -125,9 +125,34 @@
             </div>
         </div>
 
+        <!-- Edit Category Modal -->
+        <div id="edit-category-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-base text-accord-slate">Rename Category</h3>
+                    <button type="button" onclick="closeEditCategoryModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <form onsubmit="handleRenameCategory(event)" class="space-y-4">
+                    <input type="hidden" id="edit-category-id">
+                    <input type="hidden" id="edit-category-old-name">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category Name</label>
+                        <input type="text" id="edit-category-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <p class="text-[11px] text-accord-muted mt-1.5">Books currently assigned to this category will automatically update to the new name.</p>
+                    </div>
+                    <div class="flex items-center space-x-3 pt-1">
+                        <button type="button" onclick="closeEditCategoryModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                        <button type="submit" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Header / Admin Navigation -->
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
                 <!-- Brand Logo -->
                 <a href="#" class="flex items-center space-x-3 group">
                     <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -143,14 +168,17 @@
                 </a>
 
                 <!-- Navigation Tabs -->
-                <nav class="hidden md:flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl">
-                    <button onclick="switchTab('catalog')" id="nav-tab-catalog" class="px-5 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
+                <nav class="hidden lg:flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl">
+                    <button onclick="switchTab('catalog')" id="nav-tab-catalog" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
                         <i class="fa-solid fa-book-bookmark mr-1.5"></i> Archive Catalog
                     </button>
-                    <button onclick="switchTab('submissions')" id="nav-tab-submissions" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                    <button onclick="switchTab('categories')" id="nav-tab-categories" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                        <i class="fa-solid fa-tags mr-1.5"></i> Categories <span id="categories-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                    </button>
+                    <button onclick="switchTab('submissions')" id="nav-tab-submissions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-inbox mr-1.5"></i> Pending Submissions <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
-                    <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                    <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-trash-can mr-1.5"></i> Recycle Bin <span id="trash-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
                 </nav>
@@ -238,10 +266,6 @@
                         </div>
                         <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue">
                             <option value="All">All Categories</option>
-                            <option value="Church History">Church History</option>
-                            <option value="Biographies">Biographies</option>
-                            <option value="Nations & Leadership">Nations & Leadership</option>
-                            <option value="Christian Chronicles">Christian Chronicles</option>
                         </select>
                     </div>
                 </div>
@@ -268,7 +292,43 @@
                 </div>
             </section>
 
-            <!-- Tab 2: Pending Submissions Management Section -->
+            <!-- Tab 2: Categories Management Section -->
+            <section id="section-categories" class="space-y-6 hidden">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Library Categories</h2>
+                        <p class="text-xs text-accord-muted mt-1">Add, rename, or remove categories. All active categories appear in the upload dropdown and filter bar.</p>
+                    </div>
+
+                    <!-- Quick Add Category Form -->
+                    <form onsubmit="handleAddCategory(event)" class="flex items-center space-x-2">
+                        <input type="text" id="new-category-name" required placeholder="New category name..." class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-64">
+                        <button type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5 whitespace-nowrap">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add Category</span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Category Name</th>
+                                    <th class="py-4 px-6 text-center">Books in Category</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categories-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab 3: Pending Submissions Management Section -->
             <section id="section-submissions" class="space-y-6 hidden">
                 <div class="flex items-center justify-between">
                     <div>
@@ -297,7 +357,7 @@
                 </div>
             </section>
 
-            <!-- Tab 3: Recycle Bin Section -->
+            <!-- Tab 4: Recycle Bin Section -->
             <section id="section-trash" class="space-y-6 hidden">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -355,7 +415,7 @@
                 <form id="archive-form" onsubmit="handleArchiveSubmit(event)" class="p-6 sm:p-8 space-y-5 overflow-y-auto">
                     <input type="hidden" id="edit-book-id">
                     
-                    <!-- 1. FILE UPLOAD -->
+                    <!-- 1. FILE UPLOAD OR EXTERNAL LINK -->
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload PDF Archive</label>
                         <div class="relative group">
@@ -368,6 +428,7 @@
                                 <p id="file-name-display" class="text-[10px] text-accord-muted mt-1 max-w-[200px] truncate">Max size: 50MB</p>
                             </div>
                         </div>
+
                         <div class="relative flex py-2.5 items-center">
                             <div class="flex-grow border-t border-slate-200"></div>
                             <span class="flex-shrink mx-3 text-[10px] font-bold uppercase tracking-wider text-accord-muted">Or External Link</span>
@@ -401,7 +462,7 @@
                         <input type="text" id="form-title" required placeholder="e.g., The Great Welsh Revival & Beyond" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                     </div>
 
-                    <!-- 3. AUTHOR & CATEGORY -->
+                    <!-- 3. AUTHOR & CATEGORY DROPDOWN -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Author / Source</label>
@@ -409,11 +470,8 @@
                         </div>
                         <div>
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category</label>
-                            <select id="form-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                                <option>Church History</option>
-                                <option>Biographies</option>
-                                <option>Nations & Leadership</option>
-                                <option>Christian Chronicles</option>
+                            <select id="form-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                                <!-- Populated dynamically from categories table -->
                             </select>
                         </div>
                     </div>
