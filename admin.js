@@ -9,7 +9,6 @@ let submissionsData = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
-// Initialize App
 window.onload = async function() {
     await fetchAllData();
 };
@@ -39,7 +38,6 @@ async function fetchAllData() {
     }
 }
 
-// Tab Switching
 function switchTab(tabName) {
     const tabs = ['catalog', 'submissions', 'trash'];
     tabs.forEach(t => {
@@ -55,7 +53,6 @@ function switchTab(tabName) {
     });
 }
 
-// Render Catalog Table with Visibility Toggle, Status Badges, Cover Thumbnails & Reader Button
 function renderCatalogTable(list) {
     const tbody = document.getElementById('admin-book-table-body');
     tbody.innerHTML = '';
@@ -69,7 +66,6 @@ function renderCatalogTable(list) {
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
 
-        // Status Indicator Badge
         let statusBadge = '';
         if (book.status === 'uploading') {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 mt-0.5"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Uploading PDF...</span>`;
@@ -81,23 +77,19 @@ function renderCatalogTable(list) {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 mt-0.5">No PDF Linked</span>`;
         }
 
-        // Hidden Badge
         const visibilityBadge = book.is_visible === false
             ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700 mt-0.5"><i class="fa-solid fa-eye-slash mr-1"></i> Hidden</span>`
             : '';
 
-        // Eye Toggle Button
         const isVisible = book.is_visible !== false;
         const visibilityBtn = isVisible
             ? `<button onclick="toggleBookVisibility(${book.id}, false)" class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-amber-50 text-emerald-600 hover:text-amber-600 transition-all inline-flex items-center justify-center" title="Visible on Homepage (Click to Hide)"><i class="fa-solid fa-eye text-xs"></i></button>`
             : `<button onclick="toggleBookVisibility(${book.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Hidden from Homepage (Click to Make Visible)"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
 
-        // Cover Thumbnail
         const thumb = book.cover_url
             ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
             : `<div class="w-9 h-12 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
-        // View / Read PDF Button
         const viewBtn = book.download_url
             ? `<a href="${book.download_url.split('?')[0]}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
             : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
@@ -128,7 +120,6 @@ function renderCatalogTable(list) {
     });
 }
 
-// Toggle Homepage Visibility (Without Deleting)
 async function toggleBookVisibility(id, makeVisible) {
     const { error } = await supabaseClient
         .from('books')
@@ -143,7 +134,6 @@ async function toggleBookVisibility(id, makeVisible) {
     }
 }
 
-// Filter Catalog Table
 function filterAdminBooks() {
     const query = document.getElementById('admin-search').value.toLowerCase();
     const cat = document.getElementById('admin-cat-filter').value;
@@ -156,7 +146,6 @@ function filterAdminBooks() {
     renderCatalogTable(filtered);
 }
 
-// Modal Controls
 function openArchiveModal(mode, id = null) {
     const modal = document.getElementById('archive-modal');
     const heading = document.getElementById('modal-heading');
@@ -164,7 +153,6 @@ function openArchiveModal(mode, id = null) {
     document.getElementById('edit-book-id').value = '';
     currentCompressedCover = "";
 
-    // Reset Upload UI
     document.getElementById('file-name-display').textContent = "Max size: 50MB";
     document.getElementById('file-name-display').classList.remove('text-accord-blue', 'font-bold');
     document.getElementById('upload-ui').classList.remove('border-accord-blue', 'bg-accord-lightBlue');
@@ -215,7 +203,6 @@ function closeArchiveModal() {
     }, 200);
 }
 
-// Handle Add / Edit Submission with Direct Supabase Storage Upload
 async function handleArchiveSubmit(e) {
     e.preventDefault();
 
@@ -231,10 +218,8 @@ async function handleArchiveSubmit(e) {
     const pages = document.getElementById('form-pages').value || "TBD";
     const description = document.getElementById('form-description').value;
 
-    // 1. Immediately close modal box
     closeArchiveModal();
 
-    // 2. Insert temporary row in dashboard showing "Uploading..."
     const tempId = Date.now();
     const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
     const tempBook = {
@@ -253,7 +238,6 @@ async function handleArchiveSubmit(e) {
     }
     renderCatalogTable(catalogData);
 
-    // 3. Upload PDF directly to Supabase Storage if selected
     let downloadUrl = existingBook ? existingBook.download_url : "";
     if (selectedFile) {
         try {
@@ -278,7 +262,6 @@ async function handleArchiveSubmit(e) {
                 .getPublicUrl(uploadData.path);
 
             downloadUrl = `${publicUrlData.publicUrl}?download=${encodeURIComponent(fileName)}`;
-
         } catch (error) {
             console.error("Supabase Storage Upload Error:", error);
             const target = catalogData.find(b => b.id === tempBook.id);
@@ -289,7 +272,6 @@ async function handleArchiveSubmit(e) {
         }
     }
 
-    // 4. Save Final Record to Supabase Database
     const payload = {
         title, author, category, year, pages,
         download_url: downloadUrl,
@@ -309,7 +291,6 @@ async function handleArchiveSubmit(e) {
     await fetchAllData();
 }
 
-// Move to Recycle Bin (Soft Delete — No Modal Needed, Instant Toast)
 async function promptDelete(id) {
     await supabaseClient
         .from('books')
@@ -320,7 +301,6 @@ async function promptDelete(id) {
     showToast("Moved to Recycle Bin.");
 }
 
-// Render Recycle Bin Table (With View & Read Button)
 function renderTrashTable() {
     const tbody = document.getElementById('trash-table-body');
     const badge = document.getElementById('trash-badge');
@@ -364,7 +344,6 @@ function renderTrashTable() {
     });
 }
 
-// Restore Book from Recycle Bin
 async function restoreFromTrash(id) {
     await supabaseClient
         .from('books')
@@ -375,7 +354,6 @@ async function restoreFromTrash(id) {
     showToast("Archive restored to live catalog!");
 }
 
-// Confirm Permanent Delete (Single Item)
 function promptPermanentDelete(id) {
     deleteTargetId = id;
     document.getElementById('confirm-title').innerText = "Delete Permanently?";
@@ -388,7 +366,6 @@ function promptPermanentDelete(id) {
     };
 }
 
-// Confirm Empty Entire Recycle Bin
 function promptEmptyTrash() {
     if (trashData.length === 0) {
         showToast("Recycle Bin is already empty.");
@@ -417,7 +394,6 @@ function closeConfirmModal() {
     deleteTargetId = null;
 }
 
-// Helper to clean up PDF file in Supabase Storage
 async function removeStorageFile(downloadUrl) {
     if (!downloadUrl || !downloadUrl.includes('/archive-files/')) return;
     const filePath = decodeURIComponent(downloadUrl.split('/archive-files/')[1].split('?')[0]);
@@ -433,7 +409,6 @@ async function executePermanentDelete(id) {
     showToast("Archive permanently deleted.");
 }
 
-// Submissions Workflow
 function renderSubmissionsTable() {
     const tbody = document.getElementById('submissions-table-body');
     tbody.innerHTML = '';
@@ -480,4 +455,91 @@ async function approveSubmission(id) {
             gradient: "from-blue-900 via-blue-800 to-indigo-950",
             is_visible: true
         }]);
-        await supabaseClient
+        await supabaseClient.from('submissions').delete().eq('id', id);
+        await fetchAllData();
+        showToast(`Submission "${sub.title}" approved!`);
+    }
+}
+
+async function rejectSubmission(id) {
+    await supabaseClient.from('submissions').delete().eq('id', id);
+    await fetchAllData();
+    showToast("Submission rejected and removed.");
+}
+
+function updateStats() {
+    document.getElementById('stat-total').innerText = catalogData.length;
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-message').innerText = message;
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+    setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+    }, 3500);
+}
+
+document.getElementById('form-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const uploadUi = document.getElementById('upload-ui');
+    const titleInput = document.getElementById('form-title');
+    const pageInput = document.getElementById('form-pages');
+
+    if (file) {
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.classList.add('text-accord-blue', 'font-bold');
+        uploadUi.classList.add('border-accord-blue', 'bg-accord-lightBlue');
+
+        if (!titleInput.value) {
+            titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        }
+
+        if (file.type === 'application/pdf') {
+            const fileReader = new FileReader();
+            fileReader.onload = async function() {
+                try {
+                    const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                    pageInput.value = pdf.numPages;
+                } catch {
+                    pageInput.value = 'TBD';
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+    }
+});
+
+document.getElementById('form-cover')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const previewBox = document.getElementById('cover-preview-box');
+    const coverName = document.getElementById('cover-name-display');
+
+    if (file) {
+        coverName.textContent = file.name;
+        coverName.classList.add('text-accord-blue', 'font-bold');
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 480;
+                const scale = Math.min(1, MAX_WIDTH / img.width);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                currentCompressedCover = canvas.toDataURL('image/jpeg', 0.82);
+                if (previewBox) {
+                    previewBox.innerHTML = `<img src="${currentCompressedCover}" class="w-full h-full object-cover">`;
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+});
