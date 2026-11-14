@@ -82,7 +82,7 @@
             <p id="confirm-text" class="text-xs text-accord-muted">This action cannot be undone. The document will be permanently deleted from the Accord archive.</p>
             <div class="flex items-center space-x-3 pt-2">
                 <button onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
-                <button id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Delete Archive</button>
+                <button id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Delete Permanently</button>
             </div>
         </div>
     </div>
@@ -111,6 +111,9 @@
                 </button>
                 <button onclick="switchTab('submissions')" id="nav-tab-submissions" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                     <i class="fa-solid fa-inbox mr-1.5"></i> Pending Submissions <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">2</span>
+                </button>
+                <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                    <i class="fa-solid fa-trash-can mr-1.5"></i> Recycle Bin <span id="trash-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                 </button>
             </nav>
 
@@ -249,6 +252,38 @@
                             </tr>
                         </thead>
                         <tbody id="submissions-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 3: Recycle Bin Section -->
+        <section id="section-trash" class="space-y-6 hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Recycle Bin</h2>
+                    <p class="text-xs text-accord-muted mt-1">Deleted archives are held here. Restore them to the live catalog or permanently delete them (including their PDF file).</p>
+                </div>
+                <button onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all self-start sm:self-auto">
+                    <i class="fa-solid fa-fire mr-1.5"></i> Empty Recycle Bin
+                </button>
+            </div>
+
+            <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                <th class="py-4 px-6">Book / Archive Title</th>
+                                <th class="py-4 px-6">Author</th>
+                                <th class="py-4 px-6">Category</th>
+                                <th class="py-4 px-6">Deleted On</th>
+                                <th class="py-4 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trash-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
                             <!-- Injected via JS -->
                         </tbody>
                     </table>

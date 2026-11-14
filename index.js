@@ -17,12 +17,13 @@ async function loadBooksFromSupabase() {
     const { data, error } = await supabaseClient
         .from('books')
         .select('*')
+        .is('deleted_at', null)
+        .eq('is_visible', true)
         .order('created_at', { ascending: false });
 
     if (!error && data) {
         booksData = data;
 
-        // Check if visitor opened a direct shared ?book=ID link
         const urlParams = new URLSearchParams(window.location.search);
         const sharedBookId = urlParams.get('book');
 
