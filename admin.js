@@ -120,7 +120,10 @@ function renderCatalogTable(list) {
         } else if (book.status === 'failed') {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600 mt-0.5"><i class="fa-solid fa-circle-exclamation mr-1"></i> Upload Failed</span>`;
         } else if (book.download_url) {
-            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-600 mt-0.5"><i class="fa-solid fa-circle-check mr-1"></i> Upload Successful</span>`;
+            const isExternal = !book.download_url.includes('/archive-files/');
+            statusBadge = isExternal
+                ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-accord-blue mt-0.5"><i class="fa-solid fa-link mr-1"></i> External Link</span>`
+                : `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-600 mt-0.5"><i class="fa-solid fa-circle-check mr-1"></i> Upload Successful</span>`;
         } else {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 mt-0.5">No PDF Linked</span>`;
         }
@@ -138,8 +141,12 @@ function renderCatalogTable(list) {
             ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
             : `<div class="w-9 h-12 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
-        const viewBtn = book.download_url
-            ? `<a href="${book.download_url.split('?')[0]}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+        const viewUrl = book.download_url
+            ? (book.download_url.includes('/archive-files/') ? book.download_url.split('?')[0] : book.download_url)
+            : '';
+
+        const viewBtn = viewUrl
+            ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
             : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
 
         tr.innerHTML = `
@@ -224,6 +231,12 @@ function openArchiveModal(mode, id = null) {
             document.getElementById('form-year').value = book.year;
             document.getElementById('form-pages').value = book.pages;
             document.getElementById('form-description').value = book.description;
+
+            const externalInput = document.getElementById('form-external-url');
+            if (externalInput && book.download_url && !book.download_url.includes('/archive-files/')) {
+                externalInput.value = book.download_url;
+            }
+
             if (book.cover_url && coverPreview) {
                 coverPreview.innerHTML = `<img src="${book.cover_url}" class="w-full h-full object-cover">`;
             }
@@ -256,6 +269,8 @@ async function handleArchiveSubmit(e) {
 
     const fileInput = document.getElementById('form-file');
     const selectedFile = fileInput && fileInput.files.length > 0 ? fileInput.files[0] : null;
+    const externalUrlInput = document.getElementById('form-external-url');
+    const externalUrl = externalUrlInput ? externalUrlInput.value.trim() : "";
     const coverToSave = currentCompressedCover;
 
     const editId = document.getElementById('edit-book-id').value;
@@ -270,11 +285,13 @@ async function handleArchiveSubmit(e) {
 
     const tempId = Date.now();
     const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
+    const initialUrl = externalUrl || (existingBook ? existingBook.download_url : "");
+
     const tempBook = {
         id: editId ? Number(editId) : tempId,
         title, author, category, year, pages, description,
         cover_url: coverToSave || (existingBook ? existingBook.cover_url : ""),
-        download_url: existingBook ? existingBook.download_url : "",
+        download_url: initialUrl,
         status: selectedFile ? 'uploading' : 'complete'
     };
 
@@ -286,7 +303,7 @@ async function handleArchiveSubmit(e) {
     }
     renderCatalogTable(catalogData);
 
-    let downloadUrl = existingBook ? existingBook.download_url : "";
+    let downloadUrl = initialUrl;
     if (selectedFile) {
         try {
             const originalName = selectedFile.name || 'document.pdf';
@@ -367,8 +384,12 @@ function renderTrashTable() {
             day: 'numeric', month: 'short', year: 'numeric'
         });
 
-        const viewBtn = book.download_url
-            ? `<a href="${book.download_url.split('?')[0]}" target="_blank" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+        const viewUrl = book.download_url
+            ? (book.download_url.includes('/archive-files/') ? book.download_url.split('?')[0] : book.download_url)
+            : '';
+
+        const viewBtn = viewUrl
+            ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
             : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
 
         const tr = document.createElement('tr');
