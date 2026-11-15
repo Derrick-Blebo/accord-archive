@@ -6,7 +6,7 @@
     <title>Accord — Christian Media House & Historical Archive</title>
     
     <meta name="google-site-verification" content="-UXnRC4ScaYjZnpk-9JmWOcoL2KMzzloT2nk3aEaAhA" /> 
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -96,8 +96,10 @@
                 <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
                 <a href="#submit" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</a>
                 <button onclick="openBookmarksModal()" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Reading List">
-                    <i class="fa-solid fa-bookmark text-lg"></i>
-                    <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                    <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Books">
+                        <i class="fa-solid fa-bookmark text-lg"></i>
+                        <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                    </a>
                 </button>
                 <button id="auth-nav-btn" onclick="openAuthModal()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
                     <i class="fa-regular fa-user"></i>
@@ -124,8 +126,10 @@
             <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
             <a href="#submit" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Contribute Archive</a>
             <button onclick="openBookmarksModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
-                <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
+                <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
+                </a>
             </button>
             <button id="mobile-auth-btn" onclick="openAuthModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-2">
                 <i class="fa-regular fa-user"></i>
