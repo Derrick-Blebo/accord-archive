@@ -109,14 +109,14 @@ function renderSavedBooks() {
         const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
         const coverVisual = book.cover_url
-            ? `<div class="w-full h-60 sm:h-full min-h-[230px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
+            ? `<div class="w-full h-56 sm:h-48 rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
                    <img src="${book.cover_url}" alt="${book.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                </div>`
-            : `<div class="w-full h-60 sm:h-full min-h-[230px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-4 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
+            : `<div class="w-full h-56 sm:h-48 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-4 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
                    <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
                    <div class="relative z-10">
                        <p class="text-[8px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
-                       <h4 class="serif-heading text-sm font-bold mt-2 leading-snug line-clamp-4">${book.title}</h4>
+                       <h4 class="serif-heading text-sm font-bold mt-1.5 leading-snug line-clamp-3">${book.title}</h4>
                    </div>
                    <div class="relative z-10 text-[10px] text-slate-200/90 truncate">
                        ${book.author}
@@ -125,49 +125,51 @@ function renderSavedBooks() {
 
         const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
         const downloadButton = book.download_url
-            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
+            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
                    <i class="fa-solid fa-download text-xs"></i>
                    <span>Download</span>
                </a>`
-            : `<button onclick="showToast('This archive item does not have a PDF attached yet.')" class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
+            : `<button onclick="showToast('This archive item does not have a PDF attached yet.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
                    <i class="fa-solid fa-download text-xs"></i>
                    <span>Download</span>
                </button>`;
 
         const metaBadges = `
-            <div class="flex flex-wrap items-center gap-1.5 mb-2.5">
+            <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
                 ${book.category ? `<span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md">${book.category}</span>` : ''}
                 ${book.pages && book.pages !== 'TBD' ? `<span class="bg-slate-100 text-accord-muted text-[10px] font-semibold px-2 py-0.5 rounded-md">${book.pages} pages</span>` : ''}
             </div>
         `;
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col sm:flex-row gap-5 items-stretch group";
+        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col sm:flex-row gap-5 items-center group";
         card.innerHTML = `
-            <!-- Left Column: Book Cover -->
-            <div class="w-full sm:w-40 md:w-44 shrink-0">
+            <!-- Left Column: Compact Book Cover -->
+            <div class="w-full sm:w-36 shrink-0">
                 ${coverVisual}
             </div>
 
-            <!-- Right Column: Full Details & Actions -->
-            <div class="flex-1 flex flex-col justify-between min-w-0">
+            <!-- Right Column: Wide Content & Action Row -->
+            <div class="flex-1 flex flex-col justify-between min-w-0 w-full">
                 <div>
-                    ${metaBadges}
-                    <h3 class="font-bold text-accord-slate text-base sm:text-[17px] leading-snug mb-1.5 group-hover:text-accord-blue transition-colors">
-                        ${book.title}
-                    </h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
+                        <h3 class="font-bold text-accord-slate text-base sm:text-lg leading-snug truncate group-hover:text-accord-blue transition-colors">
+                            ${book.title}
+                        </h3>
+                        ${metaBadges}
+                    </div>
 
-                    <p class="text-xs font-bold text-accord-slate mb-2.5">
+                    <p class="text-xs font-bold text-accord-slate mb-2">
                         ${book.author} ${book.year ? `<span class="font-semibold text-accord-muted ml-1">(${book.year})</span>` : ''}
                     </p>
 
-                    <p class="text-xs text-accord-muted leading-relaxed mb-4">
+                    <p class="text-xs text-accord-muted leading-relaxed line-clamp-3 mb-4">
                         ${book.description || ''}
                     </p>
                 </div>
 
                 <!-- Bottom Action Row -->
-                <div class="flex items-center gap-2 pt-1">
+                <div class="flex items-center gap-2">
                     ${downloadButton}
                     <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center transition-all" title="Copy Book Link">
                         <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
