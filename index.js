@@ -36,9 +36,10 @@ function renderSkeletonCards() {
     grid.innerHTML = Array(6).fill(`
         <div class="bg-white border border-slate-200/90 rounded-3xl p-4 flex gap-4 animate-pulse">
             <div class="w-28 sm:w-32 shrink-0 space-y-2.5">
-                <div class="h-40 rounded-2xl bg-slate-200"></div>
+                <div class="h-44 rounded-2xl bg-slate-200"></div>
                 <div class="flex gap-1.5">
                     <div class="h-8 bg-slate-200 rounded-xl flex-1"></div>
+                    <div class="h-8 w-8 bg-slate-200 rounded-xl"></div>
                     <div class="h-8 w-8 bg-slate-200 rounded-xl"></div>
                 </div>
             </div>
@@ -265,10 +266,10 @@ function renderBooks(filteredList) {
         const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
         const coverVisual = book.cover_url
-            ? `<div class="w-full h-40 sm:h-44 rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
+            ? `<div class="w-full h-44 rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
                    <img src="${book.cover_url}" alt="${book.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                </div>`
-            : `<div class="w-full h-40 sm:h-44 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-3 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
+            : `<div class="w-full h-44 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
                    <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
                    <div class="relative z-10">
                        <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
@@ -291,20 +292,15 @@ function renderBooks(filteredList) {
                </button>`;
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-start group";
+        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
         card.innerHTML = `
-            <!-- Left Column: Compact Cover + Action Row -->
-            <div class="w-28 sm:w-32 shrink-0 flex flex-col gap-2.5">
+            <!-- Left Column: Cover + Download -->
+            <div class="w-28 sm:w-32 shrink-0 flex flex-col justify-between gap-2.5">
                 ${coverVisual}
-                <div class="flex items-center gap-1.5">
-                    ${downloadButton}
-                    <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-8 h-8 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
-                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
-                    </button>
-                </div>
+                ${downloadButton}
             </div>
 
-            <!-- Right Column: Category, Year, Title, Author & Description -->
+            <!-- Right Column: Metadata, Description & Bottom Icon Row -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
                 <div>
                     <div class="flex items-center justify-between gap-2 mb-2">
@@ -322,15 +318,19 @@ function renderBooks(filteredList) {
                         ${book.author}
                     </p>
 
-                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-3">
+                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-4">
                         ${book.description || ''}
                     </p>
                 </div>
 
-                <div class="pt-2.5 flex justify-end">
-                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="text-[11px] font-semibold text-accord-muted hover:text-accord-blue flex items-center gap-1 transition-colors" title="Copy Book Link">
-                        <i class="fa-solid fa-share-nodes text-[10px] md:hidden"></i>
-                        <i class="fa-regular fa-copy text-[10px] hidden md:inline"></i>
+                <!-- Bottom Right Action Icons: Aligned flush with Download button -->
+                <div class="flex items-center justify-end gap-1.5 pt-2.5">
+                    <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-8 h-8 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
+                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
+                    </button>
+                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-8 h-8 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Copy Book Link">
+                        <i class="fa-solid fa-share-nodes text-[11px] md:hidden"></i>
+                        <i class="fa-regular fa-copy text-[11px] hidden md:inline"></i>
                     </button>
                 </div>
             </div>
