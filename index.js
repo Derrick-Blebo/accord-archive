@@ -32,23 +32,22 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderSkeletonCards() {
     const grid = document.getElementById('books-grid');
     if (!grid) return;
-    grid.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6";
-    grid.innerHTML = Array(4).fill(`
-        <div class="bg-white border border-slate-200/90 rounded-3xl p-5 flex flex-col sm:flex-row gap-5 animate-pulse">
-            <div class="w-full sm:w-36 md:w-40 h-56 sm:h-52 rounded-2xl bg-slate-200 shrink-0"></div>
-            <div class="flex-1 flex flex-col justify-between space-y-3 py-1">
-                <div class="space-y-2.5">
-                    <div class="h-4 bg-slate-200 rounded-lg w-3/4"></div>
-                    <div class="h-3 bg-slate-200 rounded-lg w-1/3"></div>
-                    <div class="h-3 bg-slate-100 rounded-lg w-full mt-3"></div>
-                    <div class="h-3 bg-slate-100 rounded-lg w-5/6"></div>
-                    <div class="h-3 bg-slate-100 rounded-lg w-2/3"></div>
+    grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
+    grid.innerHTML = Array(6).fill(`
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-4 flex gap-4 animate-pulse">
+            <div class="w-28 sm:w-32 shrink-0 space-y-2.5">
+                <div class="h-40 rounded-2xl bg-slate-200"></div>
+                <div class="flex gap-1.5">
+                    <div class="h-8 bg-slate-200 rounded-xl flex-1"></div>
+                    <div class="h-8 w-8 bg-slate-200 rounded-xl"></div>
                 </div>
-                <div class="flex items-center gap-2 pt-2">
-                    <div class="h-10 bg-slate-200 rounded-2xl flex-1"></div>
-                    <div class="h-10 w-10 bg-slate-200 rounded-2xl"></div>
-                    <div class="h-10 w-10 bg-slate-200 rounded-2xl"></div>
-                </div>
+            </div>
+            <div class="flex-1 space-y-2.5 py-1">
+                <div class="h-3 bg-slate-200 rounded w-1/2"></div>
+                <div class="h-4 bg-slate-200 rounded w-5/6"></div>
+                <div class="h-3 bg-slate-200 rounded w-1/3"></div>
+                <div class="h-3 bg-slate-100 rounded w-full mt-2"></div>
+                <div class="h-3 bg-slate-100 rounded w-4/5"></div>
             </div>
         </div>
     `).join('');
@@ -249,9 +248,8 @@ async function loadBooksFromSupabase() {
 function renderBooks(filteredList) {
     const grid = document.getElementById('books-grid');
     const emptyState = document.getElementById('empty-state');
-    
-    // 1 column on mobile, 2 on tablets/laptops and wide screens
-    grid.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6";
+
+    grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
     grid.innerHTML = '';
 
     if (filteredList.length === 0) {
@@ -266,67 +264,73 @@ function renderBooks(filteredList) {
         const safeTitle = book.title.replace(/'/g, "\\'");
         const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
-        // Full-height left cover image
         const coverVisual = book.cover_url
-            ? `<div class="w-full h-56 sm:h-full min-h-[210px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
+            ? `<div class="w-full h-40 sm:h-44 rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
                    <img src="${book.cover_url}" alt="${book.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                </div>`
-            : `<div class="w-full h-56 sm:h-full min-h-[210px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-4 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
+            : `<div class="w-full h-40 sm:h-44 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-3 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
                    <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
                    <div class="relative z-10">
-                       <p class="text-[8px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
-                       <h4 class="serif-heading text-sm font-bold mt-2 leading-snug line-clamp-4">${book.title}</h4>
+                       <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                       <h4 class="serif-heading text-xs font-bold mt-1.5 leading-snug line-clamp-4">${book.title}</h4>
                    </div>
-                   <div class="relative z-10 text-[10px] text-slate-200/90 truncate">
+                   <div class="relative z-10 text-[9px] text-slate-200/90 truncate">
                        ${book.author}
                    </div>
                </div>`;
 
-        // Pill-shaped Download button: direct download for Supabase PDFs, new tab for external links
         const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
         const downloadButton = book.download_url
-            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
-                   <i class="fa-solid fa-download text-xs"></i>
+            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-8 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-2.5 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1">
+                   <i class="fa-solid fa-download text-[10px]"></i>
                    <span>Download</span>
                </a>`
-            : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
-                   <i class="fa-solid fa-download text-xs"></i>
+            : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-8 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-2.5 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1">
+                   <i class="fa-solid fa-download text-[10px]"></i>
                    <span>Download</span>
                </button>`;
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col sm:flex-row gap-5 items-stretch group";
+        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-start group";
         card.innerHTML = `
-            <!-- Left Column: Full-Height Book Cover -->
-            <div class="w-full sm:w-36 md:w-40 shrink-0">
+            <!-- Left Column: Compact Cover + Action Row -->
+            <div class="w-28 sm:w-32 shrink-0 flex flex-col gap-2.5">
                 ${coverVisual}
+                <div class="flex items-center gap-1.5">
+                    ${downloadButton}
+                    <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-8 h-8 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
+                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
+                    </button>
+                </div>
             </div>
 
-            <!-- Right Column: Title, Author + (Pub Date), Description, and Bottom Action Row -->
+            <!-- Right Column: Category, Year, Title, Author & Description -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
                 <div>
-                    <h3 class="font-bold text-accord-slate text-base sm:text-[17px] leading-snug mb-1.5 line-clamp-3 group-hover:text-accord-blue transition-colors">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
+                            ${book.category || 'Archive'}
+                        </span>
+                        ${book.year ? `<span class="text-[10px] font-semibold text-accord-muted shrink-0">Pub. ${book.year}</span>` : ''}
+                    </div>
+
+                    <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 group-hover:text-accord-blue transition-colors">
                         ${book.title}
                     </h3>
 
-                    <p class="text-xs font-bold text-accord-slate mb-2.5">
-                        ${book.author} ${book.year ? `<span class="font-semibold text-accord-muted ml-1">(${book.year})</span>` : ''}
+                    <p class="text-[11px] font-bold text-accord-slate mb-2 truncate">
+                        ${book.author}
                     </p>
 
-                    <p class="text-xs text-accord-muted leading-relaxed line-clamp-4 mb-4">
+                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-3">
                         ${book.description || ''}
                     </p>
                 </div>
 
-                <!-- Bottom Action Row: Download Pill + Bookmark + Share/Copy -->
-                <div class="flex items-center gap-2 pt-1">
-                    ${downloadButton}
-                    <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-10 h-10 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-2xl flex items-center justify-center transition-all" title="Save Bookmark">
-                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-xs"></i>
-                    </button>
-                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center transition-all" title="Copy Book Link">
-                        <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
-                        <i class="fa-regular fa-copy text-xs hidden md:inline"></i>
+                <div class="pt-2.5 flex justify-end">
+                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="text-[11px] font-semibold text-accord-muted hover:text-accord-blue flex items-center gap-1 transition-colors" title="Copy Book Link">
+                        <i class="fa-solid fa-share-nodes text-[10px] md:hidden"></i>
+                        <i class="fa-regular fa-copy text-[10px] hidden md:inline"></i>
                     </button>
                 </div>
             </div>
@@ -393,7 +397,7 @@ async function toggleBookmark(btn, title) {
     const icon = btn.querySelector('i');
     if (index > -1) {
         savedBookmarks.splice(index, 1);
-        icon.className = "fa-regular fa-bookmark text-xs";
+        icon.className = "fa-regular fa-bookmark text-[11px]";
         btn.classList.remove('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Removed from Saved Books.");
         if (currentUser) {
@@ -401,7 +405,7 @@ async function toggleBookmark(btn, title) {
         }
     } else {
         savedBookmarks.push(title);
-        icon.className = "fa-solid fa-bookmark text-xs";
+        icon.className = "fa-solid fa-bookmark text-[11px]";
         btn.classList.add('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Added to Saved Books!");
         if (currentUser) {
