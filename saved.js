@@ -22,7 +22,9 @@ async function initAuth() {
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
         currentUser = session?.user || null;
         await syncUserState();
-        renderSavedBooks();
+        if (allBooks.length > 0) {
+            renderSavedBooks();
+        }
     });
 }
 
