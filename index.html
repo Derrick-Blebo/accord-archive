@@ -89,13 +89,17 @@
             </a>
 
             <!-- Navigation Links -->
-            <nav class="hidden md:flex items-center space-x-8">
+            <nav class="hidden md:flex items-center space-x-6">
                 <a href="#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                 <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
                 <a href="#submit" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</a>
-                <button onclick="openBookmarksModal()" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors">
+                <button onclick="openBookmarksModal()" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Reading List">
                     <i class="fa-solid fa-bookmark text-lg"></i>
                     <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                </button>
+                <button id="auth-nav-btn" onclick="openAuthModal()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                    <i class="fa-regular fa-user"></i>
+                    <span id="auth-nav-label">Sign In</span>
                 </button>
             </nav>
 
@@ -121,127 +125,20 @@
                 <i class="fa-solid fa-bookmark text-accord-gold"></i>
                 <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
             </button>
+            <button id="mobile-auth-btn" onclick="openAuthModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-2">
+                <i class="fa-regular fa-user"></i>
+                <span id="mobile-auth-label">Sign In / Create Account</span>
+            </button>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <main class="flex-grow">
 
-        <!-- Hero Section 
-        <section class="relative overflow-hidden bg-gradient-to-b from-blue-50/50 via-white to-accord-bg py-16 lg:py-24 border-b border-slate-200/60">
-            <div class="absolute -top-24 -right-24 w-96 h-96 bg-accord-blue/5 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-accord-gold/10 rounded-full blur-3xl pointer-events-none"></div>
-
-            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                    
-                    <!-- Hero Left Content 
-                    <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
-                        <div class="inline-flex items-center space-x-2 bg-accord-lightBlue text-accord-blue px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider border border-blue-200">
-                            <i class="fa-solid fa-feather-pointed"></i>
-                            <span>Christian Media & Historical Archive</span>
-                        </div>
-                        
-                        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-accord-slate leading-[1.15]">
-                            Collecting History in <span class="text-accord-blue relative inline-block">Connection to God<span class="absolute bottom-1 left-0 w-full h-2 bg-accord-gold/30 -z-10 rounded"></span></span>
-                        </h1>
-                        
-                        <p class="text-lg sm:text-xl text-accord-muted max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
-                            Welcome to <strong>Accord</strong>. We archive, organize, and freely disseminate foundational stories, church histories, biographies of men of God, and chronicles shaping nations and world leaders.
-                        </p>
-
-                        <!-- Hero Action Buttons 
-                        <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
-                            <a href="#library" class="w-full sm:w-auto inline-flex items-center justify-center space-x-3 bg-accord-blue hover:bg-accord-darkBlue text-white font-semibold px-8 py-4 rounded-2xl shadow-xl shadow-blue-500/25 transition-all transform hover:-translate-y-0.5">
-                                <i class="fa-solid fa-download text-accord-gold"></i>
-                                <span>Browse Free Archives</span>
-                            </a>
-                            <a href="#submit" class="w-full sm:w-auto inline-flex items-center justify-center space-x-3 bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-semibold px-8 py-4 rounded-2xl shadow-sm transition-all">
-                                <i class="fa-solid fa-file-arrow-up text-accord-blue"></i>
-                                <span>Submit Manuscript</span>
-                            </a>
-                        </div>
-
-                        <!-- Stats Banner
-                        <div class="grid grid-cols-3 gap-4 pt-8 border-t border-slate-200/80 max-w-lg mx-auto lg:mx-0">
-                            <div>
-                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">120+</p>
-                                <p class="text-xs text-accord-muted font-medium">Archived Books</p>
-                            </div>
-                            <div>
-                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">45k</p>
-                                <p class="text-xs text-accord-muted font-medium">Global Readers</p>
-                            </div>
-                            <div>
-                                <p class="text-2xl sm:text-3xl font-extrabold text-accord-slate">4</p>
-                                <p class="text-xs text-accord-muted font-medium">Core Categories</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Hero Right Featured Book Showcase 
-                    <div class="lg:col-span-5 flex justify-center">
-                        <div class="relative w-full max-w-sm">
-                            <!-- Glow Behind Card 
-                            <div class="absolute inset-0 bg-gradient-to-tr from-accord-blue to-accord-gold rounded-3xl blur-2xl opacity-20 transform rotate-3"></div>
-                            
-                            <!-- Featured Book Card 
-                            <div class="relative bg-white border border-slate-200/80 rounded-3xl p-6 shadow-2xl space-y-6">
-                                <div class="flex items-center justify-between">
-                                    <span class="bg-accord-goldLight text-accord-gold font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider flex items-center space-x-1">
-                                        <i class="fa-solid fa-star text-[10px]"></i>
-                                        <span>Featured Archive</span>
-                                    </span>
-                                    <span class="text-xs font-semibold text-accord-muted">Pub. 1954</span>
-                               </div>
-
-                               <!-- Book Cover Mockup 
-                               <div class="h-64 rounded-2xl bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 p-6 flex flex-col justify-between text-white shadow-inner relative overflow-hidden group">
-                                    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                                    <div class="absolute top-0 right-0 w-32 h-32 bg-accord-gold/20 rounded-full blur-xl"></div>
-                                    
-                                    <div class="relative z-10">
-                                        <p class="text-[10px] uppercase tracking-widest text-accord-gold font-bold">Accord Historical Press</p>
-                                        <h3 class="serif-heading text-xl font-bold mt-1 leading-snug">The Great Welsh Revival & Beyond</h3>
-                                    </div>
-                                    
-                                    <div class="relative z-10 flex items-end justify-between">
-                                        <div>
-                                            <p class="text-xs text-slate-300">By Dr. Arthur Roberts</p>
-                                            <p class="text-[11px] text-accord-blue bg-white/90 px-2 py-0.5 rounded font-bold inline-block mt-1">Church History</p>
-                                        </div>
-                                        <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-white">
-                                            <i class="fa-solid fa-book-bookmark"></i>
-                                        </div>
-                                    </div>
-                               </div>
-
-                               <div class="space-y-2">
-                                    <h4 class="font-bold text-accord-slate text-base">The Fires of 1904: Eyewitness Accounts</h4>
-                                    <p class="text-xs text-accord-muted line-clamp-2">An exhaustive collection of original diary entries, newspaper cuttings, and theological letters documenting the spiritual awakening across Wales.</p>
-                               </div>
-
-                               <div class="flex items-center space-x-3 pt-2">
-                                    <button onclick="triggerSimulatedDownload()" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center space-x-2">
-                                        <i class="fa-solid fa-download"></i>
-                                        <span>Download</span>
-                                    </button>
-                                    <button onclick="toggleBookmark(this, 'The Great Welsh Revival & Beyond')" class="p-3 border border-slate-200 hover:border-accord-blue text-accord-slate hover:text-accord-blue rounded-xl transition-all">
-                                        <i class="fa-regular fa-bookmark"></i>
-                                    </button>
-                               </div>
-                            </div>
-                        </div>
-                    </div> 
-
-                </div>
-            </div>
-        </section>
-        -->
         <!-- Library Section & Search Filter -->
         <section id="library" class="py-16 lg:py-24 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex flex-col md:flex-row md:items-end justify-between mb-5">
-                    <h2 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate mt-1">Explore Historical Publications</h2>
+                <h2 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate mt-1">Explore Historical Publications</h2>
             </div>
 
             <!-- Search and Filter Bar -->
@@ -253,7 +150,7 @@
                         <input type="text" id="search-input" oninput="filterBooks()" placeholder="Search by title, author, or keyword (e.g., Revival, Leaders, Scotland)..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white transition-all">
                     </div>
 
-                    <!-- Category Selector Dropdown for Mobile -->
+                    <!-- Category Selector -->
                     <div class="w-full lg:w-auto flex items-center space-x-2 overflow-x-auto pb-2 lg:pb-0">
                         <button onclick="setCategory('All')" id="cat-btn-All" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-md shadow-blue-500/20">All Archives</button>
                         <button onclick="setCategory('Church History')" id="cat-btn-Church History" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Church History</button>
@@ -420,6 +317,79 @@
             </div>
             <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 text-center">
                 <button onclick="closeBookmarksModal()" class="w-full bg-accord-slate text-white text-xs font-bold py-3 rounded-xl">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Optional Sign In / Sign Up Modal -->
+    <div id="auth-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 id="auth-modal-title" class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
+                    <p class="text-xs text-accord-muted">Optional — sync your reading list across devices</p>
+                </div>
+                <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Signed-Out View -->
+            <div id="auth-forms-container" class="p-6 space-y-4">
+                <button type="button" onclick="handleGoogleSignIn()" class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
+                    <i class="fa-brands fa-google text-red-500"></i>
+                    <span>Continue with Google</span>
+                </button>
+
+                <div class="relative flex py-1 items-center">
+                    <div class="flex-grow border-t border-slate-200"></div>
+                    <span class="flex-shrink mx-3 text-[11px] uppercase tracking-wider text-accord-muted font-semibold">or with email</span>
+                    <div class="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-xl">
+                    <button type="button" id="tab-signin" onclick="switchAuthMode('signin')" class="py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all">Sign In</button>
+                    <button type="button" id="tab-signup" onclick="switchAuthMode('signup')" class="py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all">Create Account</button>
+                </div>
+
+                <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <div id="auth-name-field" class="hidden">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
+                        <input type="text" id="auth-name" placeholder="e.g., Derrick Blebo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
+                        <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
+                        <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <button type="submit" id="auth-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
+                        Sign In
+                    </button>
+                </form>
+
+                <p class="text-center text-[11px] text-accord-muted">
+                    You don't need an account to browse or download public archives.
+                </p>
+            </div>
+
+            <!-- Signed-In Account View -->
+            <div id="auth-profile-container" class="hidden p-6 space-y-5 text-center">
+                <div class="w-14 h-14 rounded-2xl bg-accord-lightBlue text-accord-blue flex items-center justify-center mx-auto text-xl font-bold">
+                    <i class="fa-solid fa-user-check"></i>
+                </div>
+                <div>
+                    <h4 id="profile-display-name" class="font-bold text-accord-slate text-base">Reader Account</h4>
+                    <p id="profile-display-email" class="text-xs text-accord-muted mt-0.5"></p>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-accord-muted">
+                    Your saved reading list is automatically synced to your account.
+                </div>
+                <button onclick="handleSignOut()" class="w-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs transition-all">
+                    Sign Out
+                </button>
             </div>
         </div>
     </div>

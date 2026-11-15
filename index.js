@@ -6,12 +6,175 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let booksData = [];
 let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
 let currentCategory = 'All';
+let currentUser = null;
+let authMode = 'signin';
 
-// Initialize App & Load Live Catalog from Supabase
+// Initialize App, Auth Session & Live Catalog
 window.onload = async function() {
     updateBookmarkBadge();
+    await initAuth();
     await loadBooksFromSupabase();
 };
+
+// Optional Auth Initialization & Session Listener
+async function initAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    currentUser = session?.user || null;
+    await syncUserState();
+
+    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+        currentUser = session?.user || null;
+        await syncUserState();
+    });
+}
+
+async function syncUserState() {
+    const navLabel = document.getElementById('auth-nav-label');
+    const mobileLabel = document.getElementById('mobile-auth-label');
+    const formsContainer = document.getElementById('auth-forms-container');
+    const profileContainer = document.getElementById('auth-profile-container');
+
+    if (currentUser) {
+        const fullName = currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.email.split('@')[0];
+        if (navLabel) navLabel.innerText = fullName;
+        if (mobileLabel) mobileLabel.innerText = `Account (${fullName})`;
+
+        formsContainer?.classList.add('hidden');
+        profileContainer?.classList.remove('hidden');
+        document.getElementById('profile-display-name').innerText = fullName;
+        document.getElementById('profile-display-email').innerText = currentUser.email;
+
+        // Pre-fill Manuscript Submission Form if empty
+        const subName = document.getElementById('sub-name');
+        const subEmail = document.getElementById('sub-email');
+        if (subName && !subName.value) subName.value = fullName;
+        if (subEmail && !subEmail.value) subEmail.value = currentUser.email;
+
+        await mergeAndLoadCloudBookmarks();
+    } else {
+        if (navLabel) navLabel.innerText = 'Sign In';
+        if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
+        formsContainer?.classList.remove('hidden');
+        profileContainer?.classList.add('hidden');
+
+        savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
+        updateBookmarkBadge();
+    }
+}
+
+async function mergeAndLoadCloudBookmarks() {
+    if (!currentUser) return;
+
+    if (savedBookmarks.length > 0) {
+        const rows = savedBookmarks.map(title => ({
+            user_id: currentUser.id,
+            book_title: title
+        }));
+        await supabaseClient
+            .from('user_bookmarks')
+            .upsert(rows, { onConflict: 'user_id,book_title' });
+    }
+
+    const { data, error } = await supabaseClient
+        .from('user_bookmarks')
+        .select('book_title')
+        .eq('user_id', currentUser.id);
+
+    if (!error && data) {
+        savedBookmarks = data.map(item => item.book_title);
+        localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
+        updateBookmarkBadge();
+        if (booksData.length > 0) renderBooks(booksData);
+    }
+}
+
+function openAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+function switchAuthMode(mode) {
+    authMode = mode;
+    const isSignup = mode === 'signup';
+    document.getElementById('auth-name-field').classList.toggle('hidden', !isSignup);
+    document.getElementById('auth-name').required = isSignup;
+    document.getElementById('auth-submit-btn').innerText = isSignup ? 'Create Free Account' : 'Sign In';
+
+    document.getElementById('tab-signin').className = !isSignup
+        ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
+        : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
+    document.getElementById('tab-signup').className = isSignup
+        ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
+        : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
+}
+
+async function handleGoogleSignIn() {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin
+        }
+    });
+    if (error) {
+        showToast(error.message);
+    }
+}
+
+async function handleAuthSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const fullName = document.getElementById('auth-name').value.trim();
+    const submitBtn = document.getElementById('auth-submit-btn');
+
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Please wait...';
+
+    if (authMode === 'signup') {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+        });
+        if (error) {
+            showToast(error.message);
+        } else if (data.session) {
+            showToast(`Welcome to Accord, ${fullName || 'Reader'}!`);
+            closeAuthModal();
+        } else {
+            showToast('Account created! Check your email to confirm.');
+            closeAuthModal();
+        }
+    } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            showToast(error.message);
+        } else {
+            showToast('Signed in successfully!');
+            closeAuthModal();
+        }
+    }
+
+    submitBtn.disabled = false;
+    switchAuthMode(authMode);
+}
+
+async function handleSignOut() {
+    await supabaseClient.auth.signOut();
+    localStorage.removeItem('accord_bookmarks');
+    savedBookmarks = [];
+    updateBookmarkBadge();
+    if (booksData.length > 0) renderBooks(booksData);
+    closeAuthModal();
+    showToast('Signed out.');
+}
 
 async function loadBooksFromSupabase() {
     const { data, error } = await supabaseClient
@@ -182,7 +345,7 @@ function triggerSimulatedDownload() {
     showToast("This archive item does not have a PDF attached yet.");
 }
 
-function toggleBookmark(btn, title) {
+async function toggleBookmark(btn, title) {
     const index = savedBookmarks.indexOf(title);
     const icon = btn.querySelector('i');
     if (index > -1) {
@@ -190,11 +353,17 @@ function toggleBookmark(btn, title) {
         icon.className = "fa-regular fa-bookmark text-xs";
         btn.classList.remove('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Removed from saved reading list.");
+        if (currentUser) {
+            await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', title);
+        }
     } else {
         savedBookmarks.push(title);
         icon.className = "fa-solid fa-bookmark text-xs";
         btn.classList.add('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Book saved to your reading list!");
+        if (currentUser) {
+            await supabaseClient.from('user_bookmarks').upsert({ user_id: currentUser.id, book_title: title });
+        }
     }
     localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
     updateBookmarkBadge();
@@ -236,9 +405,12 @@ function closeBookmarksModal() {
     renderBooks(booksData);
 }
 
-function removeBookmark(title) {
+async function removeBookmark(title) {
     savedBookmarks = savedBookmarks.filter(t => t !== title);
     localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
+    if (currentUser) {
+        await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', title);
+    }
     updateBookmarkBadge();
     openBookmarksModal();
 }
