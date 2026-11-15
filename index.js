@@ -9,12 +9,64 @@ let currentCategory = 'All';
 let currentUser = null;
 let authMode = 'signin';
 
-// Initialize App, Auth Session & Live Catalog
-window.onload = async function() {
+// Initialize App: Render cached books immediately, then fetch fresh data & auth in parallel
+document.addEventListener('DOMContentLoaded', () => {
     updateBookmarkBadge();
-    await initAuth();
-    await loadBooksFromSupabase();
-};
+
+    const cachedBooks = localStorage.getItem('accord_books_cache');
+    if (cachedBooks) {
+        try {
+            booksData = JSON.parse(cachedBooks);
+            applyInitialRender();
+        } catch (e) {
+            renderSkeletonCards();
+        }
+    } else {
+        renderSkeletonCards();
+    }
+
+    loadBooksFromSupabase();
+    initAuth();
+});
+
+function renderSkeletonCards() {
+    const grid = document.getElementById('books-grid');
+    if (!grid) return;
+    grid.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6";
+    grid.innerHTML = Array(4).fill(`
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-5 flex flex-col sm:flex-row gap-5 animate-pulse">
+            <div class="w-full sm:w-36 md:w-40 h-56 sm:h-52 rounded-2xl bg-slate-200 shrink-0"></div>
+            <div class="flex-1 flex flex-col justify-between space-y-3 py-1">
+                <div class="space-y-2.5">
+                    <div class="h-4 bg-slate-200 rounded-lg w-3/4"></div>
+                    <div class="h-3 bg-slate-200 rounded-lg w-1/3"></div>
+                    <div class="h-3 bg-slate-100 rounded-lg w-full mt-3"></div>
+                    <div class="h-3 bg-slate-100 rounded-lg w-5/6"></div>
+                    <div class="h-3 bg-slate-100 rounded-lg w-2/3"></div>
+                </div>
+                <div class="flex items-center gap-2 pt-2">
+                    <div class="h-10 bg-slate-200 rounded-2xl flex-1"></div>
+                    <div class="h-10 w-10 bg-slate-200 rounded-2xl"></div>
+                    <div class="h-10 w-10 bg-slate-200 rounded-2xl"></div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function applyInitialRender() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedBookId = urlParams.get('book');
+
+    if (sharedBookId) {
+        const matchedBook = booksData.filter(b => String(b.id) === String(sharedBookId));
+        if (matchedBook.length > 0) {
+            renderBooks(matchedBook);
+            return;
+        }
+    }
+    renderBooks(booksData);
+}
 
 // Optional Auth Initialization & Session Listener
 async function initAuth() {
@@ -44,7 +96,6 @@ async function syncUserState() {
         document.getElementById('profile-display-name').innerText = fullName;
         document.getElementById('profile-display-email').innerText = currentUser.email;
 
-        // Pre-fill Manuscript Submission Form if empty
         const subName = document.getElementById('sub-name');
         const subEmail = document.getElementById('sub-email');
         if (subName && !subName.value) subName.value = fullName;
@@ -84,7 +135,7 @@ async function mergeAndLoadCloudBookmarks() {
         savedBookmarks = data.map(item => item.book_title);
         localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
         updateBookmarkBadge();
-        if (booksData.length > 0) renderBooks(booksData);
+        if (booksData.length > 0) applyInitialRender();
     }
 }
 
@@ -171,7 +222,7 @@ async function handleSignOut() {
     localStorage.removeItem('accord_bookmarks');
     savedBookmarks = [];
     updateBookmarkBadge();
-    if (booksData.length > 0) renderBooks(booksData);
+    if (booksData.length > 0) applyInitialRender();
     closeAuthModal();
     showToast('Signed out.');
 }
@@ -179,26 +230,19 @@ async function handleSignOut() {
 async function loadBooksFromSupabase() {
     const { data, error } = await supabaseClient
         .from('books')
-        .select('*')
+        .select('id, title, author, category, year, pages, description, cover_url, download_url, gradient')
         .is('deleted_at', null)
         .eq('is_visible', true)
         .order('created_at', { ascending: false });
 
     if (!error && data) {
         booksData = data;
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const sharedBookId = urlParams.get('book');
-
-        if (sharedBookId) {
-            const matchedBook = booksData.filter(b => String(b.id) === String(sharedBookId));
-            if (matchedBook.length > 0) {
-                renderBooks(matchedBook);
-                return;
-            }
+        try {
+            localStorage.setItem('accord_books_cache', JSON.stringify(data));
+        } catch (e) {
+            // Ignore storage quota errors if cover images are large
         }
-
-        renderBooks(booksData);
+        applyInitialRender();
     }
 }
 
@@ -280,10 +324,9 @@ function renderBooks(filteredList) {
                     <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-10 h-10 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-2xl flex items-center justify-center transition-all" title="Save Bookmark">
                         <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-xs"></i>
                     </button>
-                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 md:w-auto md:px-3.5 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center gap-1.5 transition-all" title="Copy Book Link">
+                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center transition-all" title="Copy Book Link">
                         <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
                         <i class="fa-regular fa-copy text-xs hidden md:inline"></i>
-                        
                     </button>
                 </div>
             </div>
@@ -352,7 +395,7 @@ async function toggleBookmark(btn, title) {
         savedBookmarks.splice(index, 1);
         icon.className = "fa-regular fa-bookmark text-xs";
         btn.classList.remove('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
-        showToast("Removed from saved reading list.");
+        showToast("Removed from Saved Books.");
         if (currentUser) {
             await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', title);
         }
@@ -360,7 +403,7 @@ async function toggleBookmark(btn, title) {
         savedBookmarks.push(title);
         icon.className = "fa-solid fa-bookmark text-xs";
         btn.classList.add('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
-        showToast("Book saved to your reading list!");
+        showToast("Added to Saved Books!");
         if (currentUser) {
             await supabaseClient.from('user_bookmarks').upsert({ user_id: currentUser.id, book_title: title });
         }
@@ -372,47 +415,6 @@ async function toggleBookmark(btn, title) {
 function updateBookmarkBadge() {
     document.getElementById('bookmark-badge').innerText = savedBookmarks.length;
     document.getElementById('mobile-bookmark-count').innerText = savedBookmarks.length;
-}
-
-function openBookmarksModal() {
-    const listContainer = document.getElementById('bookmarks-list');
-    listContainer.innerHTML = '';
-
-    if (savedBookmarks.length === 0) {
-        listContainer.innerHTML = `<p class="text-sm text-accord-muted text-center py-8">No saved books yet. Click the bookmark icon on any book to save it for later.</p>`;
-    } else {
-        savedBookmarks.forEach(title => {
-            const safeTitle = title.replace(/'/g, "\\'");
-            const item = document.createElement('div');
-            item.className = "flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200";
-            item.innerHTML = `
-                <span class="text-sm font-bold text-accord-slate">${title}</span>
-                <button onclick="removeBookmark('${safeTitle}')" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1"><i class="fa-solid fa-trash"></i></button>
-            `;
-            listContainer.appendChild(item);
-        });
-    }
-
-    const modal = document.getElementById('bookmarks-modal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function closeBookmarksModal() {
-    const modal = document.getElementById('bookmarks-modal');
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
-    renderBooks(booksData);
-}
-
-async function removeBookmark(title) {
-    savedBookmarks = savedBookmarks.filter(t => t !== title);
-    localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
-    if (currentUser) {
-        await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', title);
-    }
-    updateBookmarkBadge();
-    openBookmarksModal();
 }
 
 // Community Submission Form -> Saves Directly to Supabase

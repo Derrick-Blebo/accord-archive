@@ -7,6 +7,11 @@
     
     <meta name="google-site-verification" content="-UXnRC4ScaYjZnpk-9JmWOcoL2KMzzloT2nk3aEaAhA" /> 
 
+    <!-- Preconnect for Faster Initial Load -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://mzblgajftvyyosyrawcx.supabase.co" crossorigin>
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -34,8 +39,6 @@
     </script>
     
     <!-- Google Fonts Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     
     <!-- FontAwesome Icons -->
@@ -95,12 +98,10 @@
                 <a href="#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                 <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
                 <a href="#submit" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</a>
-                <button onclick="openBookmarksModal()" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Reading List">
-                    <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Books">
-                        <i class="fa-solid fa-bookmark text-lg"></i>
-                        <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
-                    </a>
-                </button>
+                <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Books">
+                    <i class="fa-solid fa-bookmark text-lg"></i>
+                    <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                </a>
                 <button id="auth-nav-btn" onclick="openAuthModal()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
                     <i class="fa-regular fa-user"></i>
                     <span id="auth-nav-label">Sign In</span>
@@ -125,12 +126,10 @@
             <a href="#library" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
             <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
             <a href="#submit" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Contribute Archive</a>
-            <button onclick="openBookmarksModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
-                <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
-                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                    <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
-                </a>
-            </button>
+            <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
+                <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
+            </a>
             <button id="mobile-auth-btn" onclick="openAuthModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-2">
                 <i class="fa-regular fa-user"></i>
                 <span id="mobile-auth-label">Sign In / Create Account</span>
@@ -306,34 +305,13 @@
         </div>
     </footer>
 
-    <!-- Saved Bookmarks Drawer Modal -->
-    <div id="bookmarks-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4 sm:p-6">
-        <div class="bg-white rounded-3xl max-w-lg w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <h3 class="font-bold text-accord-slate text-lg flex items-center space-x-2">
-                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                    <span>Saved Reading List</span>
-                </h3>
-                <button onclick="closeBookmarksModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div id="bookmarks-list" class="p-6 overflow-y-auto space-y-4 flex-grow">
-                <!-- Bookmarks injected here -->
-            </div>
-            <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 text-center">
-                <button onclick="closeBookmarksModal()" class="w-full bg-accord-slate text-white text-xs font-bold py-3 rounded-xl">Close</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Optional Sign In / Sign Up Modal -->
     <div id="auth-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div>
                     <h3 id="auth-modal-title" class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
-                    <p class="text-xs text-accord-muted">Optional — sync your reading list across devices</p>
+                    <p class="text-xs text-accord-muted">Optional — sync your saved books across devices</p>
                 </div>
                 <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -391,7 +369,7 @@
                     <p id="profile-display-email" class="text-xs text-accord-muted mt-0.5"></p>
                 </div>
                 <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-accord-muted">
-                    Your saved reading list is automatically synced to your account.
+                    Your saved books are automatically synced to your account.
                 </div>
                 <button onclick="handleSignOut()" class="w-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs transition-all">
                     Sign Out
@@ -401,7 +379,7 @@
     </div>
 
     <!-- JavaScript Application Logic -->
-    <script src="index.js"></script>
+    <script src="index.js?v=2"></script>
     
 </body>
 </html>
