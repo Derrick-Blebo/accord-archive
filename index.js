@@ -113,7 +113,14 @@ async function loadLibraryData() {
     ]);
 
     if (!booksRes.error && booksRes.data) {
-        allBooks = booksRes.data;
+        // Deduplicate books by lowercase title so duplicates never show on the homepage
+        const seenTitles = new Set();
+        allBooks = booksRes.data.filter(book => {
+            const key = (book.title || '').trim().toLowerCase();
+            if (!key || seenTitles.has(key)) return false;
+            seenTitles.add(key);
+            return true;
+        });
     }
 
     if (!catsRes.error && catsRes.data) {
@@ -170,6 +177,17 @@ function setAccessFilter(accessType) {
 }
 
 function filterBooks() {
+    const searchInput = document.getElementById('library-search');
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn && searchInput) {
+        if (searchInput.value.trim().length > 0) {
+            clearBtn.classList.remove('hidden');
+            clearBtn.classList.add('flex');
+        } else {
+            clearBtn.classList.add('hidden');
+            clearBtn.classList.remove('flex');
+        }
+    }
     renderBooks();
 }
 
@@ -218,7 +236,6 @@ function renderBooks() {
         const isPurchased = purchasedBookIds.includes(Number(book.id));
         const safeTitle = (book.title || '').replace(/'/g, "\\'");
 
-        // Fallback gradient cover (also shown automatically if external cover_url fails to load)
         const fallbackCoverHtml = `
             <div class="fallback-cover w-full h-48 sm:h-full min-h-[195px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
                 <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>

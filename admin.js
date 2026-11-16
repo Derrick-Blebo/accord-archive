@@ -140,7 +140,7 @@ async function fetchAllData() {
 }
 
 // ==========================================
-// BULK EXCEL / CSV UPLOAD & TEMPLATE EXPORT
+// BULK EXCEL / CSV UPLOAD (STRICT NO-DUPLICATES)
 // ==========================================
 
 function openExcelUploadModal() {
@@ -213,7 +213,6 @@ document.getElementById('excel-file-input')?.addEventListener('change', function
             const worksheet = workbook.Sheets[firstSheetName];
             const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-            // Normalize keys to lowercase/trimmed so minor header casing differences still work
             parsedExcelRows = rawRows
                 .map(row => {
                     const normalized = {};
@@ -225,9 +224,30 @@ document.getElementById('excel-file-input')?.addEventListener('change', function
                 .filter(row => String(row.title || '').trim() !== '');
 
             if (parsedExcelRows.length > 0) {
-                document.getElementById('excel-row-preview').innerText = `${parsedExcelRows.length} valid book row(s) detected and ready to import.`;
-                document.getElementById('execute-excel-import-btn').disabled = false;
-                showToast(`Detected ${parsedExcelRows.length} book(s) in "${file.name}".`);
+                const existingTitles = new Set(
+                    catalogData.map(b => (b.title || '').trim().toLowerCase())
+                );
+                let newCount = 0;
+                let dupCount = 0;
+                const seenInSheet = new Set();
+
+                parsedExcelRows.forEach(r => {
+                    const key = String(r.title).trim().toLowerCase();
+                    if (existingTitles.has(key) || seenInSheet.has(key)) {
+                        dupCount++;
+                    } else {
+                        seenInSheet.add(key);
+                        newCount++;
+                    }
+                });
+
+                document.getElementById('excel-row-preview').innerText = dupCount > 0
+                    ? `${newCount} new book(s) ready • ${dupCount} duplicate(s) will be skipped automatically.`
+                    : `${newCount} new book row(s) detected and ready to import.`;
+                document.getElementById('execute-excel-import-btn').disabled = newCount === 0;
+                showToast(newCount === 0
+                    ? "All books in this file are already in your catalog."
+                    : `Detected ${newCount} new book(s) (${dupCount} duplicates skipped).`);
             } else {
                 document.getElementById('excel-row-preview').innerText = 'No valid rows with a "title" column found.';
                 document.getElementById('execute-excel-import-btn').disabled = true;
@@ -253,9 +273,15 @@ async function processExcelUpload() {
     importBtn.disabled = true;
     progressBox.classList.remove('hidden');
 
-    let successCount = 0;
+    let addedCount = 0;
+    let skippedCount = 0;
     const total = parsedExcelRows.length;
     const existingCatNames = new Set(categoriesData.map(c => c.name.toLowerCase()));
+
+    // Build set of existing catalog titles (case-insensitive) to strictly block duplicates
+    const existingTitles = new Set(
+        catalogData.map(b => (b.title || '').trim().toLowerCase())
+    );
 
     for (let i = 0; i < total; i++) {
         const row = parsedExcelRows[i];
@@ -264,11 +290,19 @@ async function processExcelUpload() {
         counterText.innerText = `${i + 1} / ${total}`;
 
         const title = String(row.title || 'Untitled Book').trim();
+        const normalizedTitle = title.toLowerCase();
+
+        // Skip duplicate book if already in catalog or already imported in this batch
+        if (existingTitles.has(normalizedTitle)) {
+            skippedCount++;
+            statusText.innerText = `Skipped duplicate: "${title}"`;
+            continue;
+        }
+
         statusText.innerText = `Importing: "${title}"`;
 
         const categoryName = String(row.category || 'Uncategorized').trim() || 'Uncategorized';
 
-        // Automatically register any new category from the Excel sheet
         if (categoryName !== 'Uncategorized' && !existingCatNames.has(categoryName.toLowerCase())) {
             const { error: catErr } = await supabaseClient.from('categories').insert([{ name: categoryName }]);
             if (!catErr) existingCatNames.add(categoryName.toLowerCase());
@@ -295,16 +329,19 @@ async function processExcelUpload() {
         };
 
         const { error } = await supabaseClient.from('books').insert([payload]);
-        if (!error) successCount++;
+        if (!error) {
+            addedCount++;
+            existingTitles.add(normalizedTitle);
+        }
     }
 
-    statusText.innerText = `Import complete! Added ${successCount} of ${total} books.`;
-    showToast(`Successfully imported ${successCount} book(s)!`);
+    statusText.innerText = `Done! ${addedCount} new book(s) added, ${skippedCount} duplicate(s) skipped.`;
+    showToast(`Import complete: ${addedCount} added, ${skippedCount} duplicates skipped.`);
     await fetchAllData();
 
     setTimeout(() => {
         closeExcelUploadModal();
-    }, 1500);
+    }, 1600);
 }
 
 // ==========================================
@@ -783,6 +820,18 @@ async function processArchiveSave(isDraft) {
 
     const editId = document.getElementById('edit-book-id').value;
     const title = document.getElementById('form-title').value.trim() || "Untitled Draft";
+
+    // Block duplicate titles when adding a new book
+    if (!editId && title !== "Untitled Draft") {
+        const isDuplicate = catalogData.some(
+            b => (b.title || '').trim().toLowerCase() === title.toLowerCase()
+        );
+        if (isDuplicate) {
+            showToast(`"${title}" already exists in the catalog! Edit the existing entry instead.`);
+            return;
+        }
+    }
+
     const author = document.getElementById('form-author').value.trim() || "TBD";
     const category = document.getElementById('form-category').value || "Uncategorized";
     const year = document.getElementById('form-year').value.trim() || "TBD";
@@ -797,7 +846,6 @@ async function processArchiveSave(isDraft) {
     const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
     const initialUrl = externalUrl || (existingBook ? existingBook.download_url : "");
 
-    // Upload cover to Supabase Storage as WebP
     let finalCoverUrl = existingBook ? existingBook.cover_url : "";
     if (coverToSave && coverToSave.startsWith('data:image/')) {
         try {
