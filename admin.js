@@ -616,13 +616,40 @@ async function processArchiveSave(isDraft) {
     const existingBook = editId ? catalogData.find(b => b.id == editId) : null;
     const initialUrl = externalUrl || (existingBook ? existingBook.download_url : "");
 
+    // Upload cover to Supabase Storage as WebP
+    let finalCoverUrl = existingBook ? existingBook.cover_url : "";
+    if (coverToSave && coverToSave.startsWith('data:image/')) {
+        try {
+            const blob = await (await fetch(coverToSave)).blob();
+            const coverFileName = `covers/cover_${Date.now()}.webp`;
+            const { data: coverUp, error: coverErr } = await supabaseClient.storage
+                .from('archive-files')
+                .upload(coverFileName, blob, {
+                    contentType: 'image/webp',
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (coverErr) throw coverErr;
+
+            const { data: coverPub } = supabaseClient.storage
+                .from('archive-files')
+                .getPublicUrl(coverUp.path);
+
+            finalCoverUrl = coverPub.publicUrl;
+        } catch (err) {
+            console.error("Cover Upload Error:", err);
+            showToast(`Cover upload failed: ${err.message}`);
+        }
+    }
+
     const tempBook = {
         id: editId ? Number(editId) : tempId,
         title, author, category, year, pages, description,
         is_for_sale: isForSale,
         price,
         downloads: existingBook ? existingBook.downloads : 0,
-        cover_url: coverToSave || (existingBook ? existingBook.cover_url : ""),
+        cover_url: finalCoverUrl,
         download_url: initialUrl,
         is_visible: !isDraft,
         status: selectedFile ? 'uploading' : (isDraft ? 'draft' : 'published')
@@ -676,7 +703,7 @@ async function processArchiveSave(isDraft) {
         is_for_sale: isForSale,
         price,
         download_url: downloadUrl,
-        cover_url: tempBook.cover_url,
+        cover_url: finalCoverUrl,
         description,
         gradient: existingBook ? existingBook.gradient : "from-blue-900 via-indigo-900 to-slate-900",
         is_visible: !isDraft,
@@ -794,6 +821,7 @@ function promptEmptyTrash() {
     document.getElementById('confirm-btn').onclick = async function() {
         for (const item of [...trashData]) {
             await removeStorageFile(item.download_url);
+            await removeStorageFile(item.cover_url);
             await supabaseClient.from('books').delete().eq('id', item.id);
         }
         closeConfirmModal();
@@ -809,15 +837,20 @@ function closeConfirmModal() {
     deleteTargetId = null;
 }
 
-async function removeStorageFile(downloadUrl) {
-    if (!downloadUrl || !downloadUrl.includes('/archive-files/')) return;
-    const filePath = decodeURIComponent(downloadUrl.split('/archive-files/')[1].split('?')[0]);
-    await supabaseClient.storage.from('archive-files').remove([filePath]);
+async function removeStorageFile(fileUrl) {
+    if (!fileUrl || !fileUrl.includes('/archive-files/')) return;
+    try {
+        const filePath = decodeURIComponent(fileUrl.split('/archive-files/')[1].split('?')[0]);
+        await supabaseClient.storage.from('archive-files').remove([filePath]);
+    } catch (e) {}
 }
 
 async function executePermanentDelete(id) {
     const book = trashData.find(b => b.id === id);
-    if (book) await removeStorageFile(book.download_url);
+    if (book) {
+        await removeStorageFile(book.download_url);
+        await removeStorageFile(book.cover_url);
+    }
     await supabaseClient.from('books').delete().eq('id', id);
     closeConfirmModal();
     await fetchAllData();
@@ -1172,7 +1205,8 @@ document.getElementById('form-cover')?.addEventListener('change', function(e) {
                 canvas.height = img.height * scale;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                currentCompressedCover = canvas.toDataURL('image/jpeg', 0.82);
+                // Compressed WebP at 0.80 quality
+                currentCompressedCover = canvas.toDataURL('image/webp', 0.80);
                 if (previewBox) {
                     previewBox.innerHTML = `<img src="${currentCompressedCover}" class="w-full h-full object-cover">`;
                 }

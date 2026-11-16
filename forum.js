@@ -162,7 +162,6 @@ function renderForumFeed() {
 
     feed.innerHTML = '';
 
-    // Deep-link focus mode for a single testimony or event
     if (sharedTestimonyId) {
         const matched = testimoniesData.filter(t => String(t.id) === String(sharedTestimonyId));
         if (matched.length > 0) {
@@ -198,7 +197,6 @@ function renderForumFeed() {
         )
         : [];
 
-    // Show standalone testimonies (or all testimonies when filtering by testimonies/theme)
     const filteredTestimonies = (currentForumType === 'all' || currentForumType === 'testimonies')
         ? testimoniesData.filter(item => {
             const matchesType = currentForumType === 'testimonies' || !item.event_id;
@@ -211,7 +209,6 @@ function renderForumFeed() {
         })
         : [];
 
-    // Combine and sort newest first
     const combined = [
         ...filteredEvents.map(ev => ({ type: 'event', created_at: ev.created_at, data: ev })),
         ...filteredTestimonies.map(t => ({ type: 'testimony', created_at: t.created_at, data: t }))
@@ -233,7 +230,6 @@ function renderForumFeed() {
     });
 }
 
-// Build a Church Event Card (with flyer, event likes, share link, and nested event testimonies)
 function buildEventCard(ev) {
     const likedEvents = JSON.parse(localStorage.getItem('accord_liked_events') || '[]');
     const hasLikedEvent = likedEvents.includes(Number(ev.id));
@@ -288,7 +284,6 @@ function buildEventCard(ev) {
                     </p>
                 </div>
 
-                <!-- Event Engagement & Share Row -->
                 <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center space-x-2.5">
                         <button type="button" onclick="likeEvent(${ev.id})" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${hasLikedEvent ? 'bg-red-50 border-red-200 text-red-600' : 'bg-slate-50 hover:bg-red-50 border-slate-200 text-accord-slate hover:border-red-200 hover:text-red-600'}">
@@ -310,7 +305,6 @@ function buildEventCard(ev) {
             </div>
         </div>
 
-        <!-- Event Testimonies Sub-Section -->
         <div class="pt-4 border-t border-amber-200/70 space-y-4">
             <div class="flex items-center justify-between">
                 <h4 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">
@@ -325,7 +319,6 @@ function buildEventCard(ev) {
     return card;
 }
 
-// Build a Testimony Card (with Like/Amen, Share Link, Edit for signed-in owner, Nested Comments & Comment Likes)
 function buildTestimonyCard(item, isNestedInEvent = false) {
     const comments = commentsByTestimony[item.id] || [];
     const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
@@ -345,7 +338,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
         .join('')
         .toUpperCase();
 
-    // Separate top-level comments and replies
     const topComments = comments.filter(c => !c.parent_comment_id);
     const repliesByParent = {};
     comments.filter(c => c.parent_comment_id).forEach(r => {
@@ -396,7 +388,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
                             </div>
                             <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-line">${escapeHTML(c.comment_text)}</p>
 
-                            <!-- Comment Actions: Like, Reply, Edit -->
                             <div class="flex items-center gap-4 mt-2">
                                 <button type="button" onclick="likeComment(${c.id})" class="text-[11px] font-bold ${hasLikedComment ? 'text-red-500' : 'text-accord-muted hover:text-red-500'} transition-colors">
                                     <i class="${hasLikedComment ? 'fa-solid' : 'fa-regular'} fa-heart mr-1"></i>Like (${Number(c.like_count) || 0})
@@ -412,7 +403,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
 
                     ${repliesHtml}
 
-                    <!-- Hidden Reply Form -->
                     <form id="reply-form-${c.id}" onsubmit="handleCommentSubmit(event, ${item.id}, ${c.id})" class="hidden mt-2.5 ml-6 flex items-center gap-2">
                         <input type="text" id="reply-input-${c.id}" required placeholder="Write a reply..." class="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue">
                         <button type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3.5 py-2 rounded-xl">Reply</button>
@@ -427,7 +417,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
         : "bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm transition-all space-y-5";
 
     card.innerHTML = `
-        <!-- Author & Category Header -->
         <div class="flex items-start justify-between gap-4">
             <div class="flex items-center space-x-3.5">
                 <div class="w-10 h-10 rounded-2xl bg-accord-lightBlue text-accord-blue font-extrabold text-xs flex items-center justify-center shrink-0">
@@ -454,7 +443,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
             </div>
         </div>
 
-        <!-- Testimony Title & Full Story -->
         <div class="space-y-2">
             <h3 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate leading-snug">
                 ${escapeHTML(item.title)}
@@ -464,7 +452,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
             </p>
         </div>
 
-        <!-- Engagement Bar: Like/Amen + Share Link + Comment Count -->
         <div class="pt-3 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center space-x-2.5">
                 <button type="button" onclick="likeTestimony(${item.id})" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${hasLiked ? 'bg-amber-50 border-accord-gold text-accord-gold' : 'bg-white hover:bg-amber-50 border-slate-200 text-accord-slate hover:border-accord-gold hover:text-accord-gold'}">
@@ -484,7 +471,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
             </span>
         </div>
 
-        <!-- Comments Section -->
         <div class="pt-2 space-y-3">
             <div class="space-y-2.5">
                 ${commentsHtml}
@@ -501,7 +487,6 @@ function buildTestimonyCard(item, isNestedInEvent = false) {
     return card;
 }
 
-// Share Specific Testimony or Church Event Link
 async function shareForumLink(type, id, title, navigateOnly = false) {
     const shareUrl = `${window.location.origin}/forum.html?${type}=${id}`;
     if (navigateOnly) {
@@ -522,7 +507,6 @@ async function shareForumLink(type, id, title, navigateOnly = false) {
     }
 }
 
-// Testimony Modal Controls (with Guest Non-Editable Notice)
 function openTestimonyModal(eventId = null, eventTitle = '') {
     document.getElementById('testimony-event-id').value = eventId || '';
 
@@ -535,7 +519,6 @@ function openTestimonyModal(eventId = null, eventTitle = '') {
         eventBanner.classList.add('hidden');
     }
 
-    // Show non-editable warning if user is NOT signed in
     const guestWarning = document.getElementById('guest-edit-warning');
     if (guestWarning) {
         guestWarning.classList.toggle('hidden', Boolean(currentUser));
@@ -601,7 +584,6 @@ async function handleTestimonySubmit(e) {
     showToast("Your testimony has been published!");
 }
 
-// Church Event Modal & Submission
 function openEventModal() {
     document.getElementById('event-form').reset();
     compressedEventFlyer = '';
@@ -635,7 +617,8 @@ document.getElementById('event-flyer-input')?.addEventListener('change', functio
             canvas.height = img.height * scale;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            compressedEventFlyer = canvas.toDataURL('image/jpeg', 0.82);
+            // Compressed WebP at 0.80 quality
+            compressedEventFlyer = canvas.toDataURL('image/webp', 0.80);
             document.getElementById('event-flyer-preview').innerHTML = `<img src="${compressedEventFlyer}" class="w-full h-full object-cover">`;
         };
         img.src = ev.target.result;
@@ -655,6 +638,32 @@ async function handleEventSubmit(e) {
     btn.disabled = true;
     btn.innerText = 'Publishing Event...';
 
+    // Upload flyer to Supabase Storage as WebP
+    let finalFlyerUrl = '';
+    if (compressedEventFlyer && compressedEventFlyer.startsWith('data:image/')) {
+        try {
+            const blob = await (await fetch(compressedEventFlyer)).blob();
+            const flyerFileName = `flyers/flyer_${Date.now()}.webp`;
+            const { data: flyerUp, error: flyerErr } = await supabaseClient.storage
+                .from('archive-files')
+                .upload(flyerFileName, blob, {
+                    contentType: 'image/webp',
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (flyerErr) throw flyerErr;
+
+            const { data: flyerPub } = supabaseClient.storage
+                .from('archive-files')
+                .getPublicUrl(flyerUp.path);
+
+            finalFlyerUrl = flyerPub.publicUrl;
+        } catch (err) {
+            console.error("Flyer Upload Error:", err);
+        }
+    }
+
     const { error } = await supabaseClient
         .from('forum_events')
         .insert([{
@@ -664,7 +673,7 @@ async function handleEventSubmit(e) {
             event_date,
             location,
             description,
-            flyer_url: compressedEventFlyer || ''
+            flyer_url: finalFlyerUrl
         }]);
 
     btn.disabled = false;
@@ -680,7 +689,6 @@ async function handleEventSubmit(e) {
     showToast("Church event post published! Members can now share testimonies under it.");
 }
 
-// Comments & Nested Replies (Signed-in required)
 function toggleReplyBox(commentId) {
     if (!currentUser) {
         showToast("Please sign in to reply to comments.");
@@ -736,7 +744,6 @@ async function handleCommentSubmit(e, testimonyId, parentCommentId = null) {
     showToast(parentCommentId ? "Reply posted!" : "Comment posted!");
 }
 
-// Edit Testimony or Comment (Signed-in owners only)
 function openEditPostModal(type, id) {
     if (!currentUser) return;
     document.getElementById('edit-post-type').value = type;
@@ -811,7 +818,6 @@ async function handleEditPostSubmit(e) {
     showToast("Changes saved!");
 }
 
-// Likes (Events, Testimonies, Comments)
 async function likeEvent(eventId) {
     const liked = JSON.parse(localStorage.getItem('accord_liked_events') || '[]');
     if (liked.includes(Number(eventId))) {
@@ -848,7 +854,6 @@ async function likeComment(commentId) {
     await loadForumData();
 }
 
-// Deletions
 async function deleteEvent(id) {
     await supabaseClient.from('forum_events').delete().eq('id', id);
     await loadForumData();
@@ -867,7 +872,6 @@ async function deleteComment(id) {
     showToast("Comment deleted.");
 }
 
-// Auth Modal Helpers
 function openAuthModal() {
     const modal = document.getElementById('auth-modal');
     modal.classList.remove('hidden');
