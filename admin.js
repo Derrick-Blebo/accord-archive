@@ -137,6 +137,13 @@ async function fetchAllData() {
     renderForumModeration();
 
     updateStats();
+
+    // Auto-refresh admin catalog data every 30 seconds to catch new downloads
+    setInterval(() => {
+    if (document.getElementById('dashboard-wrapper') && !document.getElementById('dashboard-wrapper').classList.contains('hidden')) {
+        fetchAllData();
+    }
+}, 30000);
 }
 
 // ==========================================

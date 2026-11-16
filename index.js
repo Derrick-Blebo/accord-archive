@@ -434,9 +434,15 @@ async function toggleBookmark(bookTitle) {
 async function recordBookDownload(bookId) {
     const book = allBooks.find(b => Number(b.id) === Number(bookId));
     if (!book) return;
-    const nextCount = (Number(book.downloads) || 0) + 1;
-    book.downloads = nextCount;
-    await supabaseClient.from('books').update({ downloads: nextCount }).eq('id', bookId);
+    
+    // Optimistically update local state so the UI updates instantly
+    book.downloads = (Number(book.downloads) || 0) + 1;
+
+    // Call the secure atomic database function
+    const { error } = await supabaseClient.rpc('increment_book_download', { book_id: Number(bookId) });
+    if (error) {
+        console.error("Failed to record download count:", error.message);
+    }
 }
 
 async function initiateBookPurchase(bookId) {
