@@ -4,7 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let booksData = [];
-let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
+let savedBookmarks = [];
 let currentCategory = 'All';
 let currentUser = null;
 let authMode = 'signin';
@@ -36,20 +36,22 @@ function renderSkeletonCards() {
     grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
     grid.innerHTML = Array(6).fill(`
         <div class="bg-white border border-slate-200/90 rounded-3xl p-4 flex gap-4 animate-pulse">
-            <div class="w-28 sm:w-32 shrink-0 space-y-2.5">
-                <div class="h-44 rounded-2xl bg-slate-200"></div>
-                <div class="flex gap-1.5">
-                    <div class="h-8 bg-slate-200 rounded-xl flex-1"></div>
-                    <div class="h-8 w-8 bg-slate-200 rounded-xl"></div>
-                    <div class="h-8 w-8 bg-slate-200 rounded-xl"></div>
-                </div>
+            <div class="w-28 sm:w-32 shrink-0">
+                <div class="h-48 rounded-2xl bg-slate-200"></div>
             </div>
-            <div class="flex-1 space-y-2.5 py-1">
-                <div class="h-3 bg-slate-200 rounded w-1/2"></div>
-                <div class="h-4 bg-slate-200 rounded w-5/6"></div>
-                <div class="h-3 bg-slate-200 rounded w-1/3"></div>
-                <div class="h-3 bg-slate-100 rounded w-full mt-2"></div>
-                <div class="h-3 bg-slate-100 rounded w-4/5"></div>
+            <div class="flex-1 flex flex-col justify-between space-y-2.5 py-1">
+                <div class="space-y-2">
+                    <div class="h-3 bg-slate-200 rounded w-1/2"></div>
+                    <div class="h-4 bg-slate-200 rounded w-5/6"></div>
+                    <div class="h-3 bg-slate-200 rounded w-1/3"></div>
+                    <div class="h-3 bg-slate-100 rounded w-full mt-2"></div>
+                    <div class="h-3 bg-slate-100 rounded w-4/5"></div>
+                </div>
+                <div class="flex gap-1.5 pt-2">
+                    <div class="h-9 bg-slate-200 rounded-xl flex-1"></div>
+                    <div class="h-9 w-9 bg-slate-200 rounded-xl"></div>
+                    <div class="h-9 w-9 bg-slate-200 rounded-xl"></div>
+                </div>
             </div>
         </div>
     `).join('');
@@ -109,24 +111,16 @@ async function syncUserState() {
         formsContainer?.classList.remove('hidden');
         profileContainer?.classList.add('hidden');
 
-        savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
-        updateBookmarkBadge();
-    } else {
-        if (navLabel) navLabel.innerText = 'Sign In';
-        if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
-        formsContainer?.classList.remove('hidden');
-        profileContainer?.classList.add('hidden');
-
         savedBookmarks = [];
         localStorage.removeItem('accord_bookmarks');
         updateBookmarkBadge();
+        if (booksData.length > 0) applyInitialRender();
     }
 }
 
 async function mergeAndLoadCloudBookmarks() {
     if (!currentUser) return;
 
-    // If the user clicked Save right before signing in, save that book now
     if (pendingBookmarkTitle) {
         await supabaseClient
             .from('user_bookmarks')

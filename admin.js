@@ -11,10 +11,14 @@ let deleteTargetId = null;
 let currentCompressedCover = "";
 
 // Check Auth Session on Page Load
+const ADMIN_EMAIL = 'accordmedia1@gmail.com';
+
 window.onload = async function() {
     const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
+    if (session?.user?.email === ADMIN_EMAIL) {
         unlockDashboard(session.user);
+    } else if (session) {
+        await supabaseClient.auth.signOut();
     }
 };
 
@@ -47,6 +51,10 @@ async function handleAdminLogin(e) {
 
     if (error) {
         errorBox.innerText = error.message || "Invalid email or password.";
+        errorBox.classList.remove('hidden');
+    } else if (data?.user?.email !== ADMIN_EMAIL) {
+        await supabaseClient.auth.signOut();
+        errorBox.innerText = "Access denied. Archivist credentials required.";
         errorBox.classList.remove('hidden');
     } else if (data?.user) {
         unlockDashboard(data.user);
