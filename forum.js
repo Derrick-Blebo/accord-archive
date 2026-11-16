@@ -11,7 +11,6 @@ let commentsByTestimony = {};
 let currentForumType = 'all';
 let currentForumCategory = 'All';
 let currentUser = null;
-let authMode = 'signin';
 let compressedEventFlyer = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -22,16 +21,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     currentUser = session?.user || null;
-    await syncUserState();
+    syncUserState();
 
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
         currentUser = session?.user || null;
-        await syncUserState();
-        renderForumFeed();
+        syncUserState();
     });
 }
 
-async function syncUserState() {
+function syncUserState() {
     const navLabel = document.getElementById('auth-nav-label');
     const mobileLabel = document.getElementById('mobile-auth-label');
 
@@ -148,7 +146,7 @@ function buildEventCard(ev) {
     const hasLikedEvent = likedEvents.includes(Number(ev.id));
     const eventTestimonies = testimoniesData.filter(t => Number(t.event_id) === Number(ev.id));
     const canDeleteEvent = currentUser && ((ev.user_id && currentUser.id === ev.user_id) || currentUser.email === ADMIN_EMAIL);
-    const safeEventTitle = ev.title.replace(/'/g, "\\'");
+    const safeEventTitle = (ev.title || '').replace(/'/g, "\\'");
 
     const card = document.createElement('section');
     card.className = "bg-white border-2 border-amber-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6";
@@ -197,10 +195,9 @@ function buildEventCard(ev) {
                     </p>
                 </div>
 
-                <!-- Facebook-Style Compact Spacing Bar -->
                 <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center space-x-6 text-sm font-semibold text-accord-muted">
-                        <button type="button" onclick="likeEvent(${ev.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors">
+                        <button type="button" onclick="likeEvent(${ev.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors cursor-pointer">
                             <i class="${hasLikedEvent ? 'fa-solid text-red-500' : 'fa-regular'} fa-thumbs-up text-base"></i>
                             <span>${Number(ev.like_count) || 0}</span>
                         </button>
@@ -208,7 +205,7 @@ function buildEventCard(ev) {
                             <i class="fa-regular fa-comment text-base"></i>
                             <span>${eventTestimonies.length}</span>
                         </span>
-                        <button type="button" onclick="shareForumLink('event', ${ev.id}, '${safeEventTitle}')" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors">
+                        <button type="button" onclick="shareForumLink('event', ${ev.id}, '${safeEventTitle}')" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors cursor-pointer">
                             <i class="fa-solid fa-share text-base"></i>
                             <span>Share</span>
                         </button>
@@ -235,7 +232,7 @@ function buildTestimonyGridCard(item) {
     const comments = commentsByTestimony[item.id] || [];
     const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
     const hasLiked = amenedIds.includes(Number(item.id));
-    const safeTitle = item.title.replace(/'/g, "\\'");
+    const safeTitle = (item.title || '').replace(/'/g, "\\'");
 
     const card = document.createElement('div');
     card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between group";
@@ -261,9 +258,8 @@ function buildTestimonyGridCard(item) {
             </p>
         </div>
 
-        <!-- Facebook-Style Compact Spacing Bar -->
         <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-start space-x-6 text-xs text-accord-muted font-semibold">
-            <button type="button" onclick="likeTestimony(${item.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors">
+            <button type="button" onclick="likeTestimony(${item.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors cursor-pointer">
                 <i class="${hasLiked ? 'fa-solid text-red-500' : 'fa-regular'} fa-thumbs-up text-sm"></i>
                 <span>${Number(item.amen_count) || 0}</span>
             </button>
@@ -273,7 +269,7 @@ function buildTestimonyGridCard(item) {
                 <span>${comments.length}</span>
             </a>
 
-            <button type="button" onclick="shareForumLink('testimony', ${item.id}, '${safeTitle}')" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors">
+            <button type="button" onclick="shareForumLink('testimony', ${item.id}, '${safeTitle}')" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors cursor-pointer">
                 <i class="fa-solid fa-share text-sm"></i>
                 <span>Share</span>
             </button>
@@ -317,13 +313,12 @@ async function likeTestimony(testimonyId) {
     await loadForumData();
 }
 
-// Modal and form helpers...
 function openTestimonyModal(eventId = null, eventTitle = '') {
     document.getElementById('testimony-event-id').value = eventId || '';
     const eventBanner = document.getElementById('selected-event-banner');
     const eventNameSpan = document.getElementById('selected-event-name');
     if (eventId && eventTitle) {
-        eventNameSpan.innerText = eventTitle;
+        if (eventNameSpan) eventNameSpan.innerText = eventTitle;
         eventBanner?.classList.remove('hidden');
     } else {
         eventBanner?.classList.add('hidden');
@@ -421,6 +416,23 @@ document.getElementById('event-flyer-input')?.addEventListener('change', functio
     };
     reader.readAsDataURL(file);
 });
+
+function openAuthModal() {
+    document.getElementById('auth-modal')?.classList.remove('hidden');
+    document.getElementById('auth-modal')?.classList.add('flex');
+}
+
+function closeAuthModal() {
+    document.getElementById('auth-modal')?.classList.remove('flex');
+    document.getElementById('auth-modal')?.classList.add('hidden');
+}
+
+async function handleGoogleSignIn() {
+    await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/forum.html` }
+    });
+}
 
 function showToast(message) {
     const toast = document.getElementById('toast');
