@@ -205,16 +205,19 @@
 
             <!-- Summary Statistics Row -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
-                    <div class="w-14 h-14 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center text-xl">
+                <button type="button" onclick="switchTab('catalog')" class="bg-white border border-slate-200/80 hover:border-accord-blue hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
+                    <div class="w-14 h-14 rounded-2xl bg-blue-50 group-hover:bg-accord-blue text-accord-blue group-hover:text-white flex items-center justify-center text-xl transition-colors">
                         <i class="fa-solid fa-book-tanakh"></i>
                     </div>
                     <div>
                         <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Archives</p>
                         <h3 id="stat-total" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p class="text-[11px] text-emerald-600 font-semibold mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> Live & staged</p>
+                        <p class="text-[11px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
+                            <span>View archive catalog</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
                 <button type="button" onclick="openPendingReviews('drafts')" class="bg-white border border-slate-200/80 hover:border-amber-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
                     <div class="w-14 h-14 rounded-2xl bg-amber-50 group-hover:bg-accord-gold text-accord-gold group-hover:text-white flex items-center justify-center text-xl transition-colors">
@@ -237,8 +240,8 @@
                     <div>
                         <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
                         <h3 id="stat-downloads" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p class="text-[11px] text-purple-600 font-semibold mt-0.5 flex items-center gap-1">
-                            <span>View per-book breakdown</span>
+                        <p id="stat-sales-summary" class="text-[11px] text-purple-600 font-semibold mt-0.5 flex items-center gap-1">
+                            <span>Downloads & sales breakdown</span>
                             <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
                         </p>
                     </div>
@@ -426,12 +429,12 @@
                 </div>
             </section>
 
-            <!-- Tab 5: Download Analytics Breakdown Section -->
+            <!-- Tab 5: Download & Sales Analytics Breakdown Section -->
             <section id="section-downloads" class="space-y-6 hidden">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Book Download Analytics</h2>
-                        <p class="text-xs text-accord-muted mt-1">All archive publications ranked from most downloaded to least downloaded.</p>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Book Downloads & Accumulated Sales</h2>
+                        <p class="text-xs text-accord-muted mt-1">Download counts for all publications alongside units sold and accumulated revenue for books on sale.</p>
                     </div>
                     <button onclick="switchTab('catalog')" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-2.5 rounded-xl transition-all self-start sm:self-auto">
                         <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Catalog
@@ -447,6 +450,7 @@
                                     <th class="py-4 px-6">Book / Archive Title</th>
                                     <th class="py-4 px-6">Author</th>
                                     <th class="py-4 px-6">Category</th>
+                                    <th class="py-4 px-6 text-right">Accumulated Sales</th>
                                     <th class="py-4 px-6 text-right">Downloads</th>
                                 </tr>
                             </thead>
@@ -465,7 +469,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.6</span>
+                    <span>• Secure CMS v2.7</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -589,6 +593,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=3"></script>
+    <script src="admin.js?v=4"></script>
 </body>
 </html>

@@ -9,6 +9,7 @@ let catalogData = [];
 let trashData = [];
 let submissionsData = [];
 let categoriesData = [];
+let purchasesData = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
@@ -75,6 +76,14 @@ async function fetchAllData() {
         .from('books')
         .select('*')
         .order('created_at', { ascending: false });
+
+    const { data: purchases, error: purchasesErr } = await supabaseClient
+        .from('user_purchases')
+        .select('book_id, amount_paid');
+
+    if (!purchasesErr && purchases) {
+        purchasesData = purchases;
+    }
 
     if (!booksErr && books) {
         catalogData = books.filter(b => !b.deleted_at);
@@ -867,6 +876,15 @@ function updateStats() {
         downloadsEl.innerText = totalDownloads.toLocaleString();
     }
 
+    const totalRevenue = purchasesData.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+    const salesSummaryEl = document.getElementById('stat-sales-summary');
+    if (salesSummaryEl) {
+        salesSummaryEl.innerHTML = `
+            <span>${purchasesData.length} sold • USD ${totalRevenue.toFixed(2)}</span>
+            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+        `;
+    }
+
     const draftCount = catalogData.filter(b => b.status === 'draft' || b.is_visible === false).length;
     const totalPending = draftCount + submissionsData.length;
 
@@ -884,20 +902,44 @@ function renderDownloadsTable() {
     tbody.innerHTML = '';
 
     if (catalogData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No publications in the catalog yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-accord-muted">No publications in the catalog yet.</td></tr>`;
         return;
     }
 
-    const sortedBooks = [...catalogData].sort((a, b) => (Number(b.downloads) || 0) - (Number(a.downloads) || 0));
+    // Aggregate sales count & revenue per book_id
+    const salesByBook = {};
+    purchasesData.forEach(p => {
+        const key = Number(p.book_id);
+        if (!salesByBook[key]) {
+            salesByBook[key] = { count: 0, revenue: 0 };
+        }
+        salesByBook[key].count += 1;
+        salesByBook[key].revenue += Number(p.amount_paid) || 0;
+    });
+
+    const sortedBooks = [...catalogData].sort((a, b) => {
+        const scoreA = (Number(a.downloads) || 0) + (salesByBook[Number(a.id)]?.count || 0);
+        const scoreB = (Number(b.downloads) || 0) + (salesByBook[Number(b.id)]?.count || 0);
+        return scoreB - scoreA;
+    });
+
     const maxDownloads = Math.max(...sortedBooks.map(b => Number(b.downloads) || 0), 1);
 
     sortedBooks.forEach((book, index) => {
         const count = Number(book.downloads) || 0;
         const barWidth = Math.round((count / maxDownloads) * 100);
+        const bookSales = salesByBook[Number(book.id)] || { count: 0, revenue: 0 };
 
         const thumb = book.cover_url
             ? `<img src="${book.cover_url}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0">`
             : `<div class="w-8 h-11 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
+
+        const salesCell = book.is_for_sale
+            ? `<div class="inline-flex flex-col items-end">
+                   <span class="font-extrabold text-xs text-emerald-700">USD ${bookSales.revenue.toFixed(2)}</span>
+                   <span class="text-[10px] text-accord-muted font-semibold">${bookSales.count} ${bookSales.count === 1 ? 'copy' : 'copies'} sold @ USD ${Number(book.price || 0).toFixed(2)}</span>
+               </div>`
+            : `<span class="text-[11px] text-accord-muted">Free Archive</span>`;
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
@@ -905,10 +947,14 @@ function renderDownloadsTable() {
             <td class="py-4 px-6 text-center font-extrabold text-accord-muted">#${index + 1}</td>
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
                 ${thumb}
-                <span>${book.title}</span>
+                <div>
+                    <p>${book.title}</p>
+                    ${book.is_for_sale ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale</span>` : ''}
+                </div>
             </td>
             <td class="py-4 px-6 text-accord-muted">${book.author}</td>
             <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
+            <td class="py-4 px-6 text-right">${salesCell}</td>
             <td class="py-4 px-6 text-right">
                 <div class="inline-flex flex-col items-end min-w-[90px]">
                     <span class="font-extrabold text-sm text-accord-slate">${count.toLocaleString()}</span>
