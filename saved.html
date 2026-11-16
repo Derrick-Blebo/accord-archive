@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
 
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
@@ -52,10 +52,19 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full space-y-10">
-        <div>
-            <h1 class="serif-heading text-3xl font-bold text-accord-slate">Your Saved Library</h1>
-            <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your bookmarked publications and saved testimonies.</p>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow w-full space-y-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <h1 class="serif-heading text-3xl font-bold text-accord-slate">Your Saved Library</h1>
+                <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your bookmarked publications and saved testimonies.</p>
+            </div>
+
+            <!-- Filter Buttons to Switch Views -->
+            <div class="inline-flex items-center space-x-1.5 bg-slate-100 p-1.5 rounded-2xl">
+                <button type="button" onclick="setSavedFilter('all')" id="sfilter-all" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white shadow-sm">All Saved</button>
+                <button type="button" onclick="setSavedFilter('books')" id="sfilter-books" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Books</button>
+                <button type="button" onclick="setSavedFilter('testimonies')" id="sfilter-testimonies" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Testimonies</button>
+            </div>
         </div>
 
         <div id="saved-loading" class="text-center py-16">
@@ -63,16 +72,19 @@
             <p class="text-sm text-accord-muted">Loading your saved items...</p>
         </div>
 
-        <!-- Section 1: Saved Books -->
-        <div class="space-y-4">
-            <h2 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Publications & Books</h2>
-            <div id="saved-books-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
-        </div>
+        <!-- Unified Container for Saved Items -->
+        <div id="saved-content-container" class="space-y-10">
+            <!-- Saved Books Grid (Restored to original home page card view) -->
+            <div id="saved-books-section" class="space-y-4">
+                <h2 id="heading-books" class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Publications & Books</h2>
+                <div id="saved-books-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            </div>
 
-        <!-- Section 2: Saved Testimonies -->
-        <div class="space-y-4 pt-6 border-t border-slate-200">
-            <h2 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Testimonies</h2>
-            <div id="saved-testimonies-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            <!-- Saved Testimonies Grid -->
+            <div id="saved-testimonies-section" class="space-y-4">
+                <h2 id="heading-testimonies" class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Testimonies</h2>
+                <div id="saved-testimonies-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            </div>
         </div>
 
         <!-- Empty State -->
@@ -80,10 +92,11 @@
             <div class="w-16 h-16 bg-blue-50 text-accord-blue rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
                 <i class="fa-solid fa-bookmark"></i>
             </div>
-            <h3 id="empty-state-title" class="text-lg font-bold text-accord-slate">No Saved Items Yet</h3>
+            <h3 id="empty-state-title" class="text-lg font-bold text-accord-slate">No Saved Items Found</h3>
             <p id="empty-state-desc" class="text-xs text-accord-muted mt-1 leading-relaxed">Bookmark books or testimonies to keep them here for quick access.</p>
-            <div id="empty-state-actions" class="mt-6">
+            <div id="empty-state-actions" class="mt-6 flex justify-center gap-3">
                 <a href="index.html#library" class="bg-accord-blue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md">Browse Digital Library</a>
+                <a href="forum.html" class="bg-slate-100 text-accord-slate text-xs font-bold px-5 py-3 rounded-xl">Explore Testimonies</a>
             </div>
         </div>
     </main>
@@ -91,6 +104,6 @@
     <footer class="bg-white border-t border-slate-200 py-8 text-center text-xs text-accord-muted">
         © 2026 Accord Media House. All rights reserved.
     </footer>
-    <script src="saved.js?v=2"></script>
+    <script src="saved.js?v=3"></script>
 </body>
 </html>
