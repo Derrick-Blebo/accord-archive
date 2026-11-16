@@ -137,19 +137,21 @@
             <!-- Detailed book cards injected via saved.js -->
         </div>
 
-        <!-- Empty State -->
+        <!-- Empty / Sign-In Prompt State -->
         <div id="saved-empty-state" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
             <div class="w-16 h-16 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center mx-auto text-2xl mb-4">
                 <i class="fa-regular fa-bookmark"></i>
             </div>
-            <h2 class="serif-heading text-2xl font-bold text-accord-slate">No Saved Books Yet</h2>
-            <p class="text-sm text-accord-muted mt-2 leading-relaxed">
+            <h2 id="empty-state-title" class="serif-heading text-2xl font-bold text-accord-slate">No Saved Books Yet</h2>
+            <p id="empty-state-desc" class="text-sm text-accord-muted mt-2 leading-relaxed">
                 Click the bookmark icon on any publication in the Digital Library to save it here for quick reading and downloading.
             </p>
-            <a href="index.html#library" class="inline-flex items-center space-x-2 mt-6 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all">
-                <i class="fa-solid fa-book-open"></i>
-                <span>Browse Digital Library</span>
-            </a>
+            <div id="empty-state-actions" class="mt-6 flex items-center justify-center gap-3">
+                <a href="index.html#library" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>Browse Digital Library</span>
+                </a>
+            </div>
         </div>
     </main>
 

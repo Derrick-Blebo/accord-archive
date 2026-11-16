@@ -8,6 +8,7 @@ let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
 let currentCategory = 'All';
 let currentUser = null;
 let authMode = 'signin';
+let pendingBookmarkTitle = null;
 
 // Initialize App: Render cached books immediately, then fetch fresh data & auth in parallel
 document.addEventListener('DOMContentLoaded', () => {
@@ -110,20 +111,28 @@ async function syncUserState() {
 
         savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
         updateBookmarkBadge();
+    } else {
+        if (navLabel) navLabel.innerText = 'Sign In';
+        if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
+        formsContainer?.classList.remove('hidden');
+        profileContainer?.classList.add('hidden');
+
+        savedBookmarks = [];
+        localStorage.removeItem('accord_bookmarks');
+        updateBookmarkBadge();
     }
 }
 
 async function mergeAndLoadCloudBookmarks() {
     if (!currentUser) return;
 
-    if (savedBookmarks.length > 0) {
-        const rows = savedBookmarks.map(title => ({
-            user_id: currentUser.id,
-            book_title: title
-        }));
+    // If the user clicked Save right before signing in, save that book now
+    if (pendingBookmarkTitle) {
         await supabaseClient
             .from('user_bookmarks')
-            .upsert(rows, { onConflict: 'user_id,book_title' });
+            .upsert({ user_id: currentUser.id, book_title: pendingBookmarkTitle }, { onConflict: 'user_id,book_title' });
+        showToast(`"${pendingBookmarkTitle}" added to Saved Books!`);
+        pendingBookmarkTitle = null;
     }
 
     const { data, error } = await supabaseClient
@@ -393,6 +402,14 @@ function triggerSimulatedDownload() {
 }
 
 async function toggleBookmark(btn, title) {
+    // Require sign-in before saving a book
+    if (!currentUser) {
+        pendingBookmarkTitle = title;
+        showToast("Please sign in to save books to your account.");
+        openAuthModal();
+        return;
+    }
+
     const index = savedBookmarks.indexOf(title);
     const icon = btn.querySelector('i');
     if (index > -1) {
@@ -400,17 +417,19 @@ async function toggleBookmark(btn, title) {
         icon.className = "fa-regular fa-bookmark text-[11px]";
         btn.classList.remove('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Removed from Saved Books.");
-        if (currentUser) {
-            await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', title);
-        }
+        await supabaseClient
+            .from('user_bookmarks')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('book_title', title);
     } else {
         savedBookmarks.push(title);
         icon.className = "fa-solid fa-bookmark text-[11px]";
         btn.classList.add('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
         showToast("Added to Saved Books!");
-        if (currentUser) {
-            await supabaseClient.from('user_bookmarks').upsert({ user_id: currentUser.id, book_title: title });
-        }
+        await supabaseClient
+            .from('user_bookmarks')
+            .upsert({ user_id: currentUser.id, book_title: title });
     }
     localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
     updateBookmarkBadge();

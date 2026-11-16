@@ -4,7 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let allBooks = [];
-let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks')) || [];
+let savedBookmarks = [];
 let currentUser = null;
 let authMode = 'signin';
 
@@ -44,11 +44,6 @@ async function syncUserState() {
         document.getElementById('profile-display-name').innerText = fullName;
         document.getElementById('profile-display-email').innerText = currentUser.email;
 
-        if (savedBookmarks.length > 0) {
-            const rows = savedBookmarks.map(title => ({ user_id: currentUser.id, book_title: title }));
-            await supabaseClient.from('user_bookmarks').upsert(rows, { onConflict: 'user_id,book_title' });
-        }
-
         const { data, error } = await supabaseClient
             .from('user_bookmarks')
             .select('book_title')
@@ -61,9 +56,13 @@ async function syncUserState() {
         }
     } else {
         if (navLabel) navLabel.innerText = 'Sign In';
-        if (syncText) syncText.innerHTML = `Saved on this device • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign in to sync</button>`;
+        if (syncText) syncText.innerHTML = `Sign in required • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign In</button>`;
         formsContainer?.classList.remove('hidden');
         profileContainer?.classList.add('hidden');
+
+        savedBookmarks = [];
+        localStorage.removeItem('accord_bookmarks');
+        updateBookmarkBadge();
     }
 }
 
@@ -92,14 +91,39 @@ function renderSavedBooks() {
     updateBookmarkBadge();
 
     if (subtitle) {
-        subtitle.innerText = matchedBooks.length === 1
-            ? 'You have 1 saved publication in your library.'
-            : `You have ${matchedBooks.length} saved publications in your library.`;
+        if (!currentUser) {
+            subtitle.innerText = 'Sign in to view and manage your bookmarked publications.';
+        } else {
+            subtitle.innerText = matchedBooks.length === 1
+                ? 'You have 1 saved publication in your library.'
+                : `You have ${matchedBooks.length} saved publications in your library.`;
+        }
     }
 
     grid.innerHTML = '';
 
+    if (!currentUser) {
+        document.getElementById('empty-state-title').innerText = 'Sign In to View Saved Books';
+        document.getElementById('empty-state-desc').innerText = 'Create a free account or sign in with Google to save books and access your reading list across devices.';
+        document.getElementById('empty-state-actions').innerHTML = `
+            <button onclick="openAuthModal()" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all">
+                <i class="fa-regular fa-user"></i>
+                <span>Sign In / Create Account</span>
+            </button>
+        `;
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
     if (matchedBooks.length === 0) {
+        document.getElementById('empty-state-title').innerText = 'No Saved Books Yet';
+        document.getElementById('empty-state-desc').innerText = 'Click the bookmark icon on any publication in the Digital Library to save it here for quick reading and downloading.';
+        document.getElementById('empty-state-actions').innerHTML = `
+            <a href="index.html#library" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all">
+                <i class="fa-solid fa-book-open"></i>
+                <span>Browse Digital Library</span>
+            </a>
+        `;
         emptyState.classList.remove('hidden');
         return;
     } else {
