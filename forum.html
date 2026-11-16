@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Testimonies Forum — Accord Christian Media House & Archive</title>
+    <title>Testimonies & Church Events Forum — Accord Archive & Library</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -99,9 +99,13 @@
                 </button>
             </nav>
 
-            <!-- CTA Button -->
-            <div class="flex items-center space-x-3">
-                <button onclick="openTestimonyModal()" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+            <!-- CTA Buttons -->
+            <div class="flex items-center space-x-2.5">
+                <button onclick="openEventModal()" class="hidden sm:inline-flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                    <i class="fa-solid fa-church text-accord-gold"></i>
+                    <span>Church Event</span>
+                </button>
+                <button onclick="openTestimonyModal(null)" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
                     <i class="fa-solid fa-feather-pointed"></i>
                     <span>Share Testimony</span>
                 </button>
@@ -115,6 +119,7 @@
         <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
             <a href="index.html#library" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
             <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-bold text-accord-blue">Testimonies Forum</a>
+            <button onclick="openEventModal(); toggleMobileMenu();" class="block text-base font-medium text-amber-700">Create Church Event</button>
             <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-1">
                 <i class="fa-solid fa-bookmark text-accord-gold"></i>
                 <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
@@ -129,8 +134,8 @@
     <!-- Main Forum Content -->
     <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 w-full">
 
-        <!-- Hero Banner Explaining Accord's Testimony Book Compilation Mission -->
-        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm mb-10 relative overflow-hidden">
+        <!-- Hero Banner -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm mb-8 relative overflow-hidden">
             <div class="absolute top-0 right-0 w-72 h-72 bg-accord-gold/10 rounded-full blur-3xl pointer-events-none"></div>
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
                 <div class="max-w-2xl space-y-3">
@@ -139,50 +144,71 @@
                         <span>Living Chronicles • Book Compilation Initiative</span>
                     </div>
                     <h1 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate leading-tight">
-                        Share What God Has Done — Help Shape Our Next Archive Book
+                        Share What God Has Done — Gather Testimonies for Future Archive Books
                     </h1>
                     <p class="text-sm text-accord-muted leading-relaxed">
-                        Accord gathers verified testimonies of salvation, healing, deliverance, provision, and spiritual revival from believers around the world to compile into published books for our Digital Library. Share your story below and encourage fellow readers in the comments.
+                        Individuals can share personal testimonies, and churches or fellowship groups can create service & event posts to gather all testimonies born from a gathering in one place.
                     </p>
                 </div>
 
-                <div class="shrink-0 flex flex-col sm:flex-row lg:flex-col gap-3">
-                    <button onclick="openTestimonyModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-4 rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center space-x-2">
+                <div class="shrink-0 flex flex-col sm:flex-row lg:flex-col gap-2.5">
+                    <button onclick="openTestimonyModal(null)" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center space-x-2">
                         <i class="fa-solid fa-pen-nib"></i>
-                        <span>Submit Your Testimony</span>
+                        <span>Share Personal Testimony</span>
                     </button>
-                    <div class="bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-2.5 text-center">
-                        <span id="testimony-total-count" class="text-xs font-bold text-accord-slate">0 Testimonies Shared</span>
-                    </div>
+                    <button onclick="openEventModal()" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-6 py-3.5 rounded-2xl transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-church text-accord-gold"></i>
+                        <span>Create Church Event Post</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Search & Topic Filter Bar -->
-        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm mb-8 flex flex-col lg:flex-row items-center gap-4">
-            <div class="relative flex-1 w-full">
-                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-accord-muted"></i>
-                <input type="text" id="forum-search" oninput="filterTestimonies()" placeholder="Search testimonies by keyword, author, or location..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white transition-all">
+        <!-- Deep-Link Focus Banner (Shown when viewing a specific ?testimony=ID or ?event=ID link) -->
+        <div id="shared-focus-banner" class="hidden bg-accord-lightBlue border border-blue-200 rounded-2xl px-5 py-3.5 mb-6 flex items-center justify-between gap-4">
+            <div class="flex items-center space-x-2.5 text-xs font-bold text-accord-blue">
+                <i class="fa-solid fa-link"></i>
+                <span id="shared-focus-label">Viewing shared post</span>
+            </div>
+            <button onclick="clearSharedFocus()" class="bg-white hover:bg-slate-50 text-accord-slate text-xs font-bold px-3.5 py-1.5 rounded-xl border border-slate-200 transition-all">
+                View All Forum Posts
+            </button>
+        </div>
+
+        <!-- Search & Filter Bar -->
+        <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm mb-8 space-y-3.5">
+            <div class="flex flex-col lg:flex-row items-center gap-4">
+                <div class="relative flex-1 w-full">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-accord-muted"></i>
+                    <input type="text" id="forum-search" oninput="filterForumFeed()" placeholder="Search testimonies, church events, authors, or locations..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white transition-all">
+                </div>
+
+                <div class="w-full lg:w-auto flex items-center space-x-2 overflow-x-auto pb-1 lg:pb-0">
+                    <button onclick="setForumTypeFilter('all')" id="ftype-all" class="ftype-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white">All Posts</button>
+                    <button onclick="setForumTypeFilter('events')" id="ftype-events" class="ftype-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate"><i class="fa-solid fa-church text-accord-gold mr-1"></i> Church Events</button>
+                    <button onclick="setForumTypeFilter('testimonies')" id="ftype-testimonies" class="ftype-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate"><i class="fa-solid fa-dove text-accord-blue mr-1"></i> Testimonies</button>
+                </div>
             </div>
 
-            <div class="w-full lg:w-auto flex items-center space-x-2 overflow-x-auto pb-1 lg:pb-0">
-                <button onclick="setForumCategory('All')" id="fcat-All" class="fcat-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Stories</button>
-                <button onclick="setForumCategory('Salvation & Faith')" id="fcat-Salvation & Faith" class="fcat-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Salvation & Faith</button>
-                <button onclick="setForumCategory('Healing & Deliverance')" id="fcat-Healing & Deliverance" class="fcat-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Healing & Deliverance</button>
-                <button onclick="setForumCategory('Provision & Breakthrough')" id="fcat-Provision & Breakthrough" class="fcat-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Provision</button>
-                <button onclick="setForumCategory('Revival & Ministry')" id="fcat-Revival & Ministry" class="fcat-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Revival & Ministry</button>
+            <div class="flex items-center space-x-2 overflow-x-auto pt-3 border-t border-slate-100">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted mr-1 shrink-0">Theme:</span>
+                <button onclick="setForumCategory('All')" id="fcat-All" class="fcat-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Themes</button>
+                <button onclick="setForumCategory('Salvation & Faith')" id="fcat-Salvation & Faith" class="fcat-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Salvation & Faith</button>
+                <button onclick="setForumCategory('Healing & Deliverance')" id="fcat-Healing & Deliverance" class="fcat-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Healing & Deliverance</button>
+                <button onclick="setForumCategory('Provision & Breakthrough')" id="fcat-Provision & Breakthrough" class="fcat-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Provision</button>
+                <button onclick="setForumCategory('Revival & Ministry')" id="fcat-Revival & Ministry" class="fcat-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Revival & Ministry</button>
             </div>
         </div>
 
         <!-- Loading State -->
         <div id="forum-loading" class="text-center py-16">
             <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue mb-3"></i>
-            <p class="text-sm text-accord-muted">Loading community testimonies...</p>
+            <p class="text-sm text-accord-muted">Loading church events and testimonies...</p>
         </div>
 
-        <!-- Testimonies Feed -->
-        <div id="testimonies-feed" class="space-y-6">
-            <!-- Testimony cards + threaded comments injected via forum.js -->
+        <!-- Unified Feed (Church Events + Testimonies) -->
+        <div id="forum-feed" class="space-y-6">
+            <!-- Rendered via forum.js -->
         </div>
 
         <!-- Empty State -->
@@ -190,13 +216,18 @@
             <div class="w-16 h-16 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center mx-auto text-2xl mb-4">
                 <i class="fa-solid fa-dove"></i>
             </div>
-            <h2 class="serif-heading text-2xl font-bold text-accord-slate">Be the First to Share a Testimony</h2>
+            <h2 class="serif-heading text-2xl font-bold text-accord-slate">No Posts Found</h2>
             <p class="text-sm text-accord-muted mt-2 leading-relaxed">
-                Your story of faith can strengthen others and become part of Accord's upcoming compiled testimony books.
+                Start the conversation by sharing a testimony or creating an event post for your church service.
             </p>
-            <button onclick="openTestimonyModal()" class="mt-6 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md transition-all">
-                Share Your Testimony
-            </button>
+            <div class="mt-6 flex items-center justify-center gap-3">
+                <button onclick="openTestimonyModal(null)" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all">
+                    Share Testimony
+                </button>
+                <button onclick="openEventModal()" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-5 py-3 rounded-xl transition-all">
+                    Create Event
+                </button>
+            </div>
         </div>
     </main>
 
@@ -219,13 +250,13 @@
         </div>
     </footer>
 
-    <!-- Share Testimony Modal -->
+    <!-- Modal 1: Share Testimony Modal -->
     <div id="testimony-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
                 <div>
-                    <h3 class="font-bold text-accord-slate text-lg">Share Your Testimony</h3>
-                    <p class="text-xs text-accord-muted">Submitted stories may be selected for Accord's compiled testimony books</p>
+                    <h3 id="testimony-modal-heading" class="font-bold text-accord-slate text-lg">Share Your Testimony</h3>
+                    <p id="testimony-modal-subtitle" class="text-xs text-accord-muted">Submitted stories may be compiled into Accord's archive books</p>
                 </div>
                 <button onclick="closeTestimonyModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -233,6 +264,28 @@
             </div>
 
             <form id="testimony-form" onsubmit="handleTestimonySubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="testimony-event-id" value="">
+
+                <!-- Guest Warning Banner (Shown only when user is NOT signed in) -->
+                <div id="guest-edit-warning" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-3.5 text-xs text-amber-900 flex items-start justify-between gap-3">
+                    <div class="flex items-start space-x-2.5">
+                        <i class="fa-solid fa-triangle-exclamation text-accord-gold mt-0.5 text-sm"></i>
+                        <div>
+                            <p class="font-bold">You are posting as a guest</p>
+                            <p class="mt-0.5 text-[11px] leading-relaxed">You can publish right away without an account, <strong>but you will not be able to edit your testimony after posting</strong> unless you sign in first.</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeTestimonyModal(); openAuthModal();" class="shrink-0 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-3 py-1.5 rounded-xl text-[11px] transition-all">
+                        Sign In
+                    </button>
+                </div>
+
+                <!-- Event Link Pill (Shown when posting under a specific Church Event) -->
+                <div id="selected-event-banner" class="hidden bg-accord-lightBlue border border-blue-200 rounded-2xl px-4 py-2.5 text-xs text-accord-blue font-bold flex items-center justify-between">
+                    <span><i class="fa-solid fa-church mr-1.5"></i> Posting under: <span id="selected-event-name"></span></span>
+                    <button type="button" onclick="clearSelectedEventForTestimony()" class="text-[11px] underline">Remove</button>
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Name (as credited)</label>
@@ -262,17 +315,109 @@
 
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Testimony</label>
-                    <textarea id="testimony-body" rows="6" required placeholder="Write out what happened, how God intervened, and what this means for your walk of faith..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
-                </div>
-
-                <div class="bg-accord-goldLight/70 border border-amber-200/80 rounded-2xl p-3.5 text-xs text-slate-700 flex items-start space-x-2.5">
-                    <i class="fa-solid fa-book-open text-accord-gold mt-0.5"></i>
-                    <span>By posting, you grant Accord Media House permission to feature and edit your testimony for future digital & print book compilations.</span>
+                    <textarea id="testimony-body" rows="5" required placeholder="Write out what happened, how God intervened, and what this means for your walk of faith..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
 
                 <button type="submit" id="testimony-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
-                    Publish Testimony to Forum
+                    Publish Testimony
                 </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Create Church / Group Event Post Modal -->
+    <div id="event-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-lg">Create Church / Group Event Post</h3>
+                    <p class="text-xs text-accord-muted">Gather all testimonies from your service, crusade, or fellowship in one thread</p>
+                </div>
+                <button onclick="closeEventModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="event-form" onsubmit="handleEventSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <!-- Event Flyer Upload -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload Event Flyer (Optional)</label>
+                    <div class="relative group">
+                        <input type="file" id="event-flyer-input" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="flex items-center space-x-3.5 w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-3.5 group-hover:border-accord-blue group-hover:bg-accord-lightBlue transition-all">
+                            <div id="event-flyer-preview" class="w-14 h-16 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center overflow-hidden shrink-0">
+                                <i class="fa-regular fa-image text-lg"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate">Click to upload church program / event flyer</p>
+                                <p id="event-flyer-name" class="text-[11px] text-accord-muted mt-0.5">JPG, PNG, or WebP (Auto-optimized)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Church / Ministry Name</label>
+                        <input type="text" id="event-organizer" required placeholder="e.g., Grace Chapel International" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Event / Service Title</label>
+                        <input type="text" id="event-title" required placeholder="e.g., Night of Encounter 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Service / Event Date</label>
+                        <input type="text" id="event-date" placeholder="e.g., Nov 14, 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Venue / City</label>
+                        <input type="text" id="event-location" placeholder="e.g., Independence Square, Accra" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Invitation to Share Testimonies</label>
+                    <textarea id="event-description" rows="3" required placeholder="Invite attendees and members to share what the Lord did during this service or conference..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                </div>
+
+                <button type="submit" id="event-submit-btn" class="w-full bg-accord-gold hover:bg-amber-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-amber-500/20 transition-all text-sm">
+                    Publish Church Event Post
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Edit Testimony or Comment Modal (Signed-in owners only) -->
+    <div id="edit-post-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 id="edit-post-heading" class="font-bold text-accord-slate text-lg">Edit Post</h3>
+                <button onclick="closeEditPostModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleEditPostSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="edit-post-type">
+                <input type="hidden" id="edit-post-id">
+
+                <div id="edit-title-group">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title</label>
+                    <input type="text" id="edit-post-title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Content</label>
+                    <textarea id="edit-post-body" rows="5" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-1">
+                    <button type="button" onclick="closeEditPostModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                    <button type="submit" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all">Save Changes</button>
+                </div>
             </form>
         </div>
     </div>
@@ -283,7 +428,7 @@
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div>
                     <h3 class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
-                    <p class="text-xs text-accord-muted">Sign in to share testimonies and join the discussion</p>
+                    <p class="text-xs text-accord-muted">Sign in to comment, reply, and edit your posts</p>
                 </div>
                 <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -341,6 +486,6 @@
         </div>
     </div>
 
-    <script src="forum.js?v=1"></script>
+    <script src="forum.js?v=2"></script>
 </body>
 </html>
