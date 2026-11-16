@@ -122,7 +122,7 @@
 
             <div id="sync-status-pill" class="self-start sm:self-auto bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-accord-muted flex items-center space-x-2 shadow-sm">
                 <i class="fa-solid fa-cloud-arrow-up text-accord-blue"></i>
-                <span id="sync-status-text">Saved on this device • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign in to sync</button></span>
+                <span id="sync-status-text">Sign in required • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign In</button></span>
             </div>
         </div>
 
@@ -179,7 +179,7 @@
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div>
                     <h3 class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
-                    <p class="text-xs text-accord-muted">Optional — sync your saved books across devices</p>
+                    <p class="text-xs text-accord-muted">Sign in to save and sync your books across devices</p>
                 </div>
                 <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -237,7 +237,6 @@
         </div>
     </div>
 
-    <script src="saved.js"></script>
-    <script src="saved.js?v=2"></script>
+    <script src="saved.js?v=4"></script>
 </body>
 </html>

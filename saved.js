@@ -170,20 +170,23 @@ function renderSavedBooks() {
             ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url)
             : '';
 
+        const priceLine = (book.is_for_sale && !isPurchased)
+            ? `<p class="text-xs font-extrabold text-accord-blue mb-3">USD ${Number(book.price || 0).toFixed(2)}</p>`
+            : '';
+
         let primaryActionButton = '';
         if (book.is_for_sale && !isPurchased) {
-            const formattedPrice = Number(book.price || 0) > 0 ? ` • $${Number(book.price).toFixed(2)}` : '';
-            primaryActionButton = `<a href="index.html?book=${book.id}#library" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-2">
+            primaryActionButton = `<a href="index.html?book=${book.id}#library" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-5 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-2">
                    <i class="fa-solid fa-cart-shopping text-xs"></i>
-                   <span>Buy Now${formattedPrice}</span>
+                   <span>Buy Now</span>
                </a>`;
         } else if (book.is_for_sale && isPurchased) {
             primaryActionButton = cleanReadUrl
-                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-2">
+                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 rounded-full transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-2">
                        <i class="fa-solid fa-book-open-reader text-xs"></i>
                        <span>Read</span>
                    </a>`
-                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm flex items-center justify-center space-x-2">
+                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 rounded-full transition-all shadow-sm flex items-center justify-center space-x-2">
                        <i class="fa-solid fa-book-open-reader text-xs"></i>
                        <span>Read</span>
                    </button>`;
@@ -228,9 +231,11 @@ function renderSavedBooks() {
                         ${book.author} ${book.year ? `<span class="font-semibold text-accord-muted ml-1">(${book.year})</span>` : ''}
                     </p>
 
-                    <p class="text-xs text-accord-muted leading-relaxed line-clamp-3 mb-4">
+                    <p class="text-xs text-accord-muted leading-relaxed line-clamp-2 mb-2.5">
                         ${book.description || ''}
                     </p>
+
+                    ${priceLine}
                 </div>
 
                 <!-- Bottom Action Row -->

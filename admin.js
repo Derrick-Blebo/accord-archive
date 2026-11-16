@@ -80,9 +80,9 @@ async function fetchAllData() {
         catalogData = books.filter(b => !b.deleted_at);
         trashData = books.filter(b => b.deleted_at);
         renderCatalogTable(catalogData);
+        renderDraftsTable();
         renderTrashTable();
         renderDownloadsTable();
-        updateStats();
     }
 
     const { data: cats, error: catsErr } = await supabaseClient
@@ -105,6 +105,8 @@ async function fetchAllData() {
         submissionsData = subs;
         renderSubmissionsTable();
     }
+
+    updateStats();
 }
 
 function populateCategoryDropdowns() {
@@ -268,6 +270,87 @@ function switchTab(tabName) {
     });
 }
 
+function openPendingReviews(subTab = 'drafts') {
+    switchTab('submissions');
+    switchPendingSubTab(subTab);
+}
+
+function switchPendingSubTab(subTab) {
+    const isDrafts = subTab === 'drafts';
+    document.getElementById('pending-panel-drafts')?.classList.toggle('hidden', !isDrafts);
+    document.getElementById('pending-panel-submitted')?.classList.toggle('hidden', isDrafts);
+
+    const draftBtn = document.getElementById('subtab-btn-drafts');
+    const subBtn = document.getElementById('subtab-btn-submitted');
+
+    if (draftBtn) {
+        draftBtn.className = isDrafts
+            ? "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm"
+            : "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+    }
+    if (subBtn) {
+        subBtn.className = !isDrafts
+            ? "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm"
+            : "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+    }
+}
+
+function renderDraftsTable() {
+    const tbody = document.getElementById('drafts-table-body');
+    const draftBooks = catalogData.filter(b => b.status === 'draft' || b.is_visible === false);
+
+    const draftBadge = document.getElementById('drafts-subtab-badge');
+    if (draftBadge) draftBadge.innerText = draftBooks.length;
+
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (draftBooks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No draft or hidden books at the moment.</td></tr>`;
+        return;
+    }
+
+    draftBooks.forEach(book => {
+        const thumb = book.cover_url
+            ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
+            : `<div class="w-9 h-12 rounded-lg bg-amber-50 text-accord-gold flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-file-pen"></i></div>`;
+
+        const saleTag = book.is_for_sale
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">USD ${Number(book.price || 0).toFixed(2)}</span>`
+            : '';
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
+                ${thumb}
+                <div>
+                    <p class="leading-snug">${book.title}</p>
+                    <div class="flex items-center gap-1 mt-0.5">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-file-pen mr-1"></i> Draft</span>
+                        ${saleTag}
+                    </div>
+                </div>
+            </td>
+            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
+            <td class="py-4 px-6 text-center text-accord-muted">${book.year}</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                <button onclick="toggleBookVisibility(${book.id}, true)" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all" title="Publish Now">
+                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Publish
+                </button>
+                <button onclick="openArchiveModal('edit', ${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Edit Draft">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button onclick="promptDelete(${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Move to Recycle Bin">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 function renderCatalogTable(list) {
     const tbody = document.getElementById('admin-book-table-body');
     tbody.innerHTML = '';
@@ -303,7 +386,7 @@ function renderCatalogTable(list) {
         }
 
         const saleBadge = book.is_for_sale
-            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale • $${Number(book.price || 0).toFixed(2)}</span>`
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale • USD ${Number(book.price || 0).toFixed(2)}</span>`
             : '';
 
         const isVisible = book.is_visible !== false;
@@ -523,6 +606,7 @@ async function processArchiveSave(isDraft) {
         catalogData.unshift(tempBook);
     }
     renderCatalogTable(catalogData);
+    renderDraftsTable();
 
     let downloadUrl = initialUrl;
     if (selectedFile) {
@@ -713,12 +797,14 @@ async function executePermanentDelete(id) {
 
 function renderSubmissionsTable() {
     const tbody = document.getElementById('submissions-table-body');
+    const subBadge = document.getElementById('submitted-subtab-badge');
+    if (subBadge) subBadge.innerText = submissionsData.length;
+
+    if (!tbody) return;
     tbody.innerHTML = '';
-    document.getElementById('pending-badge').innerText = submissionsData.length;
-    document.getElementById('stat-pending').innerText = submissionsData.length;
 
     if (submissionsData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No pending manuscript submissions at this time.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No submitted manuscript reviews at this time.</td></tr>`;
         return;
     }
 
@@ -780,6 +866,15 @@ function updateStats() {
     if (downloadsEl) {
         downloadsEl.innerText = totalDownloads.toLocaleString();
     }
+
+    const draftCount = catalogData.filter(b => b.status === 'draft' || b.is_visible === false).length;
+    const totalPending = draftCount + submissionsData.length;
+
+    const statPendingEl = document.getElementById('stat-pending');
+    if (statPendingEl) statPendingEl.innerText = totalPending;
+
+    const pendingBadgeEl = document.getElementById('pending-badge');
+    if (pendingBadgeEl) pendingBadgeEl.innerText = totalPending;
 }
 
 function renderDownloadsTable() {

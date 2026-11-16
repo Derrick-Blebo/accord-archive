@@ -316,31 +316,34 @@ function renderBooks(filteredList) {
             ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url)
             : '';
 
+        const priceLine = (book.is_for_sale && !isPurchased)
+            ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`
+            : '';
+
         let primaryActionButton = '';
         if (book.is_for_sale && !isPurchased) {
-            const formattedPrice = Number(book.price || 0) > 0 ? ` • $${Number(book.price).toFixed(2)}` : '';
             primaryActionButton = `
-                <button onclick="initiateBookPurchase(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5">
-                    <i class="fa-solid fa-cart-shopping text-[10px]"></i>
-                    <span>Buy Now${formattedPrice}</span>
+                <button onclick="initiateBookPurchase(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5">
+                    <i class="fa-solid fa-cart-shopping text-[11px]"></i>
+                    <span>Buy Now</span>
                 </button>`;
         } else if (book.is_for_sale && isPurchased) {
             primaryActionButton = cleanReadUrl
-                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-book-open-reader text-[10px]"></i>
+                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-book-open-reader text-[11px]"></i>
                        <span>Read</span>
                    </a>`
-                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-book-open-reader text-[10px]"></i>
+                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-book-open-reader text-[11px]"></i>
                        <span>Read</span>
                    </button>`;
         } else {
             primaryActionButton = book.download_url
-                ? `<a href="${book.download_url}" onclick="trackDownload('${book.id}')" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                ? `<a href="${book.download_url}" onclick="trackDownload('${book.id}')" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
                        <i class="fa-solid fa-download text-[10px]"></i>
                        <span>Download</span>
                    </a>`
-                : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
                        <i class="fa-solid fa-download text-[10px]"></i>
                        <span>Download</span>
                    </button>`;
@@ -354,14 +357,14 @@ function renderBooks(filteredList) {
                 ${coverVisual}
             </div>
 
-            <!-- Right Column: Metadata, Description & Unified Action Row -->
+            <!-- Right Column: Metadata, Description, Price & Unified Action Row -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
                 <div>
                     <div class="flex items-center justify-between gap-2 mb-1.5">
-                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate">
+                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
                             ${book.category || 'Archive'}
                         </span>
-                        ${book.year ? `<span class="text-[10px] font-semibold text-accord-muted shrink-0">${book.year}</span>` : ''}
+                        ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${book.year}</span>` : ''}
                     </div>
 
                     <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 group-hover:text-accord-blue transition-colors">
@@ -372,12 +375,14 @@ function renderBooks(filteredList) {
                         ${book.author}
                     </p>
 
-                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-3 mb-3">
+                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2 mb-2.5">
                         ${book.description || ''}
                     </p>
+
+                    ${priceLine}
                 </div>
 
-                <!-- Unified Bottom Action Row: Buy/Read/Download + Bookmark + Copy -->
+                <!-- Unified Bottom Action Row: Buy Now / Read / Download + Bookmark + Copy -->
                 <div class="flex items-center gap-1.5">
                     ${primaryActionButton}
                     <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
@@ -412,7 +417,7 @@ function openPurchaseModal(bookId) {
 
     document.getElementById('purchase-book-title').innerText = book.title;
     document.getElementById('purchase-book-author').innerText = book.author;
-    document.getElementById('purchase-book-price').innerText = `$${Number(book.price || 0).toFixed(2)}`;
+    document.getElementById('purchase-book-price').innerText = `USD ${Number(book.price || 0).toFixed(2)}`;
 
     const coverEl = document.getElementById('purchase-book-cover');
     coverEl.innerHTML = book.cover_url

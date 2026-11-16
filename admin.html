@@ -175,8 +175,8 @@
                     <button onclick="switchTab('categories')" id="nav-tab-categories" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-tags mr-1.5"></i> Categories <span id="categories-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
-                    <button onclick="switchTab('submissions')" id="nav-tab-submissions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-inbox mr-1.5"></i> Pending Submissions <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                    <button onclick="openPendingReviews('drafts')" id="nav-tab-submissions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                        <i class="fa-solid fa-inbox mr-1.5"></i> Pending Reviews <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
                     <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-trash-can mr-1.5"></i> Recycle Bin <span id="trash-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
@@ -216,16 +216,19 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
-                    <div class="w-14 h-14 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center text-xl">
+                <button type="button" onclick="openPendingReviews('drafts')" class="bg-white border border-slate-200/80 hover:border-amber-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-50 group-hover:bg-accord-gold text-accord-gold group-hover:text-white flex items-center justify-center text-xl transition-colors">
                         <i class="fa-solid fa-inbox"></i>
                     </div>
                     <div>
                         <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Pending Reviews</p>
                         <h3 id="stat-pending" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p class="text-[11px] text-amber-600 font-semibold mt-0.5">Requires editorial attention</p>
+                        <p class="text-[11px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
+                            <span>Drafts & submitted archives</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
                 <button type="button" onclick="switchTab('downloads')" class="bg-white border border-slate-200/80 hover:border-purple-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
                     <div class="w-14 h-14 rounded-2xl bg-purple-50 group-hover:bg-purple-600 text-purple-600 group-hover:text-white flex items-center justify-center text-xl transition-colors">
@@ -331,16 +334,47 @@
                 </div>
             </section>
 
-            <!-- Tab 3: Pending Submissions Management Section -->
+            <!-- Tab 3: Pending Reviews (Draft Books + Submitted Archives) -->
             <section id="section-submissions" class="space-y-6 hidden">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Submitted Manuscripts & Archives</h2>
-                        <p class="text-xs text-accord-muted mt-1">Review user-submitted historical records and approve them to add directly to the catalog.</p>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Pending Reviews</h2>
+                        <p class="text-xs text-accord-muted mt-1">Manage unpublished book drafts and review community-submitted historical manuscripts.</p>
+                    </div>
+
+                    <!-- Sub-Tabs inside Pending Reviews -->
+                    <div class="inline-flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl self-start sm:self-auto">
+                        <button type="button" onclick="switchPendingSubTab('drafts')" id="subtab-btn-drafts" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
+                            <i class="fa-solid fa-file-pen mr-1.5"></i> Draft Books <span id="drafts-subtab-badge" class="ml-1 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                        </button>
+                        <button type="button" onclick="switchPendingSubTab('submitted')" id="subtab-btn-submitted" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                            <i class="fa-solid fa-inbox mr-1.5"></i> Submitted Archives <span id="submitted-subtab-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                        </button>
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                <!-- Sub-View 1: Draft Books -->
+                <div id="pending-panel-drafts" class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Draft Title</th>
+                                    <th class="py-4 px-6">Author</th>
+                                    <th class="py-4 px-6">Category</th>
+                                    <th class="py-4 px-6 text-center">Pub. Year</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drafts-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Injected via admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sub-View 2: Submitted Archives -->
+                <div id="pending-panel-submitted" class="hidden bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
@@ -353,7 +387,7 @@
                                 </tr>
                             </thead>
                             <tbody id="submissions-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via JS -->
+                                <!-- Injected via admin.js -->
                             </tbody>
                         </table>
                     </div>
@@ -431,7 +465,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.5</span>
+                    <span>• Secure CMS v2.6</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -525,8 +559,8 @@
                             </select>
                         </div>
                         <div id="price-field-wrapper" class="hidden">
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Price ($)</label>
-                            <input type="number" id="form-price" step="0.01" min="0" placeholder="e.g., 15.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Price (USD)</label>
+                            <input type="number" id="form-price" step="0.01" min="0" placeholder="e.g., 12.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                         </div>
                     </div>
 
@@ -555,6 +589,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=2"></script>
+    <script src="admin.js?v=3"></script>
 </body>
 </html>
