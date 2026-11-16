@@ -12,6 +12,7 @@ let categoriesData = [];
 let purchasesData = [];
 let testimoniesModData = [];
 let commentsModData = [];
+let parsedExcelRows = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
@@ -137,6 +138,178 @@ async function fetchAllData() {
 
     updateStats();
 }
+
+// ==========================================
+// BULK EXCEL / CSV UPLOAD & TEMPLATE EXPORT
+// ==========================================
+
+function openExcelUploadModal() {
+    parsedExcelRows = [];
+    const fileInput = document.getElementById('excel-file-input');
+    if (fileInput) fileInput.value = '';
+    document.getElementById('excel-file-name').innerText = 'Click or drag Excel spreadsheet (.xlsx, .csv)';
+    document.getElementById('excel-row-preview').innerText = 'All rows will be imported automatically';
+    document.getElementById('execute-excel-import-btn').disabled = true;
+    document.getElementById('excel-progress-box').classList.add('hidden');
+    document.getElementById('excel-progress-bar').style.width = '0%';
+
+    const modal = document.getElementById('excel-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeExcelUploadModal() {
+    const modal = document.getElementById('excel-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+function downloadExcelTemplate() {
+    const sampleRows = [
+        {
+            title: "The Great Awakening",
+            author: "Jonathan Edwards",
+            category: "Church History",
+            year: "1742",
+            pages: "320",
+            description: "Historical account of the spiritual revival across New England.",
+            download_url: "https://example.com/great-awakening.pdf",
+            cover_url: "",
+            is_for_sale: "false",
+            price: "0"
+        },
+        {
+            title: "Accord 2023 Mag",
+            author: "Accord Editorial",
+            category: "Magazines",
+            year: "2023",
+            pages: "48",
+            description: "Faith-based lifestyle and urban gospel chronicle.",
+            download_url: "https://example.com/accord-2023-mag.pdf",
+            cover_url: "",
+            is_for_sale: "true",
+            price: "12.00"
+        }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Accord_Books");
+    XLSX.writeFile(workbook, "Accord_Bulk_Books_Template.xlsx");
+}
+
+document.getElementById('excel-file-input')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    document.getElementById('excel-file-name').innerText = file.name;
+    const reader = new FileReader();
+
+    reader.onload = function(ev) {
+        try {
+            const data = new Uint8Array(ev.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+            // Normalize keys to lowercase/trimmed so minor header casing differences still work
+            parsedExcelRows = rawRows
+                .map(row => {
+                    const normalized = {};
+                    Object.keys(row).forEach(k => {
+                        normalized[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k];
+                    });
+                    return normalized;
+                })
+                .filter(row => String(row.title || '').trim() !== '');
+
+            if (parsedExcelRows.length > 0) {
+                document.getElementById('excel-row-preview').innerText = `${parsedExcelRows.length} valid book row(s) detected and ready to import.`;
+                document.getElementById('execute-excel-import-btn').disabled = false;
+                showToast(`Detected ${parsedExcelRows.length} book(s) in "${file.name}".`);
+            } else {
+                document.getElementById('excel-row-preview').innerText = 'No valid rows with a "title" column found.';
+                document.getElementById('execute-excel-import-btn').disabled = true;
+                showToast("No valid book rows found. Make sure your sheet has a 'title' column.");
+            }
+        } catch (err) {
+            console.error("Excel Parse Error:", err);
+            showToast("Failed to read spreadsheet. Please upload a valid .xlsx, .xls, or .csv file.");
+        }
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+async function processExcelUpload() {
+    if (parsedExcelRows.length === 0) return;
+
+    const importBtn = document.getElementById('execute-excel-import-btn');
+    const progressBox = document.getElementById('excel-progress-box');
+    const progressBar = document.getElementById('excel-progress-bar');
+    const statusText = document.getElementById('excel-status-text');
+    const counterText = document.getElementById('excel-counter');
+
+    importBtn.disabled = true;
+    progressBox.classList.remove('hidden');
+
+    let successCount = 0;
+    const total = parsedExcelRows.length;
+    const existingCatNames = new Set(categoriesData.map(c => c.name.toLowerCase()));
+
+    for (let i = 0; i < total; i++) {
+        const row = parsedExcelRows[i];
+        const pct = Math.round(((i + 1) / total) * 100);
+        progressBar.style.width = `${pct}%`;
+        counterText.innerText = `${i + 1} / ${total}`;
+
+        const title = String(row.title || 'Untitled Book').trim();
+        statusText.innerText = `Importing: "${title}"`;
+
+        const categoryName = String(row.category || 'Uncategorized').trim() || 'Uncategorized';
+
+        // Automatically register any new category from the Excel sheet
+        if (categoryName !== 'Uncategorized' && !existingCatNames.has(categoryName.toLowerCase())) {
+            const { error: catErr } = await supabaseClient.from('categories').insert([{ name: categoryName }]);
+            if (!catErr) existingCatNames.add(categoryName.toLowerCase());
+        }
+
+        const saleFlag = String(row.is_for_sale || '').trim().toLowerCase();
+        const isForSale = saleFlag === 'true' || saleFlag === '1' || saleFlag === 'yes';
+        const price = isForSale ? (parseFloat(row.price) || 0) : 0;
+
+        const payload = {
+            title,
+            author: String(row.author || 'TBD').trim() || 'TBD',
+            category: categoryName,
+            year: String(row.year || new Date().getFullYear()).trim(),
+            pages: String(row.pages || 'TBD').trim() || 'TBD',
+            description: String(row.description || 'Imported via spreadsheet.').trim(),
+            download_url: String(row.download_url || row.link || row.url || '').trim(),
+            cover_url: String(row.cover_url || row.cover || '').trim(),
+            is_for_sale: isForSale,
+            price,
+            gradient: "from-blue-900 via-indigo-900 to-slate-900",
+            is_visible: true,
+            status: 'published'
+        };
+
+        const { error } = await supabaseClient.from('books').insert([payload]);
+        if (!error) successCount++;
+    }
+
+    statusText.innerText = `Import complete! Added ${successCount} of ${total} books.`;
+    showToast(`Successfully imported ${successCount} book(s)!`);
+    await fetchAllData();
+
+    setTimeout(() => {
+        closeExcelUploadModal();
+    }, 1500);
+}
+
+// ==========================================
+// CATEGORIES MANAGEMENT
+// ==========================================
 
 function populateCategoryDropdowns() {
     const catNames = categoriesData.map(c => c.name);
@@ -283,6 +456,10 @@ function promptDeleteCategory(id, name, bookCount) {
     };
 }
 
+// ==========================================
+// TAB SWITCHING & PENDING REVIEWS
+// ==========================================
+
 function switchTab(tabName) {
     const tabs = ['catalog', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
     tabs.forEach(t => {
@@ -379,6 +556,10 @@ function renderDraftsTable() {
         tbody.appendChild(tr);
     });
 }
+
+// ==========================================
+// CATALOG TABLE & SINGLE ARCHIVE CRUD
+// ==========================================
 
 function renderCatalogTable(list) {
     const tbody = document.getElementById('admin-book-table-body');
@@ -729,6 +910,10 @@ async function processArchiveSave(isDraft) {
     await fetchAllData();
 }
 
+// ==========================================
+// RECYCLE BIN, SUBMISSIONS, STATS & FORUM MOD
+// ==========================================
+
 async function promptDelete(id) {
     await supabaseClient
         .from('books')
@@ -799,7 +984,7 @@ async function restoreFromTrash(id) {
 function promptPermanentDelete(id) {
     deleteTargetId = id;
     document.getElementById('confirm-title').innerText = "Delete Permanently?";
-    document.getElementById('confirm-text').innerText = "This will permanently remove the book and its PDF file from storage. This cannot be undone.";
+    document.getElementById('confirm-text').innerText = "This will permanently remove the book and its PDF/cover files from storage. This cannot be undone.";
     const modal = document.getElementById('confirm-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -1020,7 +1205,6 @@ function renderDownloadsTable() {
     });
 }
 
-// Forum Moderation & Book Export
 function renderForumModeration() {
     const tBody = document.getElementById('mod-testimonies-body');
     const cBody = document.getElementById('mod-comments-body');
@@ -1205,7 +1389,6 @@ document.getElementById('form-cover')?.addEventListener('change', function(e) {
                 canvas.height = img.height * scale;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                // Compressed WebP at 0.80 quality
                 currentCompressedCover = canvas.toDataURL('image/webp', 0.80);
                 if (previewBox) {
                     previewBox.innerHTML = `<img src="${currentCompressedCover}" class="w-full h-full object-cover">`;

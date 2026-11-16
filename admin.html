@@ -42,10 +42,13 @@
 
     <!-- PDF.js for Automatic Page Counting -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
+
+    <!-- SheetJS for Excel / CSV Bulk Upload -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Playfair Display', serif; }
@@ -150,6 +153,59 @@
             </div>
         </div>
 
+        <!-- Bulk Excel Upload Modal -->
+        <div id="excel-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-base text-accord-slate">Bulk Upload Books via Excel / CSV</h3>
+                        <p class="text-xs text-accord-muted mt-0.5">Upload a spreadsheet containing book details & download links</p>
+                    </div>
+                    <button type="button" onclick="closeExcelUploadModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+
+                <div class="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 text-xs text-accord-blue space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> Excel Column Headers:</p>
+                        <button type="button" onclick="downloadExcelTemplate()" class="bg-white hover:bg-blue-50 text-accord-blue border border-blue-200 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all">
+                            <i class="fa-solid fa-download mr-1"></i> Download Template
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-accord-slate leading-relaxed">
+                        First row headers: <strong>title</strong>, <strong>author</strong>, <strong>category</strong>, <strong>year</strong>, <strong>pages</strong>, <strong>description</strong>, <strong>download_url</strong>, <strong>cover_url</strong>, <strong>is_for_sale</strong>, <strong>price</strong>
+                    </p>
+                </div>
+
+                <div class="relative group">
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <div id="excel-drop-ui" class="flex flex-col items-center justify-center w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-4 py-8 text-center group-hover:border-accord-blue transition-all">
+                        <div class="w-10 h-10 rounded-full bg-slate-200 text-accord-slate flex items-center justify-center text-lg mb-2">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                        </div>
+                        <p id="excel-file-name" class="text-xs font-bold text-accord-slate">Click or drag Excel spreadsheet (.xlsx, .csv)</p>
+                        <p id="excel-row-preview" class="text-[10px] text-accord-muted mt-1">All rows will be imported automatically</p>
+                    </div>
+                </div>
+
+                <div id="excel-progress-box" class="hidden space-y-2">
+                    <div class="flex justify-between text-xs font-semibold text-accord-slate">
+                        <span id="excel-status-text">Importing books...</span>
+                        <span id="excel-counter">0 / 0</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="excel-progress-bar" class="h-full bg-accord-blue transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeExcelUploadModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                    <button type="button" id="execute-excel-import-btn" onclick="processExcelUpload()" disabled class="flex-1 bg-accord-blue hover:bg-accord-darkBlue disabled:bg-slate-300 text-white text-xs font-bold py-3 rounded-xl transition-all">Import Books</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Header / Admin Navigation -->
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -187,7 +243,11 @@
                 </nav>
 
                 <!-- Admin Profile / Actions -->
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-2.5">
+                    <button onclick="openExcelUploadModal()" class="hidden sm:flex bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all items-center space-x-1.5" title="Bulk Import from Excel/CSV">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Bulk Upload</span>
+                    </button>
                     <button onclick="openArchiveModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
                         <i class="fa-solid fa-plus"></i>
                         <span>Add New Archive</span>
@@ -405,7 +465,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h2 class="serif-heading text-2xl font-bold text-accord-slate">Recycle Bin</h2>
-                        <p class="text-xs text-accord-muted mt-1">Deleted archives are held here. Restore them to the live catalog or permanently delete them (including their PDF file).</p>
+                        <p class="text-xs text-accord-muted mt-1">Deleted archives are held here. Restore them to the live catalog or permanently delete them (including their PDF & cover files).</p>
                     </div>
                     <button onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all self-start sm:self-auto">
                         <i class="fa-solid fa-fire mr-1.5"></i> Empty Recycle Bin
@@ -536,7 +596,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.8</span>
+                    <span>• Secure CMS v2.9</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -660,6 +720,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=5"></script>
+    <script src="admin.js?v=6"></script>
 </body>
 </html>
