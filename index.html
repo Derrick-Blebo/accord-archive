@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accord Admin Dashboard — Library & Archive Management</title>
+    <title>Accord — Christian Media House & Historical Archive</title>
+    <meta name="description" content="Collect, organize, and explore documented accounts of churches, spiritual awakenings, biographies, and Christian chronicles." />
+
+    <!-- Open Graph / WhatsApp / Social Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Accord Archive & Library" />
+    <meta property="og:url" content="https://www.accordarchives.com/" />
+    <meta property="og:title" content="Accord — Christian Media House & Historical Archive" />
+    <meta property="og:description" content="Explore free and published historical Christian manuscripts, biographies, and chronicles." />
+    <meta property="og:image" content="https://www.accordarchives.com/og-cover.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://mzblgajftvyyosyrawcx.supabase.co" crossorigin>
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,32 +46,17 @@
             }
         }
     </script>
+
     <!-- Google Fonts Inter & Playfair Display -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    
+
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Supabase Client SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- PDF.js for Automatic Page Counting -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
-
-    <!-- SheetJS for Excel / CSV Bulk Upload -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Playfair Display', serif; }
-        .logo-rd-bar {
-            position: relative;
-        }
+        .logo-rd-bar { position: relative; }
         .logo-rd-bar::after {
             content: '';
             position: absolute;
@@ -66,8 +68,12 @@
             border-radius: 2px;
         }
     </style>
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="/_vercel/insights/script.js"></script>
 </head>
-<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
 
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
@@ -75,527 +81,330 @@
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
     </div>
 
-    <!-- Admin Login Gate Overlay -->
-    <div id="auth-gate" class="fixed inset-0 z-40 bg-accord-bg flex items-center justify-center p-4">
-        <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
-            <div class="text-center space-y-2">
-                <div class="w-12 h-12 bg-accord-blue rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto shadow-md shadow-blue-500/20">Ac</div>
-                <h1 class="serif-heading text-2xl font-bold text-accord-slate pt-1">Accord Admin Access</h1>
-                <p class="text-xs text-accord-muted">Sign in with your archivist credentials to manage the digital library.</p>
+    <!-- Header / Navigation -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="index.html" class="flex items-center space-x-3 group">
+                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <span class="font-bold text-xl tracking-tighter">Ac</span>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Official Archive & Library</p>
+                </div>
+            </a>
+
+            <!-- Desktop Navigation -->
+            <nav class="hidden md:flex items-center space-x-6">
+                <a href="#library" class="text-sm font-bold text-accord-blue transition-colors">Digital Library</a>
+                <a href="forum.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Testimonies</a>
+                <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
+                <button type="button" onclick="openContributeModal()" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</button>
+                <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1" title="Saved">
+                    <i class="fa-solid fa-bookmark text-lg text-accord-gold"></i>
+                    <span class="text-sm font-semibold">Saved</span>
+                    <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                </a>
+                <button id="auth-nav-btn" type="button" onclick="handleAuthNavClick()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                    <i class="fa-regular fa-user"></i>
+                    <span id="auth-nav-label">Sign In</span>
+                </button>
+            </nav>
+
+            <!-- Primary CTA & Mobile Toggle -->
+            <div class="flex items-center space-x-2.5">
+                <a href="#library" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>Explore Books</span>
+                </a>
+                <button type="button" onclick="toggleMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue" aria-label="Toggle Menu">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
+            <a href="#library" onclick="toggleMobileMenu()" class="block text-base font-bold text-accord-blue">Digital Library</a>
+            <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Testimonies Forum</a>
+            <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
+            <button type="button" onclick="openContributeModal(); toggleMobileMenu();" class="block text-base font-medium text-accord-slate">Contribute Archive</button>
+            <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-1">
+                <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                <span>Saved (<span id="mobile-bookmark-count">0</span>)</span>
+            </a>
+            <button type="button" onclick="handleAuthNavClick(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-1">
+                <i class="fa-regular fa-user"></i>
+                <span id="mobile-auth-label">Sign In / Create Account</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow">
+
+        <!-- Library Section & Search Filter -->
+        <section id="library" class="pt-8 pb-16 lg:pt-10 lg:pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-5">
+                <h1 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate">Explore Historical Publications</h1>
             </div>
 
-            <form id="admin-login-form" onsubmit="handleAdminLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Admin Email</label>
-                    <input type="email" id="login-email" required placeholder="admin@accordarchives.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+            <!-- Search & Category Filter Box -->
+            <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm mb-8 space-y-4">
+                <div class="flex flex-col lg:flex-row items-center gap-4">
+                    <!-- Search Input -->
+                    <div class="relative flex-1 w-full">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-accord-muted"></i>
+                        <input type="text" id="library-search" oninput="filterBooks()" placeholder="Search by title, author, or keyword (e.g., Revival, Leaders, Scotland)..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-sm text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white transition-all">
+                    </div>
+
+                    <!-- Dynamic Category Buttons -->
+                    <div id="category-filters" class="w-full lg:w-auto flex items-center space-x-2 overflow-x-auto pb-1 lg:pb-0">
+                        <button type="button" onclick="setCategoryFilter('All')" id="cat-All" class="cat-btn whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Archives</button>
+                    </div>
                 </div>
 
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
-                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                <!-- Access Filter & Publication Count -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted mr-1">Access:</span>
+                        <button type="button" onclick="setAccessFilter('all')" id="access-all" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white">All Books</button>
+                        <button type="button" onclick="setAccessFilter('free')" id="access-free" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate"><i class="fa-solid fa-download text-accord-blue mr-1 text-[10px]"></i> Free Books</button>
+                        <button type="button" onclick="setAccessFilter('paid')" id="access-paid" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate"><i class="fa-solid fa-tag text-accord-gold mr-1 text-[10px]"></i> Paid Books</button>
+                    </div>
+                    <span id="publication-count" class="text-xs font-semibold text-accord-muted">Loading publications...</span>
                 </div>
+            </div>
 
-                <p id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 font-medium"></p>
+            <!-- Book Grid -->
+            <div id="book-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Cards rendered dynamically by index.js -->
+            </div>
 
-                <button type="submit" id="login-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
-                    Sign In to Dashboard
+            <!-- Empty Search State -->
+            <div id="empty-library-state" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
+                <div class="w-16 h-16 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center mx-auto text-2xl mb-4">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h2 class="serif-heading text-2xl font-bold text-accord-slate">No Publications Found</h2>
+                <p class="text-sm text-accord-muted mt-2 leading-relaxed">
+                    Try adjusting your search keywords or selecting a different category filter.
+                </p>
+                <button type="button" onclick="setCategoryFilter('All'); setAccessFilter('all'); document.getElementById('library-search').value=''; filterBooks();" class="mt-6 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all">
+                    Reset Filters
                 </button>
-            </form>
+            </div>
+        </section>
 
-            <div class="text-center pt-1">
-                <a href="index.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
-                    <i class="fa-solid fa-arrow-left mr-1"></i> Back to Public Library
-                </a>
+        <!-- Mission Section -->
+        <section id="mission" class="bg-white border-t border-slate-200 py-16">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                    <div class="lg:col-span-7 space-y-4">
+                        <span class="inline-flex items-center space-x-2 bg-accord-lightBlue text-accord-blue px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <i class="fa-solid fa-landmark"></i>
+                            <span>Our Mission</span>
+                        </span>
+                        <h2 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate leading-tight">
+                            Preserving Christian Heritage, Revival Chronicles & Living Testimonies
+                        </h2>
+                        <p class="text-sm sm:text-base text-accord-muted leading-relaxed">
+                            Accord collects, organizes, and preserves documented accounts of churches, spiritual awakenings, missionary biographies, and Christian chronicles—making timeless manuscripts freely accessible alongside contemporary testimonies of faith.
+                        </p>
+                        <div class="pt-2 flex flex-wrap gap-3">
+                            <a href="forum.html" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
+                                <i class="fa-solid fa-feather-pointed"></i>
+                                <span>Visit Testimonies Forum</span>
+                            </a>
+                            <button type="button" onclick="openContributeModal()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-5 py-3 rounded-xl transition-all inline-flex items-center space-x-2">
+                                <i class="fa-solid fa-file-arrow-up text-accord-blue"></i>
+                                <span>Submit a Manuscript</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-5 grid grid-cols-2 gap-4">
+                        <div class="bg-accord-bg border border-slate-200/80 rounded-3xl p-5 space-y-2">
+                            <div class="w-10 h-10 rounded-xl bg-accord-lightBlue text-accord-blue flex items-center justify-center">
+                                <i class="fa-solid fa-scroll"></i>
+                            </div>
+                            <h3 class="font-bold text-sm text-accord-slate">Historical Texts</h3>
+                            <p class="text-xs text-accord-muted leading-relaxed">Curated public-domain and editorial editions ready to read or download.</p>
+                        </div>
+                        <div class="bg-accord-bg border border-slate-200/80 rounded-3xl p-5 space-y-2">
+                            <div class="w-10 h-10 rounded-xl bg-accord-goldLight text-accord-gold flex items-center justify-center">
+                                <i class="fa-solid fa-dove"></i>
+                            </div>
+                            <h3 class="font-bold text-sm text-accord-slate">Living Chronicles</h3>
+                            <p class="text-xs text-accord-muted leading-relaxed">Documented testimonies from believers and church gatherings worldwide.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold">Ac</div>
+                <div>
+                    <span class="font-extrabold text-accord-slate tracking-tight">Accord</span>
+                    <p class="text-xs text-accord-muted">© 2026 Accord Media House. All rights reserved.</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
+                <a href="#library" class="hover:text-accord-blue transition-colors">Library</a>
+                <a href="forum.html" class="hover:text-accord-blue transition-colors">Testimonies</a>
+                <a href="saved.html" class="hover:text-accord-blue transition-colors">Saved</a>
+                <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
+                <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal 1: Book Detail Modal -->
+    <div id="book-detail-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <span class="text-xs font-bold uppercase tracking-wider text-accord-blue">Publication Details</span>
+                <button type="button" onclick="closeBookModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="book-modal-content" class="p-6 sm:p-8 overflow-y-auto">
+                <!-- Populated dynamically by index.js -->
             </div>
         </div>
     </div>
 
-    <!-- Protected Dashboard Wrapper (Hidden until authenticated) -->
-    <div id="dashboard-wrapper" class="hidden min-h-screen flex flex-col justify-between">
-
-        <!-- Confirmation Modal -->
-        <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
-                <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
+    <!-- Modal 2: Contribute Archive Modal -->
+    <div id="contribute-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-lg">Contribute Historical Archive</h3>
+                    <p class="text-xs text-accord-muted">Propose a manuscript or chronicle for editorial review</p>
                 </div>
-                <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Are you sure?</h3>
-                <p id="confirm-text" class="text-xs text-accord-muted">This action cannot be undone. The document will be permanently deleted from the Accord archive.</p>
-                <div class="flex items-center space-x-3 pt-2">
-                    <button onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
-                    <button id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Delete Permanently</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Edit Category Modal -->
-        <div id="edit-category-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="font-bold text-base text-accord-slate">Rename Category</h3>
-                    <button type="button" onclick="closeEditCategoryModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-                <form onsubmit="handleRenameCategory(event)" class="space-y-4">
-                    <input type="hidden" id="edit-category-id">
-                    <input type="hidden" id="edit-category-old-name">
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category Name</label>
-                        <input type="text" id="edit-category-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
-                        <p class="text-[11px] text-accord-muted mt-1.5">Books currently assigned to this category will automatically update to the new name.</p>
-                    </div>
-                    <div class="flex items-center space-x-3 pt-1">
-                        <button type="button" onclick="closeEditCategoryModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
-                        <button type="submit" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Bulk Excel Upload Modal -->
-        <div id="excel-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="font-bold text-base text-accord-slate">Bulk Upload Books via Excel / CSV</h3>
-                        <p class="text-xs text-accord-muted mt-0.5">Upload a spreadsheet containing book details & download links</p>
-                    </div>
-                    <button type="button" onclick="closeExcelUploadModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-
-                <div class="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 text-xs text-accord-blue space-y-2">
-                    <div class="flex items-center justify-between">
-                        <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> Excel Column Headers:</p>
-                        <button type="button" onclick="downloadExcelTemplate()" class="bg-white hover:bg-blue-50 text-accord-blue border border-blue-200 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all">
-                            <i class="fa-solid fa-download mr-1"></i> Download Template
-                        </button>
-                    </div>
-                    <p class="text-[11px] text-accord-slate leading-relaxed">
-                        First row headers: <strong>title</strong>, <strong>author</strong>, <strong>category</strong>, <strong>year</strong>, <strong>pages</strong>, <strong>description</strong>, <strong>download_url</strong>, <strong>cover_url</strong>, <strong>is_for_sale</strong>, <strong>price</strong>
-                    </p>
-                </div>
-
-                <div class="relative group">
-                    <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                    <div id="excel-drop-ui" class="flex flex-col items-center justify-center w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl px-4 py-8 text-center group-hover:border-accord-blue transition-all">
-                        <div class="w-10 h-10 rounded-full bg-slate-200 text-accord-slate flex items-center justify-center text-lg mb-2">
-                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
-                        </div>
-                        <p id="excel-file-name" class="text-xs font-bold text-accord-slate">Click or drag Excel spreadsheet (.xlsx, .csv)</p>
-                        <p id="excel-row-preview" class="text-[10px] text-accord-muted mt-1">All rows will be imported automatically</p>
-                    </div>
-                </div>
-
-                <div id="excel-progress-box" class="hidden space-y-2">
-                    <div class="flex justify-between text-xs font-semibold text-accord-slate">
-                        <span id="excel-status-text">Importing books...</span>
-                        <span id="excel-counter">0 / 0</span>
-                    </div>
-                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div id="excel-progress-bar" class="h-full bg-accord-blue transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
-
-                <div class="flex items-center space-x-3 pt-2">
-                    <button type="button" onclick="closeExcelUploadModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
-                    <button type="button" id="execute-excel-import-btn" onclick="processExcelUpload()" disabled class="flex-1 bg-accord-blue hover:bg-accord-darkBlue disabled:bg-slate-300 text-white text-xs font-bold py-3 rounded-xl transition-all">Import Books</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Header / Admin Navigation -->
-        <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                <!-- Brand Logo -->
-                <a href="#" class="flex items-center space-x-3 group">
-                    <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-                        <span class="font-bold text-xl tracking-tighter">Ac</span>
-                    </div>
-                    <div>
-                        <div class="flex items-center">
-                            <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
-                            <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
-                        </div>
-                        <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Admin Control Center</p>
-                    </div>
-                </a>
-
-                <!-- Navigation Tabs -->
-                <nav class="hidden lg:flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl">
-                    <button onclick="switchTab('catalog')" id="nav-tab-catalog" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
-                        <i class="fa-solid fa-book-bookmark mr-1.5"></i> Archive Catalog
-                    </button>
-                    <button onclick="switchTab('categories')" id="nav-tab-categories" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-tags mr-1.5"></i> Categories <span id="categories-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                    </button>
-                    <button onclick="openPendingReviews('drafts')" id="nav-tab-submissions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-inbox mr-1.5"></i> Pending Reviews <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                    </button>
-                    <button onclick="switchTab('forum')" id="nav-tab-forum" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-comments mr-1.5"></i> Forum <span id="forum-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                    </button>
-                    <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-trash-can mr-1.5"></i> Recycle Bin <span id="trash-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                    </button>
-                </nav>
-
-                <!-- Admin Profile / Actions -->
-                <div class="flex items-center space-x-2.5">
-                    <button onclick="openExcelUploadModal()" class="hidden sm:flex bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition-all items-center space-x-1.5" title="Bulk Import from Excel/CSV">
-                        <i class="fa-solid fa-file-excel"></i>
-                        <span>Bulk Upload</span>
-                    </button>
-                    <button onclick="openArchiveModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Add New Archive</span>
-                    </button>
-                    <div class="hidden sm:flex items-center space-x-3 pl-3 border-l border-slate-200">
-                        <div class="w-9 h-9 rounded-full bg-accord-goldLight text-accord-gold font-bold flex items-center justify-center border border-amber-200">AD</div>
-                        <div class="text-left">
-                            <p id="admin-user-email" class="text-xs font-bold text-accord-slate max-w-[140px] truncate">Archivist Admin</p>
-                            <button onclick="handleAdminLogout()" class="text-[10px] font-bold text-red-500 hover:underline">Sign Out</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <!-- Main Admin Dashboard Content -->
-        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
-
-            <!-- Summary Statistics Row -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <button type="button" onclick="switchTab('catalog')" class="bg-white border border-slate-200/80 hover:border-accord-blue hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
-                    <div class="w-14 h-14 rounded-2xl bg-blue-50 group-hover:bg-accord-blue text-accord-blue group-hover:text-white flex items-center justify-center text-xl transition-colors">
-                        <i class="fa-solid fa-book-tanakh"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Archives</p>
-                        <h3 id="stat-total" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p class="text-[11px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
-                            <span>View archive catalog</span>
-                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
-                        </p>
-                    </div>
+                <button type="button" onclick="closeContributeModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
-
-                <button type="button" onclick="openPendingReviews('drafts')" class="bg-white border border-slate-200/80 hover:border-amber-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
-                    <div class="w-14 h-14 rounded-2xl bg-amber-50 group-hover:bg-accord-gold text-accord-gold group-hover:text-white flex items-center justify-center text-xl transition-colors">
-                        <i class="fa-solid fa-inbox"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Pending Reviews</p>
-                        <h3 id="stat-pending" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p class="text-[11px] text-amber-600 font-semibold mt-0.5 flex items-center gap-1">
-                            <span>Drafts & submitted archives</span>
-                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
-                        </p>
-                    </div>
-                </button>
-
-                <button type="button" onclick="switchTab('downloads')" class="bg-white border border-slate-200/80 hover:border-purple-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
-                    <div class="w-14 h-14 rounded-2xl bg-purple-50 group-hover:bg-purple-600 text-purple-600 group-hover:text-white flex items-center justify-center text-xl transition-colors">
-                        <i class="fa-solid fa-download"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
-                        <h3 id="stat-downloads" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
-                        <p id="stat-sales-summary" class="text-[11px] text-purple-600 font-semibold mt-0.5 flex items-center gap-1">
-                            <span>Downloads & sales breakdown</span>
-                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
-                        </p>
-                    </div>
-                </button>
-
-                <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
-                    <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
-                        <i class="fa-solid fa-shield-halved"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">System Security</p>
-                        <h3 class="text-2xl font-extrabold text-accord-slate mt-0.5">Protected</h3>
-                        <p class="text-[11px] text-emerald-600 font-semibold mt-0.5">RLS & Auth active</p>
-                    </div>
-                </div>
             </div>
 
-            <!-- Tab 1: Archive Catalog Management Section -->
-            <section id="section-catalog" class="space-y-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <form id="contribute-form" onsubmit="handleContributeSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Archive Catalog Management</h2>
-                        <p class="text-xs text-accord-muted mt-1">View, hide/show, edit, or move publications to the Recycle Bin.</p>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Name</label>
+                        <input type="text" id="sub-name" required placeholder="e.g., Daniel Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
                     </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
+                        <input type="email" id="sub-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
 
-                    <!-- Search & Filter Controls -->
-                    <div class="flex items-center space-x-3">
-                        <div class="relative">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
-                            <input type="text" id="admin-search" oninput="filterAdminBooks()" placeholder="Search catalog..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-60">
-                        </div>
-                        <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue">
-                            <option value="All">All Categories</option>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Manuscript Title</label>
+                        <input type="text" id="sub-title" required placeholder="e.g., History of the Gold Coast Church" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category</label>
+                        <select id="sub-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                            <option>Church History</option>
+                            <option>Biographies</option>
+                            <option>Nations & Leadership</option>
+                            <option>Chronicles</option>
+                            <option>Theology & Doctrine</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Table Container -->
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Book / Archive Title</th>
-                                    <th class="py-4 px-6">Author</th>
-                                    <th class="py-4 px-6">Category</th>
-                                    <th class="py-4 px-6 text-center">Pub. Year</th>
-                                    <th class="py-4 px-6 text-center">Pages</th>
-                                    <th class="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-book-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via JS -->
-                            </tbody>
-                        </table>
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Summary & Provenance</label>
+                    <textarea id="sub-description" rows="4" required placeholder="Describe the publication, author, year, and where it can be sourced..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
-            </section>
 
-            <!-- Tab 2: Categories Management Section -->
-            <section id="section-categories" class="space-y-6 hidden">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Library Categories</h2>
-                        <p class="text-xs text-accord-muted mt-1">Add, rename, or remove categories. All active categories appear in the upload dropdown and filter bar.</p>
+                <button type="submit" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
+                    Submit for Editorial Review
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Sign In / Create Account Modal -->
+    <div id="auth-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <h3 class="font-bold text-accord-slate text-lg">Accord Reader Account</h3>
+                <button type="button" onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5">
+                <!-- Signed-Out Forms -->
+                <div id="auth-forms-container" class="space-y-4">
+                    <button type="button" onclick="handleGoogleSignIn()" class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
+                        <i class="fa-brands fa-google text-red-500"></i>
+                        <span>Continue with Google</span>
+                    </button>
+
+                    <div class="relative flex items-center py-1">
+                        <div class="flex-grow border-t border-slate-200"></div>
+                        <span class="flex-shrink mx-3 text-[11px] font-bold uppercase tracking-wider text-accord-muted">Or with Email</span>
+                        <div class="flex-grow border-t border-slate-200"></div>
                     </div>
 
-                    <!-- Quick Add Category Form -->
-                    <form onsubmit="handleAddCategory(event)" class="flex items-center space-x-2">
-                        <input type="text" id="new-category-name" required placeholder="New category name..." class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-64">
-                        <button type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5 whitespace-nowrap">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Add Category</span>
+                    <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-xl">
+                        <button type="button" id="tab-signin" onclick="switchAuthMode('signin')" class="py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all">Sign In</button>
+                        <button type="button" id="tab-signup" onclick="switchAuthMode('signup')" class="py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all">Create Account</button>
+                    </div>
+
+                    <form onsubmit="handleAuthSubmit(event)" class="space-y-3.5">
+                        <div id="auth-name-field" class="hidden">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Full Name</label>
+                            <input type="text" id="auth-name" placeholder="e.g., Grace Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Email</label>
+                            <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Password</label>
+                            <input type="password" id="auth-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <button type="submit" id="auth-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
+                            Sign In
                         </button>
                     </form>
                 </div>
 
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Category Name</th>
-                                    <th class="py-4 px-6 text-center">Books in Category</th>
-                                    <th class="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="categories-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via JS -->
-                            </tbody>
-                        </table>
+                <!-- Signed-In Profile Summary -->
+                <div id="auth-profile-container" class="hidden text-center space-y-4">
+                    <div class="w-14 h-14 bg-accord-lightBlue text-accord-blue rounded-2xl flex items-center justify-center mx-auto text-xl">
+                        <i class="fa-solid fa-user-check"></i>
                     </div>
-                </div>
-            </section>
-
-            <!-- Tab 3: Pending Reviews (Draft Books + Submitted Archives) -->
-            <section id="section-submissions" class="space-y-6 hidden">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Pending Reviews</h2>
-                        <p class="text-xs text-accord-muted mt-1">Manage unpublished book drafts and review community-submitted historical manuscripts.</p>
+                        <h4 id="profile-display-name" class="font-bold text-accord-slate text-base">Reader</h4>
+                        <p id="profile-display-email" class="text-xs text-accord-muted"></p>
                     </div>
-
-                    <!-- Sub-Tabs inside Pending Reviews -->
-                    <div class="inline-flex items-center space-x-1 bg-slate-100 p-1.5 rounded-2xl self-start sm:self-auto">
-                        <button type="button" onclick="switchPendingSubTab('drafts')" id="subtab-btn-drafts" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">
-                            <i class="fa-solid fa-file-pen mr-1.5"></i> Draft Books <span id="drafts-subtab-badge" class="ml-1 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                        </button>
-                        <button type="button" onclick="switchPendingSubTab('submitted')" id="subtab-btn-submitted" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                            <i class="fa-solid fa-inbox mr-1.5"></i> Submitted Archives <span id="submitted-subtab-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
-                        </button>
+                    <div class="flex flex-col gap-2 pt-2">
+                        <a href="profile.html" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl transition-all">Edit Profile Settings</a>
+                        <a href="saved.html" class="w-full bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">View Saved Items</a>
+                        <button type="button" onclick="handleSignOut()" class="w-full text-red-500 hover:underline text-xs font-bold py-2">Sign Out</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- Sub-View 1: Draft Books -->
-                <div id="pending-panel-drafts" class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Draft Title</th>
-                                    <th class="py-4 px-6">Author</th>
-                                    <th class="py-4 px-6">Category</th>
-                                    <th class="py-4 px-6 text-center">Pub. Year</th>
-                                    <th class="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="drafts-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Sub-View 2: Submitted Archives -->
-                <div id="pending-panel-submitted" class="hidden bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Submitter</th>
-                                    <th class="py-4 px-6">Proposed Title</th>
-                                    <th class="py-4 px-6">Category</th>
-                                    <th class="py-4 px-6">Summary / Provenance</th>
-                                    <th class="py-4 px-6 text-right">Editorial Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="submissions-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Tab 4: Recycle Bin Section -->
-            <section id="section-trash" class="space-y-6 hidden">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Recycle Bin</h2>
-                        <p class="text-xs text-accord-muted mt-1">Deleted archives are held here. Restore them to the live catalog or permanently delete them (including their PDF & cover files).</p>
-                    </div>
-                    <button onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-4 py-2.5 rounded-xl border border-red-200 transition-all self-start sm:self-auto">
-                        <i class="fa-solid fa-fire mr-1.5"></i> Empty Recycle Bin
-                    </button>
-                </div>
-
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Book / Archive Title</th>
-                                    <th class="py-4 px-6">Author</th>
-                                    <th class="py-4 px-6">Category</th>
-                                    <th class="py-4 px-6">Deleted On</th>
-                                    <th class="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="trash-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Tab 5: Download & Sales Analytics Breakdown Section -->
-            <section id="section-downloads" class="space-y-6 hidden">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Book Downloads & Accumulated Sales</h2>
-                        <p class="text-xs text-accord-muted mt-1">Download counts for all publications alongside units sold and accumulated revenue for books on sale.</p>
-                    </div>
-                    <button onclick="switchTab('catalog')" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-2.5 rounded-xl transition-all self-start sm:self-auto">
-                        <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Catalog
-                    </button>
-                </div>
-
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6 w-14 text-center">Rank</th>
-                                    <th class="py-4 px-6">Book / Archive Title</th>
-                                    <th class="py-4 px-6">Author</th>
-                                    <th class="py-4 px-6">Category</th>
-                                    <th class="py-4 px-6 text-right">Accumulated Sales</th>
-                                    <th class="py-4 px-6 text-right">Downloads</th>
-                                </tr>
-                            </thead>
-                            <tbody id="downloads-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Tab 6: Testimonies & Comments Moderation Section -->
-            <section id="section-forum" class="space-y-6 hidden">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Testimonies & Comments Moderation</h2>
-                        <p class="text-xs text-accord-muted mt-1">Review submitted testimonies, hide or delete off-topic posts/comments, and export approved stories for book compilation.</p>
-                    </div>
-
-                    <div class="flex items-center space-x-2">
-                        <button type="button" onclick="exportApprovedTestimonies()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
-                            <i class="fa-solid fa-file-export"></i>
-                            <span>Copy Approved for Book</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Testimonies Moderation Table -->
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-accord-slate">Submitted Testimonies</h3>
-                        <span id="mod-testimony-count" class="text-xs text-accord-muted font-semibold">0 posts</span>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50/60 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-3.5 px-6">Author & Location</th>
-                                    <th class="py-3.5 px-6">Testimony</th>
-                                    <th class="py-3.5 px-6">Category</th>
-                                    <th class="py-3.5 px-6 text-center">Status</th>
-                                    <th class="py-3.5 px-6 text-right">Moderation</th>
-                                </tr>
-                            </thead>
-                            <tbody id="mod-testimonies-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Recent Comments Moderation Table -->
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                        <h3 class="text-xs font-bold uppercase tracking-wider text-accord-slate">Recent Reader Comments</h3>
-                        <span id="mod-comment-count" class="text-xs text-accord-muted font-semibold">0 comments</span>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50/60 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-3.5 px-6">Commenter</th>
-                                    <th class="py-3.5 px-6">On Testimony</th>
-                                    <th class="py-3.5 px-6">Comment</th>
-                                    <th class="py-3.5 px-6 text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="mod-comments-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Injected via admin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-        </main>
-
-        <!-- Footer -->
-        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
-                <div class="flex items-center space-x-2">
-                    <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.9</span>
-                </div>
-                <p>© 2026 Accord Media House. All rights reserved.</p>
+    <script src="index.js?v=4"></script>
+</body>
+</html>
