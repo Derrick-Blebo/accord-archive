@@ -96,6 +96,7 @@
             <!-- Navigation Links -->
             <nav class="hidden md:flex items-center space-x-6">
                 <a href="#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
+                <a href="forum.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Testimonies</a>
                 <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
                 <a href="#submit" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</a>
                 <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Books">
@@ -124,6 +125,7 @@
         <!-- Mobile Menu Dropdown -->
         <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
             <a href="#library" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
+            <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Testimonies Forum</a>
             <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
             <a href="#submit" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Contribute Archive</a>
             <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-2">
@@ -164,6 +166,23 @@
                         <button onclick="setCategory('Christian Chronicles')" id="cat-btn-Christian Chronicles" class="category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">Chronicles</button>
                     </div>
                 </div>
+
+                <!-- Free vs. Paid Access Filter -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted mr-1">Access:</span>
+                        <button type="button" onclick="setAccessFilter('all')" id="access-btn-all" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white">
+                            All Books
+                        </button>
+                        <button type="button" onclick="setAccessFilter('free')" id="access-btn-free" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">
+                            <i class="fa-solid fa-download text-[10px] mr-1 text-accord-blue"></i> Free Books
+                        </button>
+                        <button type="button" onclick="setAccessFilter('paid')" id="access-btn-paid" class="access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate">
+                            <i class="fa-solid fa-tag text-[10px] mr-1 text-accord-gold"></i> Paid Books
+                        </button>
+                    </div>
+                    <p id="filter-result-count" class="text-xs text-accord-muted font-medium"></p>
+                </div>
             </div>
 
             <!-- Book Grid -->
@@ -177,7 +196,7 @@
                     <i class="fa-solid fa-book-tanakh"></i>
                 </div>
                 <h3 class="text-lg font-bold text-accord-slate">No historical documents found</h3>
-                <p class="text-sm text-accord-muted mt-1">Try adjusting your search query or selecting a different category filter.</p>
+                <p class="text-sm text-accord-muted mt-1">Try adjusting your search query or selecting a different category or access filter.</p>
                 <button onclick="resetFilters()" class="mt-4 bg-accord-blue text-white text-xs font-bold px-5 py-2.5 rounded-xl">Reset Filters</button>
             </div>
         </section>
@@ -292,6 +311,7 @@
             
             <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
                 <a href="#library" class="hover:text-accord-blue transition-colors">Library</a>
+                <a href="forum.html" class="hover:text-accord-blue transition-colors">Testimonies</a>
                 <a href="#mission" class="hover:text-accord-blue transition-colors">Mission</a>
                 <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
                 <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms of Service</a>
@@ -405,7 +425,7 @@
 
                 <div class="flex items-center justify-between px-1 py-2 border-y border-slate-100">
                     <span class="text-xs font-semibold text-accord-muted">Total Amount</span>
-                    <span id="purchase-book-price" class="text-xl font-extrabold text-accord-slate">$0.00</span>
+                    <span id="purchase-book-price" class="text-xl font-extrabold text-accord-slate">USD 0.00</span>
                 </div>
 
                 <button type="button" id="confirm-purchase-btn" onclick="completeBookPurchase()" class="w-full bg-accord-gold hover:bg-amber-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-amber-500/20 transition-all text-sm flex items-center justify-center space-x-2">
@@ -421,7 +441,7 @@
     </div>
 
     <!-- JavaScript Application Logic -->
-    <script src="index.js?v=5"></script>
+    <script src="index.js?v=6"></script>
     
 </body>
 </html>

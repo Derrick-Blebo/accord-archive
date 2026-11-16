@@ -7,6 +7,7 @@ let booksData = [];
 let savedBookmarks = [];
 let purchasedBookIds = [];
 let currentCategory = 'All';
+let currentAccessFilter = 'all';
 let currentUser = null;
 let authMode = 'signin';
 let pendingBookmarkTitle = null;
@@ -71,7 +72,7 @@ function applyInitialRender() {
             return;
         }
     }
-    renderBooks(booksData);
+    filterBooks();
 }
 
 // Optional Auth Initialization & Session Listener
@@ -279,6 +280,11 @@ function trackDownload(bookId) {
 function renderBooks(filteredList) {
     const grid = document.getElementById('books-grid');
     const emptyState = document.getElementById('empty-state');
+    const countEl = document.getElementById('filter-result-count');
+
+    if (countEl) {
+        countEl.innerText = `Showing ${filteredList.length} ${filteredList.length === 1 ? 'publication' : 'publications'}`;
+    }
 
     grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
     grid.innerHTML = '';
@@ -484,7 +490,7 @@ async function shareBook(id, title, author) {
     }
 }
 
-// Category Filter
+// Category & Access Filters
 function setCategory(category) {
     currentCategory = category;
     document.querySelectorAll('.category-btn').forEach(btn => {
@@ -497,12 +503,27 @@ function setCategory(category) {
     filterBooks();
 }
 
+function setAccessFilter(accessType) {
+    currentAccessFilter = accessType;
+    document.querySelectorAll('.access-btn').forEach(btn => {
+        btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
+    });
+    const activeBtn = document.getElementById(`access-btn-${accessType}`);
+    if (activeBtn) {
+        activeBtn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white";
+    }
+    filterBooks();
+}
+
 function filterBooks() {
     const query = document.getElementById('search-input').value.toLowerCase();
     const filtered = booksData.filter(book => {
         const matchesCategory = currentCategory === 'All' || book.category === currentCategory;
         const matchesQuery = book.title.toLowerCase().includes(query) || book.author.toLowerCase().includes(query) || book.description.toLowerCase().includes(query);
-        return matchesCategory && matchesQuery;
+        const matchesAccess = currentAccessFilter === 'all'
+            || (currentAccessFilter === 'paid' && Boolean(book.is_for_sale))
+            || (currentAccessFilter === 'free' && !Boolean(book.is_for_sale));
+        return matchesCategory && matchesQuery && matchesAccess;
     });
     renderBooks(filtered);
 }
@@ -512,6 +533,12 @@ function resetFilters() {
     if (window.location.search) {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
+    currentAccessFilter = 'all';
+    document.querySelectorAll('.access-btn').forEach(btn => {
+        btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
+    });
+    const allAccessBtn = document.getElementById('access-btn-all');
+    if (allAccessBtn) allAccessBtn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white";
     setCategory('All');
 }
 
