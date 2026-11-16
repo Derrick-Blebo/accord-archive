@@ -178,6 +178,9 @@
                     <button onclick="openPendingReviews('drafts')" id="nav-tab-submissions" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-inbox mr-1.5"></i> Pending Reviews <span id="pending-badge" class="ml-1 bg-accord-gold text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
+                    <button onclick="switchTab('forum')" id="nav-tab-forum" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                        <i class="fa-solid fa-comments mr-1.5"></i> Forum <span id="forum-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                    </button>
                     <button onclick="switchTab('trash')" id="nav-tab-trash" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-trash-can mr-1.5"></i> Recycle Bin <span id="trash-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
@@ -462,6 +465,70 @@
                 </div>
             </section>
 
+            <!-- Tab 6: Testimonies & Comments Moderation Section -->
+            <section id="section-forum" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Testimonies & Comments Moderation</h2>
+                        <p class="text-xs text-accord-muted mt-1">Review submitted testimonies, hide or delete off-topic posts/comments, and export approved stories for book compilation.</p>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="exportApprovedTestimonies()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>Copy Approved for Book</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Testimonies Moderation Table -->
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-accord-slate">Submitted Testimonies</h3>
+                        <span id="mod-testimony-count" class="text-xs text-accord-muted font-semibold">0 posts</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/60 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-3.5 px-6">Author & Location</th>
+                                    <th class="py-3.5 px-6">Testimony</th>
+                                    <th class="py-3.5 px-6">Category</th>
+                                    <th class="py-3.5 px-6 text-center">Status</th>
+                                    <th class="py-3.5 px-6 text-right">Moderation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mod-testimonies-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Injected via admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Comments Moderation Table -->
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-accord-slate">Recent Reader Comments</h3>
+                        <span id="mod-comment-count" class="text-xs text-accord-muted font-semibold">0 comments</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/60 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-3.5 px-6">Commenter</th>
+                                    <th class="py-3.5 px-6">On Testimony</th>
+                                    <th class="py-3.5 px-6">Comment</th>
+                                    <th class="py-3.5 px-6 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mod-comments-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Injected via admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
         </main>
 
         <!-- Footer -->
@@ -469,7 +536,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.7</span>
+                    <span>• Secure CMS v2.8</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -593,6 +660,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=4"></script>
+    <script src="admin.js?v=5"></script>
 </body>
 </html>

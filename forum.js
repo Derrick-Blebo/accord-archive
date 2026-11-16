@@ -10,7 +10,6 @@ let commentsByTestimony = {};
 let currentForumCategory = 'All';
 let currentUser = null;
 let authMode = 'signin';
-let openAfterAuth = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initAuth();
@@ -55,11 +54,6 @@ async function syncUserState() {
         const count = data?.length || 0;
         if (document.getElementById('bookmark-badge')) document.getElementById('bookmark-badge').innerText = count;
         if (document.getElementById('mobile-bookmark-count')) document.getElementById('mobile-bookmark-count').innerText = count;
-
-        if (openAfterAuth) {
-            openAfterAuth = false;
-            openTestimonyModal();
-        }
     } else {
         if (navLabel) navLabel.innerText = 'Sign In';
         if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
@@ -164,7 +158,7 @@ function renderTestimonies(list) {
     list.forEach(item => {
         const comments = commentsByTestimony[item.id] || [];
         const hasAmened = amenedIds.includes(Number(item.id));
-        const canDeletePost = currentUser && (currentUser.id === item.user_id || currentUser.email === ADMIN_EMAIL);
+        const canDeletePost = currentUser && ((item.user_id && currentUser.id === item.user_id) || currentUser.email === ADMIN_EMAIL);
 
         const initials = item.author_name
             .split(' ')
@@ -241,13 +235,12 @@ function renderTestimonies(list) {
                 </div>
             </div>
 
-            <!-- Comments Section -->
+            <!-- Comments Section (Sign-in required to comment) -->
             <div class="pt-3 border-t border-slate-100 space-y-3">
                 <div class="space-y-2.5">
                     ${commentsHtml}
                 </div>
 
-                <!-- Add Comment Input -->
                 <form onsubmit="handleCommentSubmit(event, ${item.id})" class="flex items-center gap-2 pt-1">
                     <input type="text" id="comment-input-${item.id}" required placeholder="${currentUser ? 'Write an encouraging comment or prayer...' : 'Sign in to comment on this testimony...'}" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-accord-slate focus:outline-none focus:border-accord-blue focus:bg-white">
                     <button type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shrink-0">
@@ -260,13 +253,8 @@ function renderTestimonies(list) {
     });
 }
 
+// Open Testimony Modal for ANY visitor (no sign-in required to share a testimony)
 function openTestimonyModal() {
-    if (!currentUser) {
-        openAfterAuth = true;
-        showToast("Please sign in to share your testimony.");
-        openAuthModal();
-        return;
-    }
     const modal = document.getElementById('testimony-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -280,10 +268,6 @@ function closeTestimonyModal() {
 
 async function handleTestimonySubmit(e) {
     e.preventDefault();
-    if (!currentUser) {
-        openAuthModal();
-        return;
-    }
 
     const author_name = document.getElementById('testimony-author').value.trim();
     const location = document.getElementById('testimony-location').value.trim();
@@ -298,7 +282,7 @@ async function handleTestimonySubmit(e) {
     const { error } = await supabaseClient
         .from('testimonies')
         .insert([{
-            user_id: currentUser.id,
+            user_id: currentUser ? currentUser.id : null,
             author_name,
             location,
             title,
@@ -315,11 +299,16 @@ async function handleTestimonySubmit(e) {
     }
 
     document.getElementById('testimony-form').reset();
+    if (currentUser) {
+        const fullName = currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.email.split('@')[0];
+        document.getElementById('testimony-author').value = fullName;
+    }
     closeTestimonyModal();
     await loadForumData();
-    showToast("Your testimony has been published!");
+    showToast("Thank you! Your testimony has been published to the forum.");
 }
 
+// Commenting remains restricted to signed-in users
 async function handleCommentSubmit(e, testimonyId) {
     e.preventDefault();
     if (!currentUser) {

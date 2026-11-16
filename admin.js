@@ -10,6 +10,8 @@ let trashData = [];
 let submissionsData = [];
 let categoriesData = [];
 let purchasesData = [];
+let testimoniesModData = [];
+let commentsModData = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
 
@@ -114,6 +116,24 @@ async function fetchAllData() {
         submissionsData = subs;
         renderSubmissionsTable();
     }
+
+    const { data: forumTestimonies, error: testModErr } = await supabaseClient
+        .from('testimonies')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    const { data: forumComments, error: commModErr } = await supabaseClient
+        .from('testimony_comments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (!testModErr && forumTestimonies) {
+        testimoniesModData = forumTestimonies;
+    }
+    if (!commModErr && forumComments) {
+        commentsModData = forumComments;
+    }
+    renderForumModeration();
 
     updateStats();
 }
@@ -264,7 +284,7 @@ function promptDeleteCategory(id, name, bookCount) {
 }
 
 function switchTab(tabName) {
-    const tabs = ['catalog', 'categories', 'submissions', 'trash', 'downloads'];
+    const tabs = ['catalog', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`nav-tab-${t}`);
@@ -906,7 +926,6 @@ function renderDownloadsTable() {
         return;
     }
 
-    // Aggregate sales count & revenue per book_id
     const salesByBook = {};
     purchasesData.forEach(p => {
         const key = Number(p.book_id);
@@ -966,6 +985,129 @@ function renderDownloadsTable() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+// Forum Moderation & Book Export
+function renderForumModeration() {
+    const tBody = document.getElementById('mod-testimonies-body');
+    const cBody = document.getElementById('mod-comments-body');
+    const badge = document.getElementById('forum-badge');
+
+    if (badge) badge.innerText = testimoniesModData.length;
+    if (document.getElementById('mod-testimony-count')) {
+        document.getElementById('mod-testimony-count').innerText = `${testimoniesModData.length} posts`;
+    }
+    if (document.getElementById('mod-comment-count')) {
+        document.getElementById('mod-comment-count').innerText = `${commentsModData.length} comments`;
+    }
+
+    if (tBody) {
+        tBody.innerHTML = '';
+        if (testimoniesModData.length === 0) {
+            tBody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No testimonies posted yet.</td></tr>`;
+        } else {
+            testimoniesModData.forEach(item => {
+                const isApproved = item.is_approved !== false;
+                const statusPill = isApproved
+                    ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Live</span>`
+                    : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">Hidden</span>`;
+
+                const toggleBtn = isApproved
+                    ? `<button onclick="toggleTestimonyApproval(${item.id}, false)" class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-amber-50 text-emerald-600 hover:text-amber-600 transition-all inline-flex items-center justify-center" title="Hide off-topic testimony"><i class="fa-solid fa-eye text-xs"></i></button>`
+                    : `<button onclick="toggleTestimonyApproval(${item.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Approve & restore to forum"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+                tr.innerHTML = `
+                    <td class="py-4 px-6">
+                        <p class="font-bold text-accord-slate">${item.author_name}</p>
+                        <p class="text-[10px] text-accord-muted">${item.location || 'Location not specified'}</p>
+                    </td>
+                    <td class="py-4 px-6 max-w-md">
+                        <p class="font-bold text-accord-slate mb-0.5">${item.title}</p>
+                        <p class="text-[11px] text-accord-muted line-clamp-2">${item.body}</p>
+                    </td>
+                    <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${item.category}</span></td>
+                    <td class="py-4 px-6 text-center">${statusPill}</td>
+                    <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                        ${toggleBtn}
+                        <button onclick="deleteModTestimony(${item.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete permanently">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </td>
+                `;
+                tBody.appendChild(tr);
+            });
+        }
+    }
+
+    if (cBody) {
+        cBody.innerHTML = '';
+        if (commentsModData.length === 0) {
+            cBody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-accord-muted">No reader comments yet.</td></tr>`;
+        } else {
+            commentsModData.forEach(c => {
+                const parent = testimoniesModData.find(t => Number(t.id) === Number(c.testimony_id));
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+                tr.innerHTML = `
+                    <td class="py-3.5 px-6 font-bold text-accord-slate">${c.author_name}</td>
+                    <td class="py-3.5 px-6 text-accord-muted max-w-[180px] truncate">${parent ? parent.title : `Post #${c.testimony_id}`}</td>
+                    <td class="py-3.5 px-6 text-slate-700 max-w-md">${c.comment_text}</td>
+                    <td class="py-3.5 px-6 text-right">
+                        <button onclick="deleteModComment(${c.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Remove off-topic comment">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </td>
+                `;
+                cBody.appendChild(tr);
+            });
+        }
+    }
+}
+
+async function toggleTestimonyApproval(id, makeApproved) {
+    const { error } = await supabaseClient
+        .from('testimonies')
+        .update({ is_approved: makeApproved })
+        .eq('id', id);
+
+    if (!error) {
+        await fetchAllData();
+        showToast(makeApproved ? "Testimony is now visible on the forum." : "Testimony hidden from public view.");
+    } else {
+        showToast(`Action failed: ${error.message}`);
+    }
+}
+
+async function deleteModTestimony(id) {
+    await supabaseClient.from('testimonies').delete().eq('id', id);
+    await fetchAllData();
+    showToast("Testimony permanently deleted.");
+}
+
+async function deleteModComment(id) {
+    await supabaseClient.from('testimony_comments').delete().eq('id', id);
+    await fetchAllData();
+    showToast("Comment removed.");
+}
+
+async function exportApprovedTestimonies() {
+    const approved = testimoniesModData.filter(t => t.is_approved !== false);
+    if (approved.length === 0) {
+        showToast("No approved testimonies to export yet.");
+        return;
+    }
+
+    const compiledText = approved.map((t, i) => (
+        `CHAPTER ${i + 1}: ${t.title.toUpperCase()}\n` +
+        `By ${t.author_name}${t.location ? ` (${t.location})` : ''} | Theme: ${t.category}\n` +
+        `----------------------------------------\n` +
+        `${t.body}\n`
+    )).join('\n========================================\n\n');
+
+    await navigator.clipboard.writeText(compiledText);
+    showToast(`Copied ${approved.length} approved testimonies to clipboard for book compilation!`);
 }
 
 function showToast(message) {
