@@ -175,7 +175,13 @@ function buildEventCard(ev) {
     const card = document.createElement('section');
     card.className = "bg-white border-2 border-amber-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6";
 
-    // 3-Column Grid if 3 or more testimonies, otherwise 1 or 2 columns
+    // Split testimonies into initial 3 and remaining
+    const initialTestimonies = eventTestimonies.slice(0, 3);
+    const remainingTestimonies = eventTestimonies.slice(3);
+
+    const initialHtml = initialTestimonies.map(t => buildTestimonyGridCard(t, true).outerHTML).join('');
+    const remainingHtml = remainingTestimonies.map(t => buildTestimonyGridCard(t, true).outerHTML).join('');
+
     const gridColsClass = eventTestimonies.length >= 3 ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "grid grid-cols-1 md:grid-cols-2 gap-4";
 
     const testimoniesGridHtml = eventTestimonies.length === 0
@@ -186,7 +192,22 @@ function buildEventCard(ev) {
                    <span>Be the First to Share a Testimony from This Event</span>
                </button>
            </div>`
-        : `<div class="${gridColsClass}">` + eventTestimonies.map(t => buildTestimonyGridCard(t, true).outerHTML).join('') + `</div>`;
+        : `
+           <div class="${gridColsClass}">
+               ${initialHtml}
+           </div>
+           ${remainingTestimonies.length > 0 ? `
+               <div id="extra-testimonies-${ev.id}" class="hidden ${gridColsClass} mt-4">
+                   ${remainingHtml}
+               </div>
+               <div class="text-center pt-2">
+                   <button type="button" onclick="toggleEventTestimonies(${ev.id})" id="event-toggle-btn-${ev.id}" class="inline-flex items-center space-x-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-5 py-2.5 rounded-xl transition-all">
+                       <i class="fa-solid fa-chevron-down mr-1"></i>
+                       <span>See more testimonies (${remainingTestimonies.length} more)</span>
+                   </button>
+               </div>
+           ` : ''}
+          `;
 
     card.innerHTML = `
         <div class="flex flex-col md:flex-row gap-6">
@@ -253,6 +274,20 @@ function buildEventCard(ev) {
         </div>
     `;
     return card;
+}
+
+function toggleEventTestimonies(eventId) {
+    const extraContainer = document.getElementById(`extra-testimonies-${eventId}`);
+    const toggleBtn = document.getElementById(`event-toggle-btn-${eventId}`);
+    if (extraContainer) {
+        extraContainer.classList.toggle('hidden');
+        const isHidden = extraContainer.classList.contains('hidden');
+        if (toggleBtn) {
+            toggleBtn.innerHTML = isHidden
+                ? `<i class="fa-solid fa-chevron-down mr-1"></i><span>See more testimonies</span>`
+                : `<i class="fa-solid fa-chevron-up mr-1"></i><span>See less</span>`;
+        }
+    }
 }
 
 function buildTestimonyGridCard(item) {

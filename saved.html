@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saved Books — Accord Digital Library & Historical Archive</title>
-    
+    <title>Saved Items — Accord Archive & Library</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,230 +12,85 @@
                 extend: {
                     colors: {
                         accord: {
-                            blue: '#0077FF',
-                            darkBlue: '#005BC4',
-                            lightBlue: '#E6F0FF',
-                            gold: '#F5A623',
-                            goldLight: '#FEF9E7',
-                            slate: '#0F172A',
-                            muted: '#64748B',
-                            bg: '#F8FAFC'
+                            blue: '#0077FF', darkBlue: '#005BC4', lightBlue: '#E6F0FF',
+                            gold: '#F5A623', goldLight: '#FEF9E7', slate: '#0F172A',
+                            muted: '#64748B', bg: '#F8FAFC'
                         }
                     },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
                 }
             }
         }
     </script>
-    
-    <!-- Google Fonts Inter & Playfair Display -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    
-    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .serif-heading { font-family: 'Playfair Display', serif; }
-        .logo-rd-bar { position: relative; }
-        .logo-rd-bar::after {
-            content: '';
-            position: absolute;
-            top: -4px;
-            right: 0px;
-            width: 14px;
-            height: 3px;
-            background-color: #F5A623;
-            border-radius: 2px;
-        }
-    </style>
-
-    <!-- Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
 
-    <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
-        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
-        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+        <i class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed.</span>
     </div>
 
-    <!-- Header / Navigation -->
+    <!-- Header -->
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-            <!-- Brand Logo -->
-            <a href="index.html" class="flex items-center space-x-3 group">
-                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-                    <span class="font-bold text-xl tracking-tighter">Ac</span>
-                </div>
-                <div>
-                    <div class="flex items-center">
-                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
-                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
-                    </div>
-                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Official Archive & Library</p>
-                </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <a href="index.html" class="flex items-center space-x-3">
+                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold text-xl">Ac</div>
+                <span class="text-2xl font-extrabold tracking-tight">Accord</span>
             </a>
-
-            <!-- Navigation Links -->
             <nav class="hidden md:flex items-center space-x-6">
-                <a href="index.html#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
-                <a href="index.html#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
-                <a href="saved.html" class="relative flex items-center space-x-1.5 text-sm font-bold text-accord-blue">
+                <a href="index.html#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue">Digital Library</a>
+                <a href="forum.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue">Testimonies</a>
+                <a href="saved.html" class="text-sm font-bold text-accord-blue flex items-center space-x-1">
                     <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                    <span>Saved Books</span>
-                    <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                    <span>Saved</span>
                 </a>
-                <button id="auth-nav-btn" onclick="openAuthModal()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
-                    <i class="fa-regular fa-user"></i>
-                    <span id="auth-nav-label">Sign In</span>
-                </button>
             </nav>
-
-            <!-- Back to Library CTA -->
-            <div class="flex items-center space-x-3">
-                <a href="index.html#library" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    <span>All Archives</span>
-                </a>
-            </div>
+            <a href="index.html" class="text-xs font-bold text-accord-blue hover:underline"><i class="fa-solid fa-arrow-left mr-1"></i> Back to Home</a>
         </div>
     </header>
 
-    <!-- Main Saved Books Content -->
-    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 w-full">
-        <!-- Page Heading & Sync Banner -->
-        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-            <div>
-                <div class="inline-flex items-center space-x-2 bg-accord-goldLight text-accord-gold px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-                    <i class="fa-solid fa-bookmark"></i>
-                    <span>Personal Collection</span>
-                </div>
-                <h1 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate">Saved Books</h1>
-                <p id="saved-subtitle" class="text-sm text-accord-muted mt-1">Your bookmarked historical publications and manuscripts.</p>
-            </div>
-
-            <div id="sync-status-pill" class="self-start sm:self-auto bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-accord-muted flex items-center space-x-2 shadow-sm">
-                <i class="fa-solid fa-cloud-arrow-up text-accord-blue"></i>
-                <span id="sync-status-text">Sign in required • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign In</button></span>
-            </div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full space-y-10">
+        <div>
+            <h1 class="serif-heading text-3xl font-bold text-accord-slate">Your Saved Library</h1>
+            <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your bookmarked publications and saved testimonies.</p>
         </div>
 
-        <!-- Loading State -->
         <div id="saved-loading" class="text-center py-16">
             <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue mb-3"></i>
-            <p class="text-sm text-accord-muted">Loading your saved books...</p>
+            <p class="text-sm text-accord-muted">Loading your saved items...</p>
         </div>
 
-        <!-- Saved Books Grid (1 wide card per row) -->
-        <div id="saved-books-grid" class="grid grid-cols-1 gap-5">
-            <!-- Detailed book cards injected via saved.js -->
+        <!-- Section 1: Saved Books -->
+        <div class="space-y-4">
+            <h2 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Publications & Books</h2>
+            <div id="saved-books-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
         </div>
 
-        <!-- Empty / Sign-In Prompt State -->
-        <div id="saved-empty-state" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
-            <div class="w-16 h-16 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center mx-auto text-2xl mb-4">
-                <i class="fa-regular fa-bookmark"></i>
+        <!-- Section 2: Saved Testimonies -->
+        <div class="space-y-4 pt-6 border-t border-slate-200">
+            <h2 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Testimonies</h2>
+            <div id="saved-testimonies-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="saved-empty-state" class="hidden text-center py-16 bg-white border border-slate-200 rounded-3xl p-8 max-w-md mx-auto">
+            <div class="w-16 h-16 bg-blue-50 text-accord-blue rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
+                <i class="fa-solid fa-bookmark"></i>
             </div>
-            <h2 id="empty-state-title" class="serif-heading text-2xl font-bold text-accord-slate">No Saved Books Yet</h2>
-            <p id="empty-state-desc" class="text-sm text-accord-muted mt-2 leading-relaxed">
-                Click the bookmark icon on any publication in the Digital Library to save it here for quick reading and downloading.
-            </p>
-            <div id="empty-state-actions" class="mt-6 flex items-center justify-center gap-3">
-                <a href="index.html#library" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all">
-                    <i class="fa-solid fa-book-open"></i>
-                    <span>Browse Digital Library</span>
-                </a>
+            <h3 id="empty-state-title" class="text-lg font-bold text-accord-slate">No Saved Items Yet</h3>
+            <p id="empty-state-desc" class="text-xs text-accord-muted mt-1 leading-relaxed">Bookmark books or testimonies to keep them here for quick access.</p>
+            <div id="empty-state-actions" class="mt-6">
+                <a href="index.html#library" class="bg-accord-blue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md">Browse Digital Library</a>
             </div>
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-slate-200 py-10 mt-12">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold">Ac</div>
-                <div>
-                    <span class="font-extrabold text-accord-slate tracking-tight">Accord</span>
-                    <p class="text-xs text-accord-muted">© 2026 Accord Media House. All rights reserved.</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
-                <a href="index.html#library" class="hover:text-accord-blue transition-colors">Library</a>
-                <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
-                <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms of Service</a>
-            </div>
-        </div>
+    <footer class="bg-white border-t border-slate-200 py-8 text-center text-xs text-accord-muted">
+        © 2026 Accord Media House. All rights reserved.
     </footer>
-
-    <!-- Optional Sign In / Sign Up Modal -->
-    <div id="auth-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
-            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <div>
-                    <h3 class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
-                    <p class="text-xs text-accord-muted">Sign in to save and sync your books across devices</p>
-                </div>
-                <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div id="auth-forms-container" class="p-6 space-y-4">
-                <button type="button" onclick="handleGoogleSignIn()" class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
-                    <i class="fa-brands fa-google text-red-500"></i>
-                    <span>Continue with Google</span>
-                </button>
-
-                <div class="relative flex py-1 items-center">
-                    <div class="flex-grow border-t border-slate-200"></div>
-                    <span class="flex-shrink mx-3 text-[11px] uppercase tracking-wider text-accord-muted font-semibold">or with email</span>
-                    <div class="flex-grow border-t border-slate-200"></div>
-                </div>
-
-                <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-xl">
-                    <button type="button" id="tab-signin" onclick="switchAuthMode('signin')" class="py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all">Sign In</button>
-                    <button type="button" id="tab-signup" onclick="switchAuthMode('signup')" class="py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all">Create Account</button>
-                </div>
-
-                <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
-                    <div id="auth-name-field" class="hidden">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
-                        <input type="text" id="auth-name" placeholder="e.g., Derrick Blebo" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
-                        <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
-                        <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <button type="submit" id="auth-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
-                        Sign In
-                    </button>
-                </form>
-            </div>
-
-            <div id="auth-profile-container" class="hidden p-6 space-y-5 text-center">
-                <div class="w-14 h-14 rounded-2xl bg-accord-lightBlue text-accord-blue flex items-center justify-center mx-auto text-xl font-bold">
-                    <i class="fa-solid fa-user-check"></i>
-                </div>
-                <div>
-                    <h4 id="profile-display-name" class="font-bold text-accord-slate text-base">Reader Account</h4>
-                    <p id="profile-display-email" class="text-xs text-accord-muted mt-0.5"></p>
-                </div>
-                <button onclick="handleSignOut()" class="w-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs transition-all">
-                    Sign Out
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script src="saved.js?v=4"></script>
+    <script src="saved.js?v=2"></script>
 </body>
 </html>
