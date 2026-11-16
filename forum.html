@@ -17,51 +17,32 @@
                 extend: {
                     colors: {
                         accord: {
-                            blue: '#0077FF',
-                            darkBlue: '#005BC4',
-                            lightBlue: '#E6F0FF',
-                            gold: '#F5A623',
-                            goldLight: '#FEF9E7',
-                            slate: '#0F172A',
-                            muted: '#64748B',
-                            bg: '#F8FAFC'
+                            blue: '#0077FF', darkBlue: '#005BC4', lightBlue: '#E6F0FF',
+                            gold: '#F5A623', goldLight: '#FEF9E7', slate: '#0F172A',
+                            muted: '#64748B', bg: '#F8FAFC'
                         }
                     },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
                 }
             }
         }
     </script>
     
-    <!-- Google Fonts Inter & Playfair Display -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    
-    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Playfair Display', serif; }
         .logo-rd-bar { position: relative; }
         .logo-rd-bar::after {
-            content: '';
-            position: absolute;
-            top: -4px;
-            right: 0px;
-            width: 14px;
-            height: 3px;
-            background-color: #F5A623;
-            border-radius: 2px;
+            content: ''; position: absolute; top: -4px; right: 0px; width: 14px; height: 3px;
+            background-color: #F5A623; border-radius: 2px;
         }
     </style>
-
-    <!-- Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
 
-    <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
@@ -87,14 +68,17 @@
                 <a href="index.html#library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                 <a href="forum.html" class="text-sm font-bold text-accord-blue">Testimonies</a>
                 <a href="index.html#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
-                <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors" title="Saved Books">
-                    <i class="fa-solid fa-bookmark text-lg"></i>
-                    <span id="bookmark-badge" class="absolute -top-1 -right-1 bg-accord-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1" title="Saved">
+                    <i class="fa-solid fa-bookmark text-lg text-accord-gold"></i>
+                    <span class="text-sm font-semibold">Saved</span>
+                    <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                 </a>
-                <button id="auth-nav-btn" onclick="openAuthModal()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
-                    <i class="fa-regular fa-user"></i>
-                    <span id="auth-nav-label">Sign In</span>
-                </button>
+                <div id="auth-nav-container">
+                    <button id="auth-nav-btn" onclick="handleAuthNavClick()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                        <i class="fa-regular fa-user"></i>
+                        <span id="auth-nav-label">Sign In</span>
+                    </button>
+                </div>
             </nav>
 
             <div class="flex items-center space-x-2.5">
@@ -118,9 +102,9 @@
             <button onclick="openEventModal(); toggleMobileMenu();" class="block text-base font-medium text-amber-700">Create Church Event</button>
             <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-1">
                 <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                <span>Saved Books (<span id="mobile-bookmark-count">0</span>)</span>
+                <span>Saved Items</span>
             </a>
-            <button onclick="openAuthModal(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-1">
+            <button onclick="handleAuthNavClick(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-1">
                 <i class="fa-regular fa-user"></i>
                 <span id="mobile-auth-label">Sign In / Create Account</span>
             </button>
@@ -129,7 +113,6 @@
 
     <!-- Main Forum Content -->
     <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
-
         <!-- Hero Banner -->
         <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm mb-8 relative overflow-hidden">
             <div class="absolute top-0 right-0 w-72 h-72 bg-accord-gold/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -185,23 +168,17 @@
             </div>
         </div>
 
-        <!-- Loading State -->
         <div id="forum-loading" class="text-center py-16">
             <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue mb-3"></i>
             <p class="text-sm text-accord-muted">Loading church events and testimonies...</p>
         </div>
 
         <!-- Grid Feed for Testimonies -->
-        <div id="forum-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Testimonies grid cards rendered via forum.js -->
-        </div>
+        <div id="forum-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
 
-        <!-- Separate Container for Church Event Posts (Full Width) -->
-        <div id="forum-events-container" class="space-y-6 mt-8">
-            <!-- Church events rendered via forum.js -->
-        </div>
+        <!-- Church Event Posts Container -->
+        <div id="forum-events-container" class="space-y-6 mt-8"></div>
 
-        <!-- Empty State -->
         <div id="forum-empty" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
             <div class="w-16 h-16 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center mx-auto text-2xl mb-4">
                 <i class="fa-solid fa-dove"></i>
@@ -210,76 +187,40 @@
             <p class="text-sm text-accord-muted mt-2 leading-relaxed">
                 Start the conversation by sharing a testimony or creating an event post for your church service.
             </p>
-            <div class="mt-6 flex items-center justify-center gap-3">
-                <button onclick="openTestimonyModal(null)" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all">
-                    Share Testimony
-                </button>
-                <button onclick="openEventModal()" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-5 py-3 rounded-xl transition-all">
-                    Create Event
-                </button>
-            </div>
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-slate-200 py-10 mt-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold">Ac</div>
-                <div>
-                    <span class="font-extrabold text-accord-slate tracking-tight">Accord</span>
-                    <p class="text-xs text-accord-muted">© 2026 Accord Media House. All rights reserved.</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
-                <a href="index.html#library" class="hover:text-accord-blue transition-colors">Library</a>
-                <a href="forum.html" class="hover:text-accord-blue transition-colors">Testimonies</a>
-                <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
-                <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
-
-    <!-- Modal 1: Share Testimony Modal -->
+    <!-- Modals (Testimony, Event, Auth) -->
     <div id="testimony-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
-                <div>
-                    <h3 class="font-bold text-accord-slate text-lg">Share Your Testimony</h3>
-                    <p class="text-xs text-accord-muted">Submitted stories may be compiled into Accord's archive books</p>
-                </div>
-                <button onclick="closeTestimonyModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+                <h3 class="font-bold text-accord-slate text-lg">Share Your Testimony</h3>
+                <button onclick="closeTestimonyModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
             </div>
-
             <form id="testimony-form" onsubmit="handleTestimonySubmit(event)" class="p-6 space-y-4 overflow-y-auto">
                 <input type="hidden" id="testimony-event-id" value="">
-
                 <div id="selected-event-banner" class="hidden bg-accord-lightBlue border border-blue-200 rounded-2xl px-4 py-2.5 text-xs text-accord-blue font-bold flex items-center justify-between">
                     <span><i class="fa-solid fa-church mr-1.5"></i> Posting under: <span id="selected-event-name"></span></span>
                     <button type="button" onclick="clearSelectedEventForTestimony()" class="text-[11px] underline">Remove</button>
                 </div>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Name (as credited)</label>
-                        <input type="text" id="testimony-author" required placeholder="e.g., Grace Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Name</label>
+                        <input type="text" id="testimony-author" required placeholder="e.g., Grace Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">City / Country (Optional)</label>
-                        <input type="text" id="testimony-location" placeholder="e.g., Accra, Ghana" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">City / Country</label>
+                        <input type="text" id="testimony-location" placeholder="e.g., Accra, Ghana" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                     </div>
                 </div>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Testimony Title</label>
-                        <input type="text" id="testimony-title" required placeholder="e.g., Restored After Years of Prayer" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title</label>
+                        <input type="text" id="testimony-title" required placeholder="e.g., Restored After Years" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Theme / Category</label>
-                        <select id="testimony-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Theme</label>
+                        <select id="testimony-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                             <option>Salvation & Faith</option>
                             <option>Healing & Deliverance</option>
                             <option>Provision & Breakthrough</option>
@@ -287,101 +228,51 @@
                         </select>
                     </div>
                 </div>
-
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Testimony</label>
-                    <textarea id="testimony-body" rows="5" required placeholder="Write out what happened, how God intervened, and what this means for your walk of faith..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Testimony</label>
+                    <textarea id="testimony-body" rows="5" required placeholder="Write out what happened..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue"></textarea>
                 </div>
-
-                <button type="submit" id="testimony-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
-                    Publish Testimony
-                </button>
+                <button type="submit" id="testimony-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg transition-all text-sm">Publish Testimony</button>
             </form>
         </div>
     </div>
 
-    <!-- Modal 2: Create Church Event Post Modal -->
     <div id="event-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
-                <div>
-                    <h3 class="font-bold text-accord-slate text-lg">Create Church / Group Event Post</h3>
-                    <p class="text-xs text-accord-muted">Gather all testimonies from your service or fellowship in one thread</p>
-                </div>
-                <button onclick="closeEventModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+                <h3 class="font-bold text-accord-slate text-lg">Create Church Event Post</h3>
+                <button onclick="closeEventModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
             </div>
-
             <form id="event-form" onsubmit="handleEventSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload Event Flyer (Optional)</label>
-                    <div class="relative group">
-                        <input type="file" id="event-flyer-input" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
-                        <div class="flex items-center space-x-3.5 w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-3.5 group-hover:border-accord-blue group-hover:bg-accord-lightBlue transition-all">
-                            <div id="event-flyer-preview" class="w-14 h-16 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center overflow-hidden shrink-0">
-                                <i class="fa-regular fa-image text-lg"></i>
-                            </div>
-                            <div>
-                                <p class="text-xs font-bold text-accord-slate">Click to upload program / event flyer</p>
-                                <p id="event-flyer-name" class="text-[11px] text-accord-muted mt-0.5">JPG, PNG, or WebP (Auto-optimized)</p>
-                            </div>
-                        </div>
-                    </div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Event Flyer (Optional)</label>
+                    <input type="file" id="event-flyer-input" accept="image/*" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
+                    <div id="event-flyer-preview" class="mt-2 w-20 h-24 bg-slate-100 rounded-lg overflow-hidden hidden"></div>
                 </div>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Church / Ministry Name</label>
-                        <input type="text" id="event-organizer" required placeholder="e.g., Grace Chapel International" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Event / Service Title</label>
-                        <input type="text" id="event-title" required placeholder="e.g., Night of Encounter 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
+                    <input type="text" id="event-organizer" required placeholder="Church Name" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm">
+                    <input type="text" id="event-title" required placeholder="Service / Program Title" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm">
                 </div>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Service / Event Date</label>
-                        <input type="text" id="event-date" placeholder="e.g., Nov 14, 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Venue / City</label>
-                        <input type="text" id="event-location" placeholder="e.g., Independence Square, Accra" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
+                    <input type="text" id="event-date" placeholder="Date (e.g., Nov 14)" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm">
+                    <input type="text" id="event-location" placeholder="Location / Venue" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm">
                 </div>
-
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Invitation to Share Testimonies</label>
-                    <textarea id="event-description" rows="3" required placeholder="Invite members to share what the Lord did during this service..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
-                </div>
-
-                <button type="submit" id="event-submit-btn" class="w-full bg-accord-gold hover:bg-amber-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all text-sm">
-                    Publish Church Event Post
-                </button>
+                <textarea id="event-description" rows="3" required placeholder="Description / Invite..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm"></textarea>
+                <button type="submit" class="w-full bg-accord-gold text-white font-bold py-3.5 rounded-xl shadow-lg">Publish Event</button>
             </form>
         </div>
     </div>
 
-    <!-- Sign In Modal -->
     <div id="auth-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
-            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <h3 class="font-bold text-accord-slate text-lg">Welcome to Accord</h3>
-                <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-4 text-center">
-                <button type="button" onclick="handleGoogleSignIn()" class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
-                    <i class="fa-brands fa-google text-red-500"></i>
-                    <span>Continue with Google</span>
-                </button>
-            </div>
+        <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 p-6 text-center space-y-4">
+            <h3 class="font-bold text-accord-slate text-lg">Sign In to Accord</h3>
+            <button type="button" onclick="handleGoogleSignIn()" class="w-full bg-white text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm text-sm flex items-center justify-center space-x-2">
+                <i class="fa-brands fa-google text-red-500"></i><span>Continue with Google</span>
+            </button>
+            <button onclick="closeAuthModal()" class="text-xs text-accord-muted font-bold">Cancel</button>
         </div>
     </div>
 
-    <script src="forum.js?v=4"></script>
+    <script src="forum.js?v=5"></script>
 </body>
 </html>

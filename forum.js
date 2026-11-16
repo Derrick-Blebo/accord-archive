@@ -8,6 +8,7 @@ const ADMIN_EMAIL = 'accordmedia1@gmail.com';
 let eventsData = [];
 let testimoniesData = [];
 let commentsByTestimony = {};
+let savedTestimonyIds = [];
 let currentForumType = 'all';
 let currentForumCategory = 'All';
 let currentUser = null;
@@ -21,15 +22,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     currentUser = session?.user || null;
-    syncUserState();
+    await syncUserState();
 
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
         currentUser = session?.user || null;
-        syncUserState();
+        await syncUserState();
+        renderForumFeed();
     });
 }
 
-function syncUserState() {
+async function syncUserState() {
     const navLabel = document.getElementById('auth-nav-label');
     const mobileLabel = document.getElementById('mobile-auth-label');
 
@@ -40,9 +42,31 @@ function syncUserState() {
 
         const authorInput = document.getElementById('testimony-author');
         if (authorInput && !authorInput.value) authorInput.value = fullName;
+
+        // Fetch saved testimonies count
+        const { data } = await supabaseClient
+            .from('user_testimony_bookmarks')
+            .select('testimony_id')
+            .eq('user_id', currentUser.id);
+        
+        savedTestimonyIds = data ? data.map(item => Number(item.testimony_id)) : [];
+        const totalSaved = savedTestimonyIds.length;
+        const badge = document.getElementById('bookmark-badge');
+        if (badge) badge.innerText = totalSaved;
     } else {
         if (navLabel) navLabel.innerText = 'Sign In';
         if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
+        savedTestimonyIds = [];
+        const badge = document.getElementById('bookmark-badge');
+        if (badge) badge.innerText = '0';
+    }
+}
+
+function handleAuthNavClick() {
+    if (currentUser) {
+        window.location.href = 'profile.html';
+    } else {
+        openAuthModal();
     }
 }
 
@@ -151,6 +175,9 @@ function buildEventCard(ev) {
     const card = document.createElement('section');
     card.className = "bg-white border-2 border-amber-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6";
 
+    // 3-Column Grid if 3 or more testimonies, otherwise 1 or 2 columns
+    const gridColsClass = eventTestimonies.length >= 3 ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "grid grid-cols-1 md:grid-cols-2 gap-4";
+
     const testimoniesGridHtml = eventTestimonies.length === 0
         ? `<div class="bg-amber-50/60 border border-amber-200/60 rounded-2xl p-5 text-center space-y-2">
                <p class="text-xs font-semibold text-slate-700">No testimonies shared under this service yet.</p>
@@ -159,7 +186,7 @@ function buildEventCard(ev) {
                    <span>Be the First to Share a Testimony from This Event</span>
                </button>
            </div>`
-        : `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">` + eventTestimonies.map(t => buildTestimonyGridCard(t, true).outerHTML).join('') + `</div>`;
+        : `<div class="${gridColsClass}">` + eventTestimonies.map(t => buildTestimonyGridCard(t, true).outerHTML).join('') + `</div>`;
 
     card.innerHTML = `
         <div class="flex flex-col md:flex-row gap-6">
@@ -232,12 +259,17 @@ function buildTestimonyGridCard(item) {
     const comments = commentsByTestimony[item.id] || [];
     const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
     const hasLiked = amenedIds.includes(Number(item.id));
+    const isSaved = savedTestimonyIds.includes(Number(item.id));
     const safeTitle = (item.title || '').replace(/'/g, "\\'");
 
     const card = document.createElement('div');
-    card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between group";
+    card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between group relative";
     card.innerHTML = `
-        <div onclick="window.location.href='testimony.html?id=${item.id}'" class="cursor-pointer space-y-3">
+        <button type="button" onclick="toggleSaveTestimony(event, ${item.id})" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-50 hover:bg-amber-50 border border-slate-200 ${isSaved ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold'} flex items-center justify-center transition-all" title="Save Testimony">
+            <i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-xs"></i>
+        </button>
+
+        <div onclick="window.location.href='testimony.html?id=${item.id}'" class="cursor-pointer space-y-3 pr-8">
             <div class="flex items-center justify-between gap-2">
                 <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
                     ${escapeHTML(item.category)}
@@ -276,6 +308,29 @@ function buildTestimonyGridCard(item) {
         </div>
     `;
     return card;
+}
+
+async function toggleSaveTestimony(e, testimonyId) {
+    e.stopPropagation();
+    if (!currentUser) {
+        showToast("Please sign in to save testimonies.");
+        openAuthModal();
+        return;
+    }
+
+    const isAlreadySaved = savedTestimonyIds.includes(Number(testimonyId));
+    if (isAlreadySaved) {
+        savedTestimonyIds = savedTestimonyIds.filter(id => id !== Number(testimonyId));
+        await supabaseClient.from('user_testimony_bookmarks').delete().eq('user_id', currentUser.id).eq('testimony_id', testimonyId);
+        showToast("Removed from Saved Items.");
+    } else {
+        savedTestimonyIds.push(Number(testimonyId));
+        await supabaseClient.from('user_testimony_bookmarks').upsert({ user_id: currentUser.id, testimony_id: Number(testimonyId) });
+        showToast("Saved to your library!");
+    }
+    const badge = document.getElementById('bookmark-badge');
+    if (badge) badge.innerText = savedTestimonyIds.length;
+    renderForumFeed();
 }
 
 async function shareForumLink(type, id, title) {
@@ -411,6 +466,7 @@ document.getElementById('event-flyer-input')?.addEventListener('change', functio
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             compressedEventFlyer = canvas.toDataURL('image/webp', 0.80);
             document.getElementById('event-flyer-preview').innerHTML = `<img src="${compressedEventFlyer}" class="w-full h-full object-cover">`;
+            document.getElementById('event-flyer-preview').classList.remove('hidden');
         };
         img.src = ev.target.result;
     };
