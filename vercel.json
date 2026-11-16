@@ -1,0 +1,19 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "book" }],
+      "destination": "/api/preview?page=index"
+    },
+    {
+      "source": "/forum.html",
+      "has": [{ "type": "query", "key": "testimony" }],
+      "destination": "/api/preview?page=forum"
+    },
+    {
+      "source": "/forum.html",
+      "has": [{ "type": "query", "key": "event" }],
+      "destination": "/api/preview?page=forum"
+    }
+  ]
+}
