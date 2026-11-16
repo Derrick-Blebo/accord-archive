@@ -3,79 +3,25 @@ const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let booksData = [];
-let savedBookmarks = [];
+let allBooks = [];
+let categoriesList = [];
+let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks') || '[]');
+let savedTestimonyIds = [];
 let purchasedBookIds = [];
 let currentCategory = 'All';
 let currentAccessFilter = 'all';
 let currentUser = null;
 let authMode = 'signin';
-let pendingBookmarkTitle = null;
-let pendingPurchaseBookId = null;
-let activePurchaseBook = null;
 
-// Initialize App: Render cached books immediately, then fetch fresh data & auth in parallel
-document.addEventListener('DOMContentLoaded', () => {
-    updateBookmarkBadge();
-
-    const cachedBooks = localStorage.getItem('accord_books_cache');
-    if (cachedBooks) {
-        try {
-            booksData = JSON.parse(cachedBooks);
-            applyInitialRender();
-        } catch (e) {
-            renderSkeletonCards();
-        }
-    } else {
-        renderSkeletonCards();
-    }
-
-    loadBooksFromSupabase();
-    initAuth();
+document.addEventListener('DOMContentLoaded', async () => {
+    await initAuth();
+    await loadLibraryData();
 });
 
-function renderSkeletonCards() {
-    const grid = document.getElementById('books-grid');
-    if (!grid) return;
-    grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
-    grid.innerHTML = Array(6).fill(`
-        <div class="bg-white border border-slate-200/90 rounded-3xl p-4 flex gap-4 animate-pulse">
-            <div class="w-28 sm:w-32 shrink-0">
-                <div class="h-48 rounded-2xl bg-slate-200"></div>
-            </div>
-            <div class="flex-1 flex flex-col justify-between space-y-2.5 py-1">
-                <div class="space-y-2">
-                    <div class="h-3 bg-slate-200 rounded w-1/2"></div>
-                    <div class="h-4 bg-slate-200 rounded w-5/6"></div>
-                    <div class="h-3 bg-slate-200 rounded w-1/3"></div>
-                    <div class="h-3 bg-slate-100 rounded w-full mt-2"></div>
-                    <div class="h-3 bg-slate-100 rounded w-4/5"></div>
-                </div>
-                <div class="flex gap-1.5 pt-2">
-                    <div class="h-9 bg-slate-200 rounded-xl flex-1"></div>
-                    <div class="h-9 w-9 bg-slate-200 rounded-xl"></div>
-                    <div class="h-9 w-9 bg-slate-200 rounded-xl"></div>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
+// ==========================================
+// AUTHENTICATION & SAVED BADGE SYNC
+// ==========================================
 
-function applyInitialRender() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const sharedBookId = urlParams.get('book');
-
-    if (sharedBookId) {
-        const matchedBook = booksData.filter(b => String(b.id) === String(sharedBookId));
-        if (matchedBook.length > 0) {
-            renderBooks(matchedBook);
-            return;
-        }
-    }
-    filterBooks();
-}
-
-// Optional Auth Initialization & Session Listener
 async function initAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     currentUser = session?.user || null;
@@ -84,6 +30,7 @@ async function initAuth() {
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
         currentUser = session?.user || null;
         await syncUserState();
+        renderBooks();
     });
 }
 
@@ -100,227 +47,202 @@ async function syncUserState() {
 
         formsContainer?.classList.add('hidden');
         profileContainer?.classList.remove('hidden');
-        document.getElementById('profile-display-name').innerText = fullName;
-        document.getElementById('profile-display-email').innerText = currentUser.email;
+        if (document.getElementById('profile-display-name')) document.getElementById('profile-display-name').innerText = fullName;
+        if (document.getElementById('profile-display-email')) document.getElementById('profile-display-email').innerText = currentUser.email;
 
-        const subName = document.getElementById('sub-name');
-        const subEmail = document.getElementById('sub-email');
-        if (subName && !subName.value) subName.value = fullName;
-        if (subEmail && !subEmail.value) subEmail.value = currentUser.email;
+        const [bookmarksRes, testimonyBookmarksRes, purchasesRes] = await Promise.all([
+            supabaseClient.from('user_bookmarks').select('book_title').eq('user_id', currentUser.id),
+            supabaseClient.from('user_testimony_bookmarks').select('testimony_id').eq('user_id', currentUser.id),
+            supabaseClient.from('user_purchases').select('book_id').eq('user_id', currentUser.id)
+        ]);
 
-        await mergeAndLoadCloudBookmarks();
+        if (!bookmarksRes.error && bookmarksRes.data) {
+            savedBookmarks = bookmarksRes.data.map(b => b.book_title);
+            localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
+        }
+        if (!testimonyBookmarksRes.error && testimonyBookmarksRes.data) {
+            savedTestimonyIds = testimonyBookmarksRes.data.map(t => Number(t.testimony_id));
+        }
+        if (!purchasesRes.error && purchasesRes.data) {
+            purchasedBookIds = purchasesRes.data.map(p => Number(p.book_id));
+        }
     } else {
         if (navLabel) navLabel.innerText = 'Sign In';
         if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
         formsContainer?.classList.remove('hidden');
         profileContainer?.classList.add('hidden');
-
-        savedBookmarks = [];
+        savedTestimonyIds = [];
         purchasedBookIds = [];
-        localStorage.removeItem('accord_bookmarks');
-        updateBookmarkBadge();
-        if (booksData.length > 0) applyInitialRender();
+    }
+
+    updateSavedBadge();
+}
+
+function updateSavedBadge() {
+    const totalCount = savedBookmarks.length + savedTestimonyIds.length;
+    const badge = document.getElementById('bookmark-badge');
+    const mobileCount = document.getElementById('mobile-bookmark-count');
+    if (badge) badge.innerText = totalCount;
+    if (mobileCount) mobileCount.innerText = totalCount;
+}
+
+function handleAuthNavClick() {
+    if (currentUser) {
+        window.location.href = 'profile.html';
+    } else {
+        openAuthModal();
     }
 }
 
-async function mergeAndLoadCloudBookmarks() {
-    if (!currentUser) return;
+// ==========================================
+// LOAD BOOKS & CATEGORIES FROM SUPABASE
+// ==========================================
 
-    if (pendingBookmarkTitle) {
-        await supabaseClient
-            .from('user_bookmarks')
-            .upsert({ user_id: currentUser.id, book_title: pendingBookmarkTitle }, { onConflict: 'user_id,book_title' });
-        showToast(`"${pendingBookmarkTitle}" added to Saved Books!`);
-        pendingBookmarkTitle = null;
+async function loadLibraryData() {
+    const [booksRes, catsRes] = await Promise.all([
+        supabaseClient
+            .from('books')
+            .select('*')
+            .is('deleted_at', null)
+            .eq('is_visible', true)
+            .order('created_at', { ascending: false }),
+        supabaseClient
+            .from('categories')
+            .select('*')
+            .order('name', { ascending: true })
+    ]);
+
+    if (!booksRes.error && booksRes.data) {
+        allBooks = booksRes.data;
     }
 
-    const { data, error } = await supabaseClient
-        .from('user_bookmarks')
-        .select('book_title')
-        .eq('user_id', currentUser.id);
-
-    if (!error && data) {
-        savedBookmarks = data.map(item => item.book_title);
-        localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
-        updateBookmarkBadge();
+    if (!catsRes.error && catsRes.data) {
+        categoriesList = catsRes.data;
+        renderCategoryButtons();
     }
 
-    const { data: purchases, error: purchaseErr } = await supabaseClient
-        .from('user_purchases')
-        .select('book_id')
-        .eq('user_id', currentUser.id);
-
-    if (!purchaseErr && purchases) {
-        purchasedBookIds = purchases.map(p => Number(p.book_id));
-    }
-
-    if (booksData.length > 0) applyInitialRender();
-
-    if (pendingPurchaseBookId) {
-        const bookToBuy = booksData.find(b => Number(b.id) === Number(pendingPurchaseBookId));
-        pendingPurchaseBookId = null;
-        if (bookToBuy && !purchasedBookIds.includes(Number(bookToBuy.id))) {
-            openPurchaseModal(bookToBuy.id);
-        }
-    }
+    renderBooks();
+    checkSharedBookParam();
 }
 
-function openAuthModal() {
-    const modal = document.getElementById('auth-modal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+function renderCategoryButtons() {
+    const container = document.getElementById('category-filters');
+    if (!container) return;
+
+    const allBtnClass = currentCategory === 'All'
+        ? "cat-btn whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm"
+        : "cat-btn whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
+
+    let html = `<button type="button" onclick="setCategoryFilter('All')" id="cat-All" class="${allBtnClass}">All Archives</button>`;
+
+    categoriesList.forEach(cat => {
+        const safeCat = escapeHTML(cat.name);
+        const jsCat = cat.name.replace(/'/g, "\\'");
+        const isActive = currentCategory === cat.name;
+        const btnClass = isActive
+            ? "cat-btn whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm"
+            : "cat-btn whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
+
+        html += `<button type="button" onclick="setCategoryFilter('${jsCat}')" class="${btnClass}">${safeCat}</button>`;
+    });
+
+    container.innerHTML = html;
 }
 
-function closeAuthModal() {
-    const modal = document.getElementById('auth-modal');
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
+function setCategoryFilter(category) {
+    currentCategory = category;
+    renderCategoryButtons();
+    renderBooks();
 }
 
-function switchAuthMode(mode) {
-    authMode = mode;
-    const isSignup = mode === 'signup';
-    document.getElementById('auth-name-field').classList.toggle('hidden', !isSignup);
-    document.getElementById('auth-name').required = isSignup;
-    document.getElementById('auth-submit-btn').innerText = isSignup ? 'Create Free Account' : 'Sign In';
-
-    document.getElementById('tab-signin').className = !isSignup
-        ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
-        : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
-    document.getElementById('tab-signup').className = isSignup
-        ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
-        : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
-}
-
-async function handleGoogleSignIn() {
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            redirectTo: window.location.origin
+function setAccessFilter(accessType) {
+    currentAccessFilter = accessType;
+    ['all', 'free', 'paid'].forEach(type => {
+        const btn = document.getElementById(`access-${type}`);
+        if (!btn) return;
+        if (type === accessType) {
+            btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white";
+        } else {
+            btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
         }
     });
-    if (error) {
-        showToast(error.message);
-    }
+    renderBooks();
 }
 
-async function handleAuthSubmit(e) {
-    e.preventDefault();
-    const email = document.getElementById('auth-email').value.trim();
-    const password = document.getElementById('auth-password').value;
-    const fullName = document.getElementById('auth-name').value.trim();
-    const submitBtn = document.getElementById('auth-submit-btn');
+function filterBooks() {
+    renderBooks();
+}
 
-    submitBtn.disabled = true;
-    submitBtn.innerText = 'Please wait...';
+// ==========================================
+// RENDER RECTANGULAR BOOK GRID CARDS
+// ==========================================
 
-    if (authMode === 'signup') {
-        const { data, error } = await supabaseClient.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: fullName } }
-        });
-        if (error) {
-            showToast(error.message);
-        } else if (data.session) {
-            showToast(`Welcome to Accord, ${fullName || 'Reader'}!`);
-            closeAuthModal();
-        } else {
-            showToast('Account created! Check your email to confirm.');
-            closeAuthModal();
-        }
-    } else {
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) {
-            showToast(error.message);
-        } else {
-            showToast('Signed in successfully!');
-            closeAuthModal();
-        }
+function renderBooks() {
+    const grid = document.getElementById('book-grid');
+    const countLabel = document.getElementById('publication-count');
+    const emptyState = document.getElementById('empty-library-state');
+    if (!grid) return;
+
+    const query = (document.getElementById('library-search')?.value || '').toLowerCase();
+
+    const filtered = allBooks.filter(book => {
+        const matchesCategory = currentCategory === 'All' || book.category === currentCategory;
+        const matchesAccess =
+            currentAccessFilter === 'all' ||
+            (currentAccessFilter === 'free' && !book.is_for_sale) ||
+            (currentAccessFilter === 'paid' && Boolean(book.is_for_sale));
+        const matchesQuery =
+            (book.title || '').toLowerCase().includes(query) ||
+            (book.author || '').toLowerCase().includes(query) ||
+            (book.category || '').toLowerCase().includes(query) ||
+            (book.description || '').toLowerCase().includes(query);
+
+        return matchesCategory && matchesAccess && matchesQuery;
+    });
+
+    if (countLabel) {
+        countLabel.innerText = `Showing ${filtered.length} ${filtered.length === 1 ? 'publication' : 'publications'}`;
     }
 
-    submitBtn.disabled = false;
-    switchAuthMode(authMode);
-}
-
-async function handleSignOut() {
-    await supabaseClient.auth.signOut();
-    localStorage.removeItem('accord_bookmarks');
-    savedBookmarks = [];
-    purchasedBookIds = [];
-    updateBookmarkBadge();
-    if (booksData.length > 0) applyInitialRender();
-    closeAuthModal();
-    showToast('Signed out.');
-}
-
-async function loadBooksFromSupabase() {
-    const { data, error } = await supabaseClient
-        .from('books')
-        .select('id, title, author, category, year, pages, description, cover_url, download_url, gradient, is_for_sale, price')
-        .is('deleted_at', null)
-        .eq('is_visible', true)
-        .order('created_at', { ascending: false });
-
-    if (!error && data) {
-        booksData = data;
-        try {
-            localStorage.setItem('accord_books_cache', JSON.stringify(data));
-        } catch (e) {
-            // Ignore storage quota errors if cover images are large
-        }
-        applyInitialRender();
-    }
-}
-
-function trackDownload(bookId) {
-    supabaseClient.rpc('increment_book_download', { book_id: Number(bookId) });
-}
-
-function renderBooks(filteredList) {
-    const grid = document.getElementById('books-grid');
-    const emptyState = document.getElementById('empty-state');
-    const countEl = document.getElementById('filter-result-count');
-
-    if (countEl) {
-        countEl.innerText = `Showing ${filteredList.length} ${filteredList.length === 1 ? 'publication' : 'publications'}`;
-    }
-
-    grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
     grid.innerHTML = '';
 
-    if (filteredList.length === 0) {
-        emptyState.classList.remove('hidden');
+    if (filtered.length === 0) {
+        emptyState?.classList.remove('hidden');
         return;
     } else {
-        emptyState.classList.add('hidden');
+        emptyState?.classList.add('hidden');
     }
 
-    filteredList.forEach(book => {
+    filtered.forEach(book => {
         const isBookmarked = savedBookmarks.includes(book.title);
         const isPurchased = purchasedBookIds.includes(Number(book.id));
-        const safeTitle = book.title.replace(/'/g, "\\'");
-        const safeAuthor = (book.author || '').replace(/'/g, "\\'");
+        const safeTitle = (book.title || '').replace(/'/g, "\\'");
+
+        // Fallback gradient cover (also shown automatically if external cover_url fails to load)
+        const fallbackCoverHtml = `
+            <div class="fallback-cover w-full h-48 sm:h-full min-h-[195px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
+                <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
+                <div class="relative z-10">
+                    <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                    <h4 class="serif-heading text-xs font-bold mt-1.5 leading-snug line-clamp-4">${escapeHTML(book.title)}</h4>
+                </div>
+                <div class="relative z-10 text-[9px] text-slate-200/90 truncate">${escapeHTML(book.author)}</div>
+            </div>
+        `;
 
         const coverVisual = book.cover_url
             ? `<div class="w-full h-48 sm:h-full min-h-[195px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
-                   <img src="${book.cover_url}" alt="${book.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-               </div>`
-            : `<div class="w-full h-48 sm:h-full min-h-[195px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-amber-900 via-orange-900 to-stone-950'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden">
-                   <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
-                   <div class="relative z-10">
-                       <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
-                       <h4 class="serif-heading text-xs font-bold mt-1.5 leading-snug line-clamp-4">${book.title}</h4>
-                   </div>
-                   <div class="relative z-10 text-[9px] text-slate-200/90 truncate">
-                       ${book.author}
-                   </div>
-               </div>`;
+                   <img src="${escapeHTML(book.cover_url)}"
+                        alt="${escapeHTML(book.title)}"
+                        loading="lazy"
+                        onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='flex';"
+                        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+               </div>
+               ${fallbackCoverHtml}`
+            : fallbackCoverHtml;
 
         const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-        const cleanReadUrl = book.download_url
-            ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url)
-            : '';
+        const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
 
         const priceLine = (book.is_for_sale && !isPurchased)
             ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`
@@ -328,75 +250,50 @@ function renderBooks(filteredList) {
 
         let primaryActionButton = '';
         if (book.is_for_sale && !isPurchased) {
-            primaryActionButton = `
-                <button onclick="initiateBookPurchase(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5">
-                    <i class="fa-solid fa-cart-shopping text-[11px]"></i>
-                    <span>Buy Now</span>
-                </button>`;
+            primaryActionButton = `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5"><i class="fa-solid fa-cart-shopping text-[11px]"></i><span>Buy Now</span></button>`;
         } else if (book.is_for_sale && isPurchased) {
             primaryActionButton = cleanReadUrl
-                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-book-open-reader text-[11px]"></i>
-                       <span>Read</span>
-                   </a>`
-                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-book-open-reader text-[11px]"></i>
-                       <span>Read</span>
-                   </button>`;
+                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read</span></a>`
+                : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-emerald-600 text-white text-xs font-bold px-4 rounded-full">Read</button>`;
         } else {
             primaryActionButton = book.download_url
-                ? `<a href="${book.download_url}" onclick="trackDownload('${book.id}')" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-download text-[10px]"></i>
-                       <span>Download</span>
-                   </a>`
-                : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
-                       <i class="fa-solid fa-download text-[10px]"></i>
-                       <span>Download</span>
-                   </button>`;
+                ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-download text-[10px]"></i><span>Download</span></a>`
+                : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl">Details</button>`;
         }
 
-        const card = document.createElement('div');
+        const card = document.createElement('article');
         card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
         card.innerHTML = `
-            <!-- Left Column: Full-Height Book Cover -->
-            <div class="w-28 sm:w-32 shrink-0">
+            <div onclick="openBookModal(${book.id})" class="w-28 sm:w-32 shrink-0 cursor-pointer">
                 ${coverVisual}
             </div>
-
-            <!-- Right Column: Metadata, Description, Price & Unified Action Row -->
             <div class="flex-1 flex flex-col justify-between min-w-0">
-                <div>
+                <div onclick="openBookModal(${book.id})" class="cursor-pointer">
                     <div class="flex items-center justify-between gap-2 mb-1.5">
                         <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
-                            ${book.category || 'Archive'}
+                            ${escapeHTML(book.category || 'Archive')}
                         </span>
-                        ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${book.year}</span>` : ''}
+                        ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${escapeHTML(book.year)}</span>` : ''}
                     </div>
-
                     <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 group-hover:text-accord-blue transition-colors">
-                        ${book.title}
+                        ${escapeHTML(book.title)}
                     </h3>
-
                     <p class="text-[11px] font-bold text-accord-slate mb-1.5 truncate">
-                        ${book.author}
+                        ${escapeHTML(book.author)}
                     </p>
-
                     <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2 mb-2.5">
-                        ${book.description || ''}
+                        ${escapeHTML(book.description || '')}
                     </p>
-
                     ${priceLine}
                 </div>
 
-                <!-- Unified Bottom Action Row: Buy Now / Read / Download + Bookmark + Copy -->
                 <div class="flex items-center gap-1.5">
                     ${primaryActionButton}
-                    <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
+                    <button type="button" onclick="toggleBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold border-slate-200 hover:border-accord-gold bg-slate-50'} rounded-xl flex items-center justify-center transition-all" title="${isBookmarked ? 'Remove from Saved' : 'Save Book'}">
                         <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
                     </button>
-                    <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-9 h-9 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Copy Book Link">
-                        <i class="fa-solid fa-share-nodes text-[11px] md:hidden"></i>
-                        <i class="fa-regular fa-copy text-[11px] hidden md:inline"></i>
+                    <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Share Book">
+                        <i class="fa-solid fa-share-nodes text-[11px]"></i>
                     </button>
                 </div>
             </div>
@@ -405,208 +302,303 @@ function renderBooks(filteredList) {
     });
 }
 
-// Book Purchase Flow
-function initiateBookPurchase(bookId) {
-    if (!currentUser) {
-        pendingPurchaseBookId = Number(bookId);
-        showToast("Please sign in to purchase this book.");
-        openAuthModal();
-        return;
+// ==========================================
+// BOOK DETAIL MODAL, BOOKMARKS & DOWNLOADS
+// ==========================================
+
+function checkSharedBookParam() {
+    const params = new URLSearchParams(window.location.search);
+    const sharedBookId = params.get('book');
+    if (sharedBookId) {
+        openBookModal(Number(sharedBookId));
     }
-    openPurchaseModal(bookId);
 }
 
-function openPurchaseModal(bookId) {
-    const book = booksData.find(b => Number(b.id) === Number(bookId));
+function openBookModal(bookId) {
+    const book = allBooks.find(b => Number(b.id) === Number(bookId));
     if (!book) return;
-    activePurchaseBook = book;
 
-    document.getElementById('purchase-book-title').innerText = book.title;
-    document.getElementById('purchase-book-author').innerText = book.author;
-    document.getElementById('purchase-book-price').innerText = `USD ${Number(book.price || 0).toFixed(2)}`;
+    const modal = document.getElementById('book-detail-modal');
+    const content = document.getElementById('book-modal-content');
+    if (!modal || !content) return;
 
-    const coverEl = document.getElementById('purchase-book-cover');
-    coverEl.innerHTML = book.cover_url
-        ? `<img src="${book.cover_url}" class="w-full h-full object-cover">`
-        : `<i class="fa-solid fa-book text-lg"></i>`;
+    const isPurchased = purchasedBookIds.includes(Number(book.id));
+    const isBookmarked = savedBookmarks.includes(book.title);
+    const safeTitle = (book.title || '').replace(/'/g, "\\'");
+    const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
 
-    const modal = document.getElementById('purchase-modal');
+    const actionHtml = (book.is_for_sale && !isPurchased)
+        ? `<button type="button" onclick="initiateBookPurchase(${book.id})" class="flex-1 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center space-x-2">
+               <i class="fa-solid fa-cart-shopping"></i>
+               <span>Purchase Publication — USD ${Number(book.price || 0).toFixed(2)}</span>
+           </button>`
+        : (book.download_url
+            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center space-x-2">
+                   <i class="fa-solid fa-download"></i>
+                   <span>Download / Read Full Publication</span>
+               </a>`
+            : `<button disabled class="flex-1 bg-slate-200 text-slate-500 text-xs font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed">Digital File Coming Soon</button>`);
+
+    content.innerHTML = `
+        <div class="flex flex-col sm:flex-row gap-6">
+            <div class="w-36 sm:w-44 shrink-0 mx-auto sm:mx-0">
+                ${book.cover_url
+                    ? `<img src="${escapeHTML(book.cover_url)}" alt="${escapeHTML(book.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-full h-56 object-cover rounded-2xl border border-slate-200 shadow-md">`
+                    : ''}
+                <div class="w-full h-56 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-4 flex-col justify-between text-white shadow-md" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
+                    <p class="text-[8px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                    <h4 class="serif-heading text-sm font-bold leading-snug">${escapeHTML(book.title)}</h4>
+                    <p class="text-[10px] text-slate-200">${escapeHTML(book.author)}</p>
+                </div>
+            </div>
+
+            <div class="flex-1 space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="bg-accord-lightBlue text-accord-blue text-[11px] font-bold px-3 py-1 rounded-lg">${escapeHTML(book.category)}</span>
+                    <span class="text-xs font-semibold text-accord-muted">Published: ${escapeHTML(book.year || 'TBD')}</span>
+                    <span class="text-xs font-semibold text-accord-muted">• ${escapeHTML(book.pages || 'TBD')} pages</span>
+                </div>
+
+                <h2 class="serif-heading text-2xl font-bold text-accord-slate leading-snug">${escapeHTML(book.title)}</h2>
+                <p class="text-xs font-bold text-accord-slate">Author / Source: ${escapeHTML(book.author)}</p>
+
+                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed pt-2 border-t border-slate-100">
+                    ${escapeHTML(book.description || '')}
+                </p>
+
+                <div class="pt-4 flex flex-wrap items-center gap-2.5">
+                    ${actionHtml}
+                    <button type="button" onclick="toggleBookmark('${safeTitle}'); openBookModal(${book.id});" class="px-4 py-3.5 rounded-2xl border ${isBookmarked ? 'border-accord-gold bg-amber-50 text-accord-gold' : 'border-slate-200 bg-slate-50 text-accord-slate hover:border-accord-gold'} text-xs font-bold transition-all">
+                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark mr-1"></i> ${isBookmarked ? 'Saved' : 'Save'}
+                    </button>
+                    <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue text-xs font-bold transition-all">
+                        <i class="fa-solid fa-share-nodes mr-1"></i> Share
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
 
-function closePurchaseModal() {
-    const modal = document.getElementById('purchase-modal');
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
-    activePurchaseBook = null;
+function closeBookModal() {
+    const modal = document.getElementById('book-detail-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+    if (window.location.search.includes('book=')) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 }
 
-async function completeBookPurchase() {
-    if (!currentUser || !activePurchaseBook) return;
-    const btn = document.getElementById('confirm-purchase-btn');
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Processing...</span>`;
+async function toggleBookmark(bookTitle) {
+    const isAlreadySaved = savedBookmarks.includes(bookTitle);
 
-    const { error } = await supabaseClient
-        .from('user_purchases')
-        .upsert({
-            user_id: currentUser.id,
-            book_id: Number(activePurchaseBook.id),
-            amount_paid: Number(activePurchaseBook.price || 0),
-            payment_reference: `ACC-${Date.now()}`
-        }, { onConflict: 'user_id,book_id' });
-
-    btn.disabled = false;
-    btn.innerHTML = `<i class="fa-solid fa-lock"></i><span>Complete Purchase</span>`;
-
-    if (error) {
-        showToast(`Purchase failed: ${error.message}`);
-        return;
+    if (isAlreadySaved) {
+        savedBookmarks = savedBookmarks.filter(t => t !== bookTitle);
+        showToast("Removed from Saved.");
+        if (currentUser) {
+            await supabaseClient.from('user_bookmarks').delete().eq('user_id', currentUser.id).eq('book_title', bookTitle);
+        }
+    } else {
+        savedBookmarks.push(bookTitle);
+        showToast("Saved to your library!");
+        if (currentUser) {
+            await supabaseClient.from('user_bookmarks').upsert({ user_id: currentUser.id, book_title: bookTitle });
+        }
     }
 
-    purchasedBookIds.push(Number(activePurchaseBook.id));
-    const boughtTitle = activePurchaseBook.title;
-    closePurchaseModal();
-    applyInitialRender();
-    showToast(`"${boughtTitle}" unlocked! Click Read to open.`);
+    localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
+    updateSavedBadge();
+    renderBooks();
 }
 
-// Share Book Handler (Mobile: Native Share Sheet | PC: Copy Direct Book Link)
-async function shareBook(id, title, author) {
-    const shareUrl = `${window.location.origin}/?book=${id}`;
-    const isDesktop = window.innerWidth >= 768;
+async function recordBookDownload(bookId) {
+    const book = allBooks.find(b => Number(b.id) === Number(bookId));
+    if (!book) return;
+    const nextCount = (Number(book.downloads) || 0) + 1;
+    book.downloads = nextCount;
+    await supabaseClient.from('books').update({ downloads: nextCount }).eq('id', bookId);
+}
 
+async function initiateBookPurchase(bookId) {
+    if (!currentUser) {
+        showToast("Please sign in to purchase this publication.");
+        closeBookModal();
+        openAuthModal();
+        return;
+    }
+    const book = allBooks.find(b => Number(b.id) === Number(bookId));
+    if (!book) return;
+
+    const { error } = await supabaseClient.from('user_purchases').insert([{
+        user_id: currentUser.id,
+        book_id: Number(book.id),
+        amount_paid: Number(book.price) || 0
+    }]);
+
+    if (!error) {
+        purchasedBookIds.push(Number(book.id));
+        showToast(`Unlocked "${book.title}"! You can now read or download it.`);
+        renderBooks();
+        openBookModal(book.id);
+    } else {
+        showToast(`Purchase notice: ${error.message}`);
+    }
+}
+
+async function shareBookLink(bookId, title) {
+    const shareUrl = `${window.location.origin}/?book=${bookId}`;
+    const isDesktop = window.innerWidth >= 768;
     if (!isDesktop && navigator.share) {
-        const shareText = `Check out "${title}" by ${author} on Accord Digital Library.`;
-        try {
-            await navigator.share({ title, text: shareText, url: shareUrl });
-        } catch (err) {
-            // User cancelled share dialog
-        }
+        try { await navigator.share({ title, url: shareUrl }); } catch (err) {}
     } else {
         await navigator.clipboard.writeText(shareUrl);
         showToast("Book link copied to clipboard!");
     }
 }
 
-// Category & Access Filters
-function setCategory(category) {
-    currentCategory = category;
-    document.querySelectorAll('.category-btn').forEach(btn => {
-        btn.className = "category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
-    });
-    const activeBtn = document.getElementById(`cat-btn-${category}`);
-    if (activeBtn) {
-        activeBtn.className = "category-btn whitespace-nowrap px-4 py-3 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-md shadow-blue-500/20";
-    }
-    filterBooks();
+// ==========================================
+// CONTRIBUTE ARCHIVE SUBMISSION MODAL
+// ==========================================
+
+function openContributeModal() {
+    const modal = document.getElementById('contribute-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
 }
 
-function setAccessFilter(accessType) {
-    currentAccessFilter = accessType;
-    document.querySelectorAll('.access-btn').forEach(btn => {
-        btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
-    });
-    const activeBtn = document.getElementById(`access-btn-${accessType}`);
-    if (activeBtn) {
-        activeBtn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white";
-    }
-    filterBooks();
+function closeContributeModal() {
+    const modal = document.getElementById('contribute-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
 }
 
-function filterBooks() {
-    const query = document.getElementById('search-input').value.toLowerCase();
-    const filtered = booksData.filter(book => {
-        const matchesCategory = currentCategory === 'All' || book.category === currentCategory;
-        const matchesQuery = book.title.toLowerCase().includes(query) || book.author.toLowerCase().includes(query) || book.description.toLowerCase().includes(query);
-        const matchesAccess = currentAccessFilter === 'all'
-            || (currentAccessFilter === 'paid' && Boolean(book.is_for_sale))
-            || (currentAccessFilter === 'free' && !Boolean(book.is_for_sale));
-        return matchesCategory && matchesQuery && matchesAccess;
-    });
-    renderBooks(filtered);
-}
+async function handleContributeSubmit(e) {
+    e.preventDefault();
+    const name = document.getElementById('sub-name').value.trim();
+    const email = document.getElementById('sub-email').value.trim();
+    const title = document.getElementById('sub-title').value.trim();
+    const category = document.getElementById('sub-category').value;
+    const description = document.getElementById('sub-description').value.trim();
 
-function resetFilters() {
-    document.getElementById('search-input').value = '';
-    if (window.location.search) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
-    currentAccessFilter = 'all';
-    document.querySelectorAll('.access-btn').forEach(btn => {
-        btn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-accord-slate";
-    });
-    const allAccessBtn = document.getElementById('access-btn-all');
-    if (allAccessBtn) allAccessBtn.className = "access-btn px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white";
-    setCategory('All');
-}
+    const { error } = await supabaseClient.from('submissions').insert([{
+        name, email, title, category, description
+    }]);
 
-function triggerSimulatedDownload() {
-    showToast("This archive item does not have a PDF attached yet.");
-}
-
-async function toggleBookmark(btn, title) {
-    if (!currentUser) {
-        pendingBookmarkTitle = title;
-        showToast("Please sign in to save books to your account.");
-        openAuthModal();
+    if (error) {
+        showToast(`Submission failed: ${error.message}`);
         return;
     }
 
-    const index = savedBookmarks.indexOf(title);
-    const icon = btn.querySelector('i');
-    if (index > -1) {
-        savedBookmarks.splice(index, 1);
-        icon.className = "fa-regular fa-bookmark text-[11px]";
-        btn.classList.remove('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
-        showToast("Removed from Saved Books.");
-        await supabaseClient
-            .from('user_bookmarks')
-            .delete()
-            .eq('user_id', currentUser.id)
-            .eq('book_title', title);
-    } else {
-        savedBookmarks.push(title);
-        icon.className = "fa-solid fa-bookmark text-[11px]";
-        btn.classList.add('text-accord-gold', 'border-accord-gold', 'bg-amber-50');
-        showToast("Added to Saved Books!");
-        await supabaseClient
-            .from('user_bookmarks')
-            .upsert({ user_id: currentUser.id, book_title: title });
+    document.getElementById('contribute-form').reset();
+    closeContributeModal();
+    showToast("Thank you! Your manuscript has been submitted for editorial review.");
+}
+
+// ==========================================
+// AUTH MODAL & HELPERS
+// ==========================================
+
+function openAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+}
+
+function switchAuthMode(mode) {
+    authMode = mode;
+    const isSignup = mode === 'signup';
+    document.getElementById('auth-name-field')?.classList.toggle('hidden', !isSignup);
+    const nameInput = document.getElementById('auth-name');
+    if (nameInput) nameInput.required = isSignup;
+    const submitBtn = document.getElementById('auth-submit-btn');
+    if (submitBtn) submitBtn.innerText = isSignup ? 'Create Free Account' : 'Sign In';
+
+    const tabSignin = document.getElementById('tab-signin');
+    const tabSignup = document.getElementById('tab-signup');
+    if (tabSignin) {
+        tabSignin.className = !isSignup
+            ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
+            : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
     }
-    localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
-    updateBookmarkBadge();
+    if (tabSignup) {
+        tabSignup.className = isSignup
+            ? 'py-2 text-xs font-bold rounded-lg bg-white text-accord-slate shadow-sm transition-all'
+            : 'py-2 text-xs font-bold rounded-lg text-accord-muted hover:text-accord-slate transition-all';
+    }
 }
 
-function updateBookmarkBadge() {
-    document.getElementById('bookmark-badge').innerText = savedBookmarks.length;
-    document.getElementById('mobile-bookmark-count').innerText = savedBookmarks.length;
+async function handleGoogleSignIn() {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+    });
+    if (error) showToast(error.message);
 }
 
-// Community Submission Form -> Saves Directly to Supabase
-async function handleFormSubmit(e) {
+async function handleAuthSubmit(e) {
     e.preventDefault();
-    const name = document.getElementById('sub-name').value;
-    const email = document.getElementById('sub-email').value;
-    const title = document.getElementById('sub-title').value;
-    const category = document.getElementById('sub-category').value;
-    const description = document.getElementById('sub-desc').value;
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const fullName = document.getElementById('auth-name')?.value.trim() || '';
+    const submitBtn = document.getElementById('auth-submit-btn');
 
-    const { error } = await supabaseClient
-        .from('submissions')
-        .insert([{ name, email, title, category, description }]);
-
-    if (!error) {
-        showToast(`Thank you, ${name}! Your manuscript "${title}" has been submitted for archive review.`);
-        document.getElementById('contribution-form').reset();
-    } else {
-        showToast("Error submitting manuscript. Please try again.");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Please wait...';
     }
+
+    if (authMode === 'signup') {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+        });
+        if (error) showToast(error.message);
+        else {
+            showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
+            closeAuthModal();
+        }
+    } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) showToast(error.message);
+        else {
+            showToast('Signed in successfully!');
+            closeAuthModal();
+        }
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        switchAuthMode(authMode);
+    }
+}
+
+async function handleSignOut() {
+    await supabaseClient.auth.signOut();
+    closeAuthModal();
+    showToast('Signed out.');
+}
+
+function escapeHTML(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 function showToast(message) {
     const toast = document.getElementById('toast');
+    if (!toast) return;
     document.getElementById('toast-message').innerText = message;
     toast.classList.remove('translate-y-24', 'opacity-0');
     toast.classList.add('translate-y-0', 'opacity-100');
@@ -617,6 +609,5 @@ function showToast(message) {
 }
 
 function toggleMobileMenu() {
-    const menu = document.getElementById('mobile-menu');
-    menu.classList.toggle('hidden');
+    document.getElementById('mobile-menu')?.classList.toggle('hidden');
 }
