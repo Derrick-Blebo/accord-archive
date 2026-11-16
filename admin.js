@@ -3,6 +3,8 @@ const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const ADMIN_EMAIL = 'accordmedia1@gmail.com';
+
 let catalogData = [];
 let trashData = [];
 let submissionsData = [];
@@ -11,8 +13,6 @@ let deleteTargetId = null;
 let currentCompressedCover = "";
 
 // Check Auth Session on Page Load
-const ADMIN_EMAIL = 'accordmedia1@gmail.com';
-
 window.onload = async function() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session?.user?.email === ADMIN_EMAIL) {
@@ -81,6 +81,7 @@ async function fetchAllData() {
         trashData = books.filter(b => b.deleted_at);
         renderCatalogTable(catalogData);
         renderTrashTable();
+        renderDownloadsTable();
         updateStats();
     }
 
@@ -106,7 +107,6 @@ async function fetchAllData() {
     }
 }
 
-// Populate both the Catalog Filter Dropdown and the Upload Modal Dropdown
 function populateCategoryDropdowns() {
     const catNames = categoriesData.map(c => c.name);
 
@@ -132,7 +132,6 @@ function populateCategoryDropdowns() {
     }
 }
 
-// Render Categories Management Table
 function renderCategoriesTable() {
     const tbody = document.getElementById('categories-table-body');
     const badge = document.getElementById('categories-badge');
@@ -170,7 +169,6 @@ function renderCategoriesTable() {
     });
 }
 
-// Add Category
 async function handleAddCategory(e) {
     e.preventDefault();
     const input = document.getElementById('new-category-name');
@@ -191,7 +189,6 @@ async function handleAddCategory(e) {
     showToast(`Category "${name}" added!`);
 }
 
-// Edit / Rename Category Modal Controls
 function openEditCategoryModal(id, currentName) {
     document.getElementById('edit-category-id').value = id;
     document.getElementById('edit-category-old-name').value = currentName;
@@ -228,7 +225,6 @@ async function handleRenameCategory(e) {
         return;
     }
 
-    // Also update any books using the old category name
     await supabaseClient
         .from('books')
         .update({ category: newName })
@@ -239,7 +235,6 @@ async function handleRenameCategory(e) {
     showToast(`Category renamed to "${newName}"!`);
 }
 
-// Delete Category
 function promptDeleteCategory(id, name, bookCount) {
     document.getElementById('confirm-title').innerText = `Delete "${name}"?`;
     document.getElementById('confirm-text').innerText = bookCount > 0
@@ -258,17 +253,17 @@ function promptDeleteCategory(id, name, bookCount) {
 }
 
 function switchTab(tabName) {
-    const tabs = ['catalog', 'categories', 'submissions', 'trash'];
+    const tabs = ['catalog', 'categories', 'submissions', 'trash', 'downloads'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`nav-tab-${t}`);
-        if (!sec || !btn) return;
+        if (!sec) return;
         if (t === tabName) {
             sec.classList.remove('hidden');
-            btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
+            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
         } else {
             sec.classList.add('hidden');
-            btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
         }
     });
 }
@@ -307,6 +302,10 @@ function renderCatalogTable(list) {
             visibilityBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700 mt-0.5"><i class="fa-solid fa-eye-slash mr-1"></i> Hidden</span>`;
         }
 
+        const saleBadge = book.is_for_sale
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale • $${Number(book.price || 0).toFixed(2)}</span>`
+            : '';
+
         const isVisible = book.is_visible !== false;
         const visibilityBtn = isVisible
             ? `<button onclick="toggleBookVisibility(${book.id}, false)" class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-amber-50 text-emerald-600 hover:text-amber-600 transition-all inline-flex items-center justify-center" title="Visible on Homepage (Click to Hide)"><i class="fa-solid fa-eye text-xs"></i></button>`
@@ -332,6 +331,7 @@ function renderCatalogTable(list) {
                     <div class="flex flex-wrap items-center gap-1">
                         ${statusBadge}
                         ${visibilityBadge}
+                        ${saleBadge}
                     </div>
                 </div>
             </td>
@@ -380,6 +380,15 @@ function filterAdminBooks() {
     renderCatalogTable(filtered);
 }
 
+function togglePriceField() {
+    const isForSale = document.getElementById('form-is-for-sale').value === 'true';
+    const wrapper = document.getElementById('price-field-wrapper');
+    const priceInput = document.getElementById('form-price');
+    wrapper.classList.toggle('hidden', !isForSale);
+    priceInput.required = isForSale;
+    if (!isForSale) priceInput.value = '';
+}
+
 function openArchiveModal(mode, id = null) {
     const modal = document.getElementById('archive-modal');
     const heading = document.getElementById('modal-heading');
@@ -388,6 +397,8 @@ function openArchiveModal(mode, id = null) {
     currentCompressedCover = "";
 
     populateCategoryDropdowns();
+    document.getElementById('form-is-for-sale').value = 'false';
+    togglePriceField();
 
     document.getElementById('file-name-display').textContent = "Max size: 50MB";
     document.getElementById('file-name-display').classList.remove('text-accord-blue', 'font-bold');
@@ -418,6 +429,12 @@ function openArchiveModal(mode, id = null) {
             document.getElementById('form-year').value = book.year === 'TBD' ? '' : book.year;
             document.getElementById('form-pages').value = book.pages;
             document.getElementById('form-description').value = book.description === 'Draft in progress.' ? '' : book.description;
+
+            document.getElementById('form-is-for-sale').value = book.is_for_sale ? 'true' : 'false';
+            togglePriceField();
+            if (book.is_for_sale) {
+                document.getElementById('form-price').value = Number(book.price || 0).toFixed(2);
+            }
 
             const externalInput = document.getElementById('form-external-url');
             if (externalInput && book.download_url && !book.download_url.includes('/archive-files/')) {
@@ -478,6 +495,8 @@ async function processArchiveSave(isDraft) {
     const year = document.getElementById('form-year').value.trim() || "TBD";
     const pages = document.getElementById('form-pages').value || "TBD";
     const description = document.getElementById('form-description').value.trim() || "Draft in progress.";
+    const isForSale = document.getElementById('form-is-for-sale').value === 'true';
+    const price = isForSale ? (parseFloat(document.getElementById('form-price').value) || 0) : 0;
 
     closeArchiveModal();
 
@@ -488,6 +507,9 @@ async function processArchiveSave(isDraft) {
     const tempBook = {
         id: editId ? Number(editId) : tempId,
         title, author, category, year, pages, description,
+        is_for_sale: isForSale,
+        price,
+        downloads: existingBook ? existingBook.downloads : 0,
         cover_url: coverToSave || (existingBook ? existingBook.cover_url : ""),
         download_url: initialUrl,
         is_visible: !isDraft,
@@ -538,6 +560,8 @@ async function processArchiveSave(isDraft) {
 
     const payload = {
         title, author, category, year, pages,
+        is_for_sale: isForSale,
+        price,
         download_url: downloadUrl,
         cover_url: tempBook.cover_url,
         description,
@@ -727,6 +751,8 @@ async function approveSubmission(id) {
             category: sub.category,
             year: new Date().getFullYear().toString(),
             pages: "TBD",
+            is_for_sale: false,
+            price: 0,
             download_url: "",
             cover_url: "",
             description: sub.description,
@@ -748,6 +774,57 @@ async function rejectSubmission(id) {
 
 function updateStats() {
     document.getElementById('stat-total').innerText = catalogData.length;
+
+    const totalDownloads = catalogData.reduce((sum, book) => sum + (Number(book.downloads) || 0), 0);
+    const downloadsEl = document.getElementById('stat-downloads');
+    if (downloadsEl) {
+        downloadsEl.innerText = totalDownloads.toLocaleString();
+    }
+}
+
+function renderDownloadsTable() {
+    const tbody = document.getElementById('downloads-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (catalogData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No publications in the catalog yet.</td></tr>`;
+        return;
+    }
+
+    const sortedBooks = [...catalogData].sort((a, b) => (Number(b.downloads) || 0) - (Number(a.downloads) || 0));
+    const maxDownloads = Math.max(...sortedBooks.map(b => Number(b.downloads) || 0), 1);
+
+    sortedBooks.forEach((book, index) => {
+        const count = Number(book.downloads) || 0;
+        const barWidth = Math.round((count / maxDownloads) * 100);
+
+        const thumb = book.cover_url
+            ? `<img src="${book.cover_url}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0">`
+            : `<div class="w-8 h-11 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6 text-center font-extrabold text-accord-muted">#${index + 1}</td>
+            <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
+                ${thumb}
+                <span>${book.title}</span>
+            </td>
+            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
+            <td class="py-4 px-6 text-right">
+                <div class="inline-flex flex-col items-end min-w-[90px]">
+                    <span class="font-extrabold text-sm text-accord-slate">${count.toLocaleString()}</span>
+                    <div class="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                        <div class="h-full bg-purple-600 rounded-full" style="width: ${barWidth}%"></div>
+                    </div>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function showToast(message) {

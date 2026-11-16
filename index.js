@@ -5,10 +5,13 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 let booksData = [];
 let savedBookmarks = [];
+let purchasedBookIds = [];
 let currentCategory = 'All';
 let currentUser = null;
 let authMode = 'signin';
 let pendingBookmarkTitle = null;
+let pendingPurchaseBookId = null;
+let activePurchaseBook = null;
 
 // Initialize App: Render cached books immediately, then fetch fresh data & auth in parallel
 document.addEventListener('DOMContentLoaded', () => {
@@ -112,6 +115,7 @@ async function syncUserState() {
         profileContainer?.classList.add('hidden');
 
         savedBookmarks = [];
+        purchasedBookIds = [];
         localStorage.removeItem('accord_bookmarks');
         updateBookmarkBadge();
         if (booksData.length > 0) applyInitialRender();
@@ -138,7 +142,25 @@ async function mergeAndLoadCloudBookmarks() {
         savedBookmarks = data.map(item => item.book_title);
         localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
         updateBookmarkBadge();
-        if (booksData.length > 0) applyInitialRender();
+    }
+
+    const { data: purchases, error: purchaseErr } = await supabaseClient
+        .from('user_purchases')
+        .select('book_id')
+        .eq('user_id', currentUser.id);
+
+    if (!purchaseErr && purchases) {
+        purchasedBookIds = purchases.map(p => Number(p.book_id));
+    }
+
+    if (booksData.length > 0) applyInitialRender();
+
+    if (pendingPurchaseBookId) {
+        const bookToBuy = booksData.find(b => Number(b.id) === Number(pendingPurchaseBookId));
+        pendingPurchaseBookId = null;
+        if (bookToBuy && !purchasedBookIds.includes(Number(bookToBuy.id))) {
+            openPurchaseModal(bookToBuy.id);
+        }
     }
 }
 
@@ -224,6 +246,7 @@ async function handleSignOut() {
     await supabaseClient.auth.signOut();
     localStorage.removeItem('accord_bookmarks');
     savedBookmarks = [];
+    purchasedBookIds = [];
     updateBookmarkBadge();
     if (booksData.length > 0) applyInitialRender();
     closeAuthModal();
@@ -233,7 +256,7 @@ async function handleSignOut() {
 async function loadBooksFromSupabase() {
     const { data, error } = await supabaseClient
         .from('books')
-        .select('id, title, author, category, year, pages, description, cover_url, download_url, gradient')
+        .select('id, title, author, category, year, pages, description, cover_url, download_url, gradient, is_for_sale, price')
         .is('deleted_at', null)
         .eq('is_visible', true)
         .order('created_at', { ascending: false });
@@ -247,6 +270,10 @@ async function loadBooksFromSupabase() {
         }
         applyInitialRender();
     }
+}
+
+function trackDownload(bookId) {
+    supabaseClient.rpc('increment_book_download', { book_id: Number(bookId) });
 }
 
 function renderBooks(filteredList) {
@@ -265,6 +292,7 @@ function renderBooks(filteredList) {
 
     filteredList.forEach(book => {
         const isBookmarked = savedBookmarks.includes(book.title);
+        const isPurchased = purchasedBookIds.includes(Number(book.id));
         const safeTitle = book.title.replace(/'/g, "\\'");
         const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
@@ -284,15 +312,39 @@ function renderBooks(filteredList) {
                </div>`;
 
         const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-        const downloadButton = book.download_url
-            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
-                   <i class="fa-solid fa-download text-[10px]"></i>
-                   <span>Download</span>
-               </a>`
-            : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
-                   <i class="fa-solid fa-download text-[10px]"></i>
-                   <span>Download</span>
-               </button>`;
+        const cleanReadUrl = book.download_url
+            ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url)
+            : '';
+
+        let primaryActionButton = '';
+        if (book.is_for_sale && !isPurchased) {
+            const formattedPrice = Number(book.price || 0) > 0 ? ` • $${Number(book.price).toFixed(2)}` : '';
+            primaryActionButton = `
+                <button onclick="initiateBookPurchase(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5">
+                    <i class="fa-solid fa-cart-shopping text-[10px]"></i>
+                    <span>Buy Now${formattedPrice}</span>
+                </button>`;
+        } else if (book.is_for_sale && isPurchased) {
+            primaryActionButton = cleanReadUrl
+                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-book-open-reader text-[10px]"></i>
+                       <span>Read</span>
+                   </a>`
+                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-book-open-reader text-[10px]"></i>
+                       <span>Read</span>
+                   </button>`;
+        } else {
+            primaryActionButton = book.download_url
+                ? `<a href="${book.download_url}" onclick="trackDownload('${book.id}')" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-download text-[10px]"></i>
+                       <span>Download</span>
+                   </a>`
+                : `<button onclick="triggerSimulatedDownload()" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold px-3 rounded-xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5">
+                       <i class="fa-solid fa-download text-[10px]"></i>
+                       <span>Download</span>
+                   </button>`;
+        }
 
         const card = document.createElement('div');
         card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
@@ -325,9 +377,9 @@ function renderBooks(filteredList) {
                     </p>
                 </div>
 
-                <!-- Unified Bottom Action Row: Download + Bookmark + Copy -->
+                <!-- Unified Bottom Action Row: Buy/Read/Download + Bookmark + Copy -->
                 <div class="flex items-center gap-1.5">
-                    ${downloadButton}
+                    ${primaryActionButton}
                     <button onclick="toggleBookmark(this, '${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'border-slate-200 text-accord-slate hover:border-accord-blue'} rounded-xl flex items-center justify-center transition-all" title="Save Bookmark">
                         <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
                     </button>
@@ -340,6 +392,73 @@ function renderBooks(filteredList) {
         `;
         grid.appendChild(card);
     });
+}
+
+// Book Purchase Flow
+function initiateBookPurchase(bookId) {
+    if (!currentUser) {
+        pendingPurchaseBookId = Number(bookId);
+        showToast("Please sign in to purchase this book.");
+        openAuthModal();
+        return;
+    }
+    openPurchaseModal(bookId);
+}
+
+function openPurchaseModal(bookId) {
+    const book = booksData.find(b => Number(b.id) === Number(bookId));
+    if (!book) return;
+    activePurchaseBook = book;
+
+    document.getElementById('purchase-book-title').innerText = book.title;
+    document.getElementById('purchase-book-author').innerText = book.author;
+    document.getElementById('purchase-book-price').innerText = `$${Number(book.price || 0).toFixed(2)}`;
+
+    const coverEl = document.getElementById('purchase-book-cover');
+    coverEl.innerHTML = book.cover_url
+        ? `<img src="${book.cover_url}" class="w-full h-full object-cover">`
+        : `<i class="fa-solid fa-book text-lg"></i>`;
+
+    const modal = document.getElementById('purchase-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePurchaseModal() {
+    const modal = document.getElementById('purchase-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+    activePurchaseBook = null;
+}
+
+async function completeBookPurchase() {
+    if (!currentUser || !activePurchaseBook) return;
+    const btn = document.getElementById('confirm-purchase-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Processing...</span>`;
+
+    const { error } = await supabaseClient
+        .from('user_purchases')
+        .upsert({
+            user_id: currentUser.id,
+            book_id: Number(activePurchaseBook.id),
+            amount_paid: Number(activePurchaseBook.price || 0),
+            payment_reference: `ACC-${Date.now()}`
+        }, { onConflict: 'user_id,book_id' });
+
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-lock"></i><span>Complete Purchase</span>`;
+
+    if (error) {
+        showToast(`Purchase failed: ${error.message}`);
+        return;
+    }
+
+    purchasedBookIds.push(Number(activePurchaseBook.id));
+    const boughtTitle = activePurchaseBook.title;
+    closePurchaseModal();
+    applyInitialRender();
+    showToast(`"${boughtTitle}" unlocked! Click Read to open.`);
 }
 
 // Share Book Handler (Mobile: Native Share Sheet | PC: Copy Direct Book Link)
@@ -396,7 +515,6 @@ function triggerSimulatedDownload() {
 }
 
 async function toggleBookmark(btn, title) {
-    // Require sign-in before saving a book
     if (!currentUser) {
         pendingBookmarkTitle = title;
         showToast("Please sign in to save books to your account.");

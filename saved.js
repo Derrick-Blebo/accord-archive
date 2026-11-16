@@ -5,6 +5,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 let allBooks = [];
 let savedBookmarks = [];
+let purchasedBookIds = [];
 let currentUser = null;
 let authMode = 'signin';
 
@@ -54,6 +55,15 @@ async function syncUserState() {
             localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
             updateBookmarkBadge();
         }
+
+        const { data: purchases, error: purchaseErr } = await supabaseClient
+            .from('user_purchases')
+            .select('book_id')
+            .eq('user_id', currentUser.id);
+
+        if (!purchaseErr && purchases) {
+            purchasedBookIds = purchases.map(p => Number(p.book_id));
+        }
     } else {
         if (navLabel) navLabel.innerText = 'Sign In';
         if (syncText) syncText.innerHTML = `Sign in required • <button onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign In</button>`;
@@ -61,6 +71,7 @@ async function syncUserState() {
         profileContainer?.classList.add('hidden');
 
         savedBookmarks = [];
+        purchasedBookIds = [];
         localStorage.removeItem('accord_bookmarks');
         updateBookmarkBadge();
     }
@@ -80,6 +91,10 @@ async function loadSavedBooksPage() {
         allBooks = data;
         renderSavedBooks();
     }
+}
+
+function trackDownload(bookId) {
+    supabaseClient.rpc('increment_book_download', { book_id: Number(bookId) });
 }
 
 function renderSavedBooks() {
@@ -131,6 +146,7 @@ function renderSavedBooks() {
     }
 
     matchedBooks.forEach(book => {
+        const isPurchased = purchasedBookIds.includes(Number(book.id));
         const safeTitle = book.title.replace(/'/g, "\\'");
         const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
@@ -150,15 +166,38 @@ function renderSavedBooks() {
                </div>`;
 
         const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-        const downloadButton = book.download_url
-            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
-                   <i class="fa-solid fa-download text-xs"></i>
-                   <span>Download</span>
-               </a>`
-            : `<button onclick="showToast('This archive item does not have a PDF attached yet.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
-                   <i class="fa-solid fa-download text-xs"></i>
-                   <span>Download</span>
-               </button>`;
+        const cleanReadUrl = book.download_url
+            ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url)
+            : '';
+
+        let primaryActionButton = '';
+        if (book.is_for_sale && !isPurchased) {
+            const formattedPrice = Number(book.price || 0) > 0 ? ` • $${Number(book.price).toFixed(2)}` : '';
+            primaryActionButton = `<a href="index.html?book=${book.id}#library" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-2">
+                   <i class="fa-solid fa-cart-shopping text-xs"></i>
+                   <span>Buy Now${formattedPrice}</span>
+               </a>`;
+        } else if (book.is_for_sale && isPurchased) {
+            primaryActionButton = cleanReadUrl
+                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-emerald-500/20 flex items-center justify-center space-x-2">
+                       <i class="fa-solid fa-book-open-reader text-xs"></i>
+                       <span>Read</span>
+                   </a>`
+                : `<button onclick="showToast('PDF file is being prepared for reading.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm flex items-center justify-center space-x-2">
+                       <i class="fa-solid fa-book-open-reader text-xs"></i>
+                       <span>Read</span>
+                   </button>`;
+        } else {
+            primaryActionButton = book.download_url
+                ? `<a href="${book.download_url}" onclick="trackDownload('${book.id}')" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
+                       <i class="fa-solid fa-download text-xs"></i>
+                       <span>Download</span>
+                   </a>`
+                : `<button onclick="showToast('This archive item does not have a PDF attached yet.')" class="flex-1 sm:flex-initial sm:px-6 h-10 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 rounded-2xl transition-all shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-2">
+                       <i class="fa-solid fa-download text-xs"></i>
+                       <span>Download</span>
+                   </button>`;
+        }
 
         const metaBadges = `
             <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -196,7 +235,7 @@ function renderSavedBooks() {
 
                 <!-- Bottom Action Row -->
                 <div class="flex items-center gap-2">
-                    ${downloadButton}
+                    ${primaryActionButton}
                     <button onclick="shareBook('${book.id}', '${safeTitle}', '${safeAuthor}')" class="w-10 h-10 shrink-0 border border-slate-200 text-accord-slate hover:border-accord-blue hover:text-accord-blue rounded-2xl flex items-center justify-center transition-all" title="Copy Book Link">
                         <i class="fa-solid fa-share-nodes text-xs md:hidden"></i>
                         <i class="fa-regular fa-copy text-xs hidden md:inline"></i>
@@ -321,6 +360,7 @@ async function handleSignOut() {
     await supabaseClient.auth.signOut();
     localStorage.removeItem('accord_bookmarks');
     savedBookmarks = [];
+    purchasedBookIds = [];
     renderSavedBooks();
     closeAuthModal();
     showToast('Signed out.');

@@ -227,16 +227,19 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
-                    <div class="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+                <button type="button" onclick="switchTab('downloads')" class="bg-white border border-slate-200/80 hover:border-purple-400 hover:shadow-md rounded-3xl p-6 shadow-sm flex items-center space-x-4 text-left transition-all group cursor-pointer w-full">
+                    <div class="w-14 h-14 rounded-2xl bg-purple-50 group-hover:bg-purple-600 text-purple-600 group-hover:text-white flex items-center justify-center text-xl transition-colors">
                         <i class="fa-solid fa-download"></i>
                     </div>
                     <div>
                         <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
-                        <h3 class="text-2xl font-extrabold text-accord-slate mt-0.5">45,820</h3>
-                        <p class="text-[11px] text-purple-600 font-semibold mt-0.5"><i class="fa-solid fa-arrow-trend-up"></i> Global readership</p>
+                        <h3 id="stat-downloads" class="text-2xl font-extrabold text-accord-slate mt-0.5">0</h3>
+                        <p class="text-[11px] text-purple-600 font-semibold mt-0.5 flex items-center gap-1">
+                            <span>View per-book breakdown</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
                 <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex items-center space-x-4">
                     <div class="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
@@ -389,6 +392,38 @@
                 </div>
             </section>
 
+            <!-- Tab 5: Download Analytics Breakdown Section -->
+            <section id="section-downloads" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Book Download Analytics</h2>
+                        <p class="text-xs text-accord-muted mt-1">All archive publications ranked from most downloaded to least downloaded.</p>
+                    </div>
+                    <button onclick="switchTab('catalog')" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-2.5 rounded-xl transition-all self-start sm:self-auto">
+                        <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Catalog
+                    </button>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6 w-14 text-center">Rank</th>
+                                    <th class="py-4 px-6">Book / Archive Title</th>
+                                    <th class="py-4 px-6">Author</th>
+                                    <th class="py-4 px-6">Category</th>
+                                    <th class="py-4 px-6 text-right">Downloads</th>
+                                </tr>
+                            </thead>
+                            <tbody id="downloads-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Injected via admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
         </main>
 
         <!-- Footer -->
@@ -396,7 +431,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v2.4</span>
+                    <span>• Secure CMS v2.5</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -476,11 +511,22 @@
                         </div>
                     </div>
 
-                    <!-- 4. PUBLICATION YEAR -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- 4. PUBLICATION YEAR & PRICING -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Publication Year</label>
                             <input type="text" id="form-year" required placeholder="e.g., 1954" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Access Type</label>
+                            <select id="form-is-for-sale" onchange="togglePriceField()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                                <option value="false">Free Archive</option>
+                                <option value="true">For Sale</option>
+                            </select>
+                        </div>
+                        <div id="price-field-wrapper" class="hidden">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Price ($)</label>
+                            <input type="number" id="form-price" step="0.01" min="0" placeholder="e.g., 15.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                         </div>
                     </div>
 
@@ -509,6 +555,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js"></script>
+    <script src="admin.js?v=2"></script>
 </body>
 </html>
