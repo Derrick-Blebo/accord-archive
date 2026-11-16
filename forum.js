@@ -134,18 +134,15 @@ function renderForumFeed() {
         emptyState?.classList.add('hidden');
     }
 
-    // Render Church Events (Full Width)
     filteredEvents.forEach(ev => {
         eventsContainer.appendChild(buildEventCard(ev));
     });
 
-    // Render Standalone Testimonies in Rectangular Grid Cards matching home page
     filteredTestimonies.forEach(t => {
         grid.appendChild(buildTestimonyGridCard(t));
     });
 }
 
-// Church Event Card with Nested Grid Testimonies
 function buildEventCard(ev) {
     const likedEvents = JSON.parse(localStorage.getItem('accord_liked_events') || '[]');
     const hasLikedEvent = likedEvents.includes(Number(ev.id));
@@ -200,9 +197,9 @@ function buildEventCard(ev) {
                     </p>
                 </div>
 
-                <!-- Facebook-style Event Engagement Bar -->
+                <!-- Facebook-Style Compact Spacing Bar -->
                 <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex items-center space-x-4 text-sm font-semibold text-accord-muted">
+                    <div class="flex items-center space-x-6 text-sm font-semibold text-accord-muted">
                         <button type="button" onclick="likeEvent(${ev.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors">
                             <i class="${hasLikedEvent ? 'fa-solid text-red-500' : 'fa-regular'} fa-thumbs-up text-base"></i>
                             <span>${Number(ev.like_count) || 0}</span>
@@ -234,8 +231,7 @@ function buildEventCard(ev) {
     return card;
 }
 
-// Rectangular Grid Card for Testimonies (matching home page style) with Facebook-style buttons
-function buildTestimonyGridCard(item, isNested = false) {
+function buildTestimonyGridCard(item) {
     const comments = commentsByTestimony[item.id] || [];
     const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
     const hasLiked = amenedIds.includes(Number(item.id));
@@ -265,8 +261,8 @@ function buildTestimonyGridCard(item, isNested = false) {
             </p>
         </div>
 
-        <!-- Facebook-Style Engagement Bar (Likes, Comments, Shares) -->
-        <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs text-accord-muted font-semibold">
+        <!-- Facebook-Style Compact Spacing Bar -->
+        <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-start space-x-6 text-xs text-accord-muted font-semibold">
             <button type="button" onclick="likeTestimony(${item.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors">
                 <i class="${hasLiked ? 'fa-solid text-red-500' : 'fa-regular'} fa-thumbs-up text-sm"></i>
                 <span>${Number(item.amen_count) || 0}</span>
@@ -284,4 +280,159 @@ function buildTestimonyGridCard(item, isNested = false) {
         </div>
     `;
     return card;
+}
+
+async function shareForumLink(type, id, title) {
+    const shareUrl = `${window.location.origin}/forum.html?${type}=${id}`;
+    const isDesktop = window.innerWidth >= 768;
+    if (!isDesktop && navigator.share) {
+        try { await navigator.share({ title, url: shareUrl }); } catch (err) {}
+    } else {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast(`${type === 'event' ? 'Event' : 'Testimony'} link copied to clipboard!`);
+    }
+}
+
+async function likeEvent(eventId) {
+    const liked = JSON.parse(localStorage.getItem('accord_liked_events') || '[]');
+    if (liked.includes(Number(eventId))) {
+        showToast("You already liked this event!");
+        return;
+    }
+    liked.push(Number(eventId));
+    localStorage.setItem('accord_liked_events', JSON.stringify(liked));
+    await supabaseClient.rpc('increment_event_like', { target_id: Number(eventId) });
+    await loadForumData();
+}
+
+async function likeTestimony(testimonyId) {
+    const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
+    if (amenedIds.includes(Number(testimonyId))) {
+        showToast("You already liked this testimony!");
+        return;
+    }
+    amenedIds.push(Number(testimonyId));
+    localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds));
+    await supabaseClient.rpc('increment_testimony_amen', { target_id: Number(testimonyId) });
+    await loadForumData();
+}
+
+// Modal and form helpers...
+function openTestimonyModal(eventId = null, eventTitle = '') {
+    document.getElementById('testimony-event-id').value = eventId || '';
+    const eventBanner = document.getElementById('selected-event-banner');
+    const eventNameSpan = document.getElementById('selected-event-name');
+    if (eventId && eventTitle) {
+        eventNameSpan.innerText = eventTitle;
+        eventBanner?.classList.remove('hidden');
+    } else {
+        eventBanner?.classList.add('hidden');
+    }
+    const modal = document.getElementById('testimony-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeTestimonyModal() {
+    const modal = document.getElementById('testimony-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+}
+
+async function handleTestimonySubmit(e) {
+    e.preventDefault();
+    const eventIdVal = document.getElementById('testimony-event-id').value;
+    const author_name = document.getElementById('testimony-author').value.trim();
+    const location = document.getElementById('testimony-location').value.trim();
+    const title = document.getElementById('testimony-title').value.trim();
+    const category = document.getElementById('testimony-category').value;
+    const body = document.getElementById('testimony-body').value.trim();
+
+    const { error } = await supabaseClient.from('testimonies').insert([{
+        user_id: currentUser ? currentUser.id : null,
+        event_id: eventIdVal ? Number(eventIdVal) : null,
+        author_name, location, title, category, body
+    }]);
+
+    if (error) {
+        showToast(`Could not publish: ${error.message}`);
+        return;
+    }
+
+    document.getElementById('testimony-form').reset();
+    closeTestimonyModal();
+    await loadForumData();
+    showToast("Your testimony has been published!");
+}
+
+function openEventModal() {
+    document.getElementById('event-form').reset();
+    const modal = document.getElementById('event-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeEventModal() {
+    const modal = document.getElementById('event-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+}
+
+async function handleEventSubmit(e) {
+    e.preventDefault();
+    const organizer_name = document.getElementById('event-organizer').value.trim();
+    const title = document.getElementById('event-title').value.trim();
+    const event_date = document.getElementById('event-date').value.trim();
+    const location = document.getElementById('event-location').value.trim();
+    const description = document.getElementById('event-description').value.trim();
+
+    const { error } = await supabaseClient.from('forum_events').insert([{
+        user_id: currentUser ? currentUser.id : null,
+        organizer_name, title, event_date, location, description, flyer_url: compressedEventFlyer || ''
+    }]);
+
+    if (error) {
+        showToast(`Could not create event: ${error.message}`);
+        return;
+    }
+
+    closeEventModal();
+    await loadForumData();
+    showToast("Church event post published!");
+}
+
+document.getElementById('event-flyer-input')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('event-flyer-name').innerText = file.name;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = (img.height * 640) / img.width;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            compressedEventFlyer = canvas.toDataURL('image/webp', 0.80);
+            document.getElementById('event-flyer-preview').innerHTML = `<img src="${compressedEventFlyer}" class="w-full h-full object-cover">`;
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-message').innerText = message;
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+    setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+    }, 3500);
+}
+
+function toggleMobileMenu() {
+    document.getElementById('mobile-menu')?.classList.toggle('hidden');
 }

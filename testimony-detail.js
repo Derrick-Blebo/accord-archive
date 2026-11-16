@@ -35,6 +35,7 @@ async function loadTestimonyDetail() {
     const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
     const hasLiked = amenedIds.includes(Number(item.id));
     const likedComments = JSON.parse(localStorage.getItem('accord_liked_comments') || '[]');
+    const safeTitle = item.title.replace(/'/g, "\\'");
 
     const topComments = comments.filter(c => !c.parent_comment_id);
     const repliesByParent = {};
@@ -115,12 +116,20 @@ async function loadTestimonyDetail() {
                 ${escapeHTML(item.body)}
             </div>
 
-            <div class="pt-4 border-t border-slate-200 flex items-center justify-between text-sm text-accord-muted font-semibold">
+            <!-- Facebook-Style Compact Spacing Bar -->
+            <div class="pt-4 border-t border-slate-200 flex items-center justify-start space-x-8 text-sm text-accord-muted font-semibold">
                 <button type="button" onclick="likeTestimony(${item.id})" class="hover:text-red-500 flex items-center space-x-1.5 transition-colors">
                     <i class="${hasLiked ? 'fa-solid text-red-500' : 'fa-regular'} fa-thumbs-up text-base"></i>
                     <span>${Number(item.amen_count) || 0} Likes</span>
                 </button>
-                <span>${comments.length} Comments</span>
+                <span class="flex items-center space-x-1.5">
+                    <i class="fa-regular fa-comment text-base"></i>
+                    <span>${comments.length} Comments</span>
+                </span>
+                <button type="button" onclick="shareTestimonyPage(${item.id}, '${safeTitle}')" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors">
+                    <i class="fa-solid fa-share text-base"></i>
+                    <span>Share</span>
+                </button>
             </div>
 
             <div class="pt-6 border-t border-slate-200 space-y-4">
@@ -136,6 +145,16 @@ async function loadTestimonyDetail() {
             </div>
         </article>
     `;
+}
+
+async function shareTestimonyPage(id, title) {
+    const shareUrl = `${window.location.origin}/testimony.html?id=${id}`;
+    if (navigator.share) {
+        try { await navigator.share({ title, url: shareUrl }); } catch (err) {}
+    } else {
+        await navigator.clipboard.writeText(shareUrl);
+        alert("Testimony link copied to clipboard!");
+    }
 }
 
 function toggleRepliesAccordion(commentId) {
@@ -157,11 +176,14 @@ function toggleReplyBox(commentId) {
         alert("Please sign in to reply.");
         return;
     }
-    const form = document.getElementById(`reply-form-${commentId}`);
-    form?.classList.toggle('hidden');
+    document.getElementById(`reply-form-${commentId}`)?.classList.toggle('hidden');
 }
 
 async function likeTestimony(id) {
+    const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
+    if (amenedIds.includes(Number(id))) return;
+    amenedIds.push(Number(id));
+    localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds));
     await supabaseClient.rpc('increment_testimony_amen', { target_id: Number(id) });
     location.reload();
 }
