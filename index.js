@@ -7,10 +7,60 @@ const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 
 let allBooks = [];
 let categoriesList = [];
-let homepageShelves = [];
+
+// Default Kindle-Style Shelves (Displayed immediately until overridden from Admin)
+function getDefaultShelves() {
+    return [
+        {
+            id: 'shelf_special_picks',
+            title: 'Accord Special Picks',
+            subtitle: 'Foundational Christian classics & ministry landmarks',
+            mode: 'recommended',
+            category: '',
+            limit: 10,
+            bookIds: [],
+            enabled: true
+        },
+        {
+            id: 'shelf_most_popular',
+            title: 'Most Popular Publications',
+            subtitle: 'Most downloaded and read across the Accord library',
+            mode: 'popular',
+            category: '',
+            limit: 10,
+            bookIds: [],
+            enabled: true
+        },
+        {
+            id: 'shelf_new_additions',
+            title: 'New Additions to the Archive',
+            subtitle: 'Recently cataloged manuscripts, biographies, and devotionals',
+            mode: 'newest',
+            category: '',
+            limit: 10,
+            bookIds: [],
+            enabled: true
+        },
+        {
+            id: 'shelf_recommended',
+            title: 'Recommended for You',
+            subtitle: 'Essential readings on prayer, spiritual awakening, and leadership',
+            mode: 'category',
+            category: 'Prayer & Devotion',
+            limit: 10,
+            bookIds: [],
+            enabled: true
+        }
+    ];
+}
+
+let homepageShelves = getDefaultShelves();
+
 let bannerConfig = {
     enabled: true,
     afterCount: 6,
+    intervalSeconds: 5,
+    slides: [],
     badge: 'ACCORD HERITAGE INITIATIVE',
     headline: 'Do You Hold a Rare Christian Manuscript or Church Chronicle?',
     subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
@@ -18,6 +68,9 @@ let bannerConfig = {
     actionType: 'contribute',
     customUrl: 'forum.html'
 };
+
+let currentBannerSlideIndex = 0;
+let bannerSliderIntervalId = null;
 
 let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks') || '[]');
 let savedTestimonyIds = [];
@@ -125,27 +178,40 @@ async function loadLibraryData() {
     ]);
 
     if (!booksRes.error && booksRes.data) {
-        // Extract layout config if stored in books table
+        // 1. Check for saved layout configuration in books table (or fallback to localStorage / defaults)
         const configRecord = booksRes.data.find(b => b.title === LAYOUT_CONFIG_CATEGORY_NAME);
         if (configRecord && configRecord.description) {
             try {
                 const parsedConfig = JSON.parse(configRecord.description);
-                if (parsedConfig.shelves) homepageShelves = parsedConfig.shelves;
-                if (parsedConfig.banner) bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                if (Array.isArray(parsedConfig.shelves) && parsedConfig.shelves.length > 0) {
+                    homepageShelves = parsedConfig.shelves;
+                }
+                if (parsedConfig.banner) {
+                    bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                }
                 localStorage.setItem('accord_home_layout_config', configRecord.description);
-            } catch (e) {}
+            } catch (e) {
+                console.warn('Could not parse layout config from DB:', e);
+            }
         } else {
             const localSaved = localStorage.getItem('accord_home_layout_config');
             if (localSaved) {
                 try {
                     const parsedConfig = JSON.parse(localSaved);
-                    if (parsedConfig.shelves) homepageShelves = parsedConfig.shelves;
-                    if (parsedConfig.banner) bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                    if (Array.isArray(parsedConfig.shelves) && parsedConfig.shelves.length > 0) {
+                        homepageShelves = parsedConfig.shelves;
+                    }
+                    if (parsedConfig.banner) {
+                        bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                    }
                 } catch (e) {}
             }
         }
 
-        const realBooks = booksRes.data.filter(b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME && !b.deleted_at && b.is_visible !== false);
+        // 2. Filter published books & deduplicate by title
+        const realBooks = booksRes.data.filter(
+            b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME && !b.deleted_at && b.is_visible !== false && b.status !== 'draft'
+        );
         const seenTitles = new Set();
         allBooks = realBooks.filter(book => {
             const key = (book.title || '').trim().toLowerCase();
@@ -233,13 +299,14 @@ function renderCuratedShelves() {
     if (!wrapper) return;
 
     const query = (document.getElementById('library-search')?.value || '').trim();
+    // Hide curated shelves while actively searching or filtering so results stay focused
     if (query.length > 0 || currentCategory !== 'All' || currentAccessFilter !== 'all') {
         wrapper.innerHTML = '';
         return;
     }
 
     const enabledShelves = (homepageShelves || []).filter(s => s.enabled !== false);
-    if (enabledShelves.length === 0) {
+    if (enabledShelves.length === 0 || allBooks.length === 0) {
         wrapper.innerHTML = '';
         return;
     }
@@ -258,9 +325,10 @@ function renderCuratedShelves() {
             shelfBooks = [...allBooks].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, limit);
         } else if (shelf.mode === 'recommended') {
             shelfBooks = [...allBooks].filter(b => b.is_for_sale || (Number(b.downloads) || 0) > 0).slice(0, limit);
-            if (shelfBooks.length === 0) shelfBooks = allBooks.slice(0, limit);
+            if (shelfBooks.length < 4) shelfBooks = allBooks.slice(0, limit);
         } else if (shelf.mode === 'category') {
-            shelfBooks = allBooks.filter(b => b.category === shelf.category).slice(0, limit);
+            shelfBooks = allBooks.filter(b => (b.category || '').toLowerCase() === (shelf.category || '').toLowerCase()).slice(0, limit);
+            if (shelfBooks.length === 0) shelfBooks = allBooks.slice(0, limit);
         }
 
         if (shelfBooks.length === 0) return;
@@ -270,7 +338,7 @@ function renderCuratedShelves() {
             const isPurchased = purchasedBookIds.includes(Number(book.id));
             const priceLabel = book.is_for_sale
                 ? (isPurchased ? `<span class="text-[11px] font-bold text-emerald-600">Purchased</span>` : `<span class="text-xs font-extrabold text-accord-slate">USD ${Number(book.price || 0).toFixed(2)}</span>`)
-                : `<span class="text-[11px] font-bold text-accord-blue">Free Archive</span>`;
+                : `<span class="text-[11px] font-bold text-accord-blue">Free Edition</span>`;
 
             const coverImg = book.cover_url
                 ? `<div class="w-full h-52 rounded-2xl overflow-hidden border border-slate-200/90 shadow-sm bg-slate-100 relative">
@@ -337,7 +405,7 @@ function scrollShelf(rowId, delta) {
 }
 
 // ==========================================
-// RENDER MAIN BOOK GRID + MID-GRID BANNER
+// RENDER MAIN BOOK GRID + MULTI-BANNER IMAGE SLIDER
 // ==========================================
 
 function buildBookCardElement(book) {
@@ -427,16 +495,132 @@ function buildBookCardElement(book) {
     return card;
 }
 
+function stopBannerSliderInterval() {
+    if (bannerSliderIntervalId) {
+        clearInterval(bannerSliderIntervalId);
+        bannerSliderIntervalId = null;
+    }
+}
+
+function startBannerSliderInterval(totalSlides) {
+    stopBannerSliderInterval();
+    if (totalSlides <= 1) return;
+    const intervalMs = Math.max(2, Number(bannerConfig.intervalSeconds) || 5) * 1000;
+    bannerSliderIntervalId = setInterval(() => {
+        nextBannerSlide(totalSlides, false);
+    }, intervalMs);
+}
+
+function goToBannerSlide(index, totalSlides, resetTimer = true) {
+    currentBannerSlideIndex = (index + totalSlides) % totalSlides;
+    for (let i = 0; i < totalSlides; i++) {
+        const slideEl = document.getElementById(`accord-banner-slide-${i}`);
+        const dotEl = document.getElementById(`accord-banner-dot-${i}`);
+        if (slideEl) {
+            if (i === currentBannerSlideIndex) {
+                slideEl.classList.remove('hidden', 'opacity-0');
+                slideEl.classList.add('block', 'opacity-100');
+            } else {
+                slideEl.classList.remove('block', 'opacity-100');
+                slideEl.classList.add('hidden', 'opacity-0');
+            }
+        }
+        if (dotEl) {
+            dotEl.className = i === currentBannerSlideIndex
+                ? 'w-6 h-2 rounded-full bg-white shadow transition-all'
+                : 'w-2 h-2 rounded-full bg-white/50 hover:bg-white/80 transition-all';
+        }
+    }
+    if (resetTimer) {
+        startBannerSliderInterval(totalSlides);
+    }
+}
+
+function nextBannerSlide(totalSlides, resetTimer = true) {
+    goToBannerSlide(currentBannerSlideIndex + 1, totalSlides, resetTimer);
+}
+
+function prevBannerSlide(totalSlides) {
+    goToBannerSlide(currentBannerSlideIndex - 1, totalSlides, true);
+}
+
 function renderMidGridBanner(showBanner) {
     const bannerEl = document.getElementById('mid-grid-banner');
     if (!bannerEl) return;
 
-    if (!showBanner || !bannerConfig.enabled) {
+    stopBannerSliderInterval();
+
+    if (!showBanner || bannerConfig.enabled === false) {
         bannerEl.classList.add('hidden');
         bannerEl.innerHTML = '';
         return;
     }
 
+    const activeSlides = Array.isArray(bannerConfig.slides)
+        ? bannerConfig.slides.filter(s => s && s.enabled !== false && (s.desktopUrl || s.mobileUrl))
+        : [];
+
+    // 1. If Admin uploaded Image Banner Slides, render the Responsive Auto-Sliding Carousel
+    if (activeSlides.length > 0) {
+        currentBannerSlideIndex = 0;
+        const total = activeSlides.length;
+
+        const slidesHtml = activeSlides.map((slide, idx) => {
+            const desktopSrc = slide.desktopUrl || slide.mobileUrl;
+            const mobileSrc = slide.mobileUrl || slide.desktopUrl;
+            const isFirst = idx === 0;
+            const altText = escapeHTML(slide.alt || `Accord Promotional Banner ${idx + 1}`);
+
+            const pictureMarkup = `
+                <picture class="block w-full">
+                    <source media="(max-width: 767px)" srcset="${escapeHTML(mobileSrc)}">
+                    <img src="${escapeHTML(desktopSrc)}" alt="${altText}" class="w-full h-auto max-h-[420px] sm:max-h-[380px] object-cover rounded-3xl shadow-lg border border-slate-200/80" />
+                </picture>
+            `;
+
+            let clickableWrapper = pictureMarkup;
+            if (slide.actionType === 'contribute') {
+                clickableWrapper = `<div onclick="openContributeModal()" class="cursor-pointer group relative overflow-hidden rounded-3xl">${pictureMarkup}</div>`;
+            } else if (slide.actionType === 'forum') {
+                clickableWrapper = `<a href="forum.html" class="block group relative overflow-hidden rounded-3xl">${pictureMarkup}</a>`;
+            } else if (slide.linkUrl) {
+                const isExternal = slide.linkUrl.startsWith('http');
+                clickableWrapper = `<a href="${escapeHTML(slide.linkUrl)}" ${isExternal ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block group relative overflow-hidden rounded-3xl">${pictureMarkup}</a>`;
+            }
+
+            return `
+                <div id="accord-banner-slide-${idx}" class="banner-slide ${isFirst ? 'block opacity-100' : 'hidden opacity-0'} w-full">
+                    ${clickableWrapper}
+                </div>
+            `;
+        }).join('');
+
+        const controlsHtml = total > 1 ? `
+            <button type="button" onclick="prevBannerSlide(${total})" class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-accord-slate/60 hover:bg-accord-slate text-white flex items-center justify-center backdrop-blur-sm transition-all shadow-md" aria-label="Previous banner">
+                <i class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <button type="button" onclick="nextBannerSlide(${total}, true)" class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-accord-slate/60 hover:bg-accord-slate text-white flex items-center justify-center backdrop-blur-sm transition-all shadow-md" aria-label="Next banner">
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+            </button>
+            <div class="absolute bottom-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-accord-slate/50 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                ${activeSlides.map((_, idx) => `
+                    <button type="button" id="accord-banner-dot-${idx}" onclick="goToBannerSlide(${idx}, ${total}, true)" class="${idx === 0 ? 'w-6 h-2 rounded-full bg-white shadow transition-all' : 'w-2 h-2 rounded-full bg-white/50 hover:bg-white/80 transition-all'}" aria-label="Slide ${idx + 1}"></button>
+                `).join('')}
+            </div>
+        ` : '';
+
+        bannerEl.innerHTML = `
+            <div class="relative w-full rounded-3xl overflow-hidden">
+                ${slidesHtml}
+                ${controlsHtml}
+            </div>
+        `;
+        bannerEl.classList.remove('hidden');
+        startBannerSliderInterval(total);
+        return;
+    }
+
+    // 2. Fallback Default Banner if no Image Slides have been uploaded yet
     let ctaHtml = '';
     if (bannerConfig.actionType === 'forum') {
         ctaHtml = `<a href="forum.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
@@ -461,7 +645,7 @@ function renderMidGridBanner(showBanner) {
             <div class="relative z-10 space-y-1.5 max-w-2xl">
                 <span class="inline-flex items-center space-x-1.5 bg-white/10 text-accord-gold px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
                     <i class="fa-solid fa-sparkles"></i>
-                    <span>${escapeHTML(bannerConfig.badge || 'Featured Initiative')}</span>
+                    <span>${escapeHTML(bannerConfig.badge || 'ACCORD HERITAGE INITIATIVE')}</span>
                 </span>
                 <h3 class="serif-heading text-xl sm:text-2xl font-bold leading-snug">${escapeHTML(bannerConfig.headline)}</h3>
                 <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${escapeHTML(bannerConfig.subtext)}</p>
@@ -686,7 +870,7 @@ async function shareBookLink(bookId, title) {
 }
 
 // ==========================================
-// CONTRIBUTE ARCHIVE SUBMISSION MODAL
+// CONTRIBUTE ARCHIVE SUBMISSION MODAL (WITH PDF UPLOAD)
 // ==========================================
 
 function openContributeModal() {
@@ -743,14 +927,30 @@ async function handleContributeSubmit(e) {
         }
     }
 
-    const { error } = await supabaseClient.from('submissions').insert([{
+    const finalDescription = downloadUrl
+        ? `${description}\n\n[Attached Manuscript PDF: ${downloadUrl}]`
+        : description;
+
+    let { error } = await supabaseClient.from('submissions').insert([{
         name,
         email,
         title,
         category,
-        description: downloadUrl ? `${description}\n\n[Attached Manuscript PDF: ${downloadUrl}]` : description,
+        description: finalDescription,
         download_url: downloadUrl
     }]);
+
+    // Fallback if `submissions` table does not have a `download_url` column yet
+    if (error && error.message && error.message.includes('download_url')) {
+        const retry = await supabaseClient.from('submissions').insert([{
+            name,
+            email,
+            title,
+            category,
+            description: finalDescription
+        }]);
+        error = retry.error;
+    }
 
     if (submitBtn) {
         submitBtn.disabled = false;
@@ -773,7 +973,7 @@ async function handleContributeSubmit(e) {
 }
 
 // ==========================================
-// AUTH MODAL & HELPERS
+// AUTH MODAL & HELPERS (COMPLETE)
 // ==========================================
 
 function openAuthModal() {
@@ -822,6 +1022,39 @@ async function handleGoogleSignIn() {
 async function handleAuthSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const fullName = document.getElementById('auth-name')?.value.trim() || '';
+    const submitBtn = document.getElementById('auth-submit-btn');
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Please wait...';
+    }
+
+    if (authMode === 'signup') {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+        });
+        if (error) showToast(error.message);
+        else {
+            showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
+            closeAuthModal();
+        }
+    } else {
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) showToast(error.message);
+        else {
+            showToast('Signed in successfully!');
+            closeAuthModal();
+        }
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        switchAuthMode(authMode);
+    }
 }
 
 async function handleSignOut() {

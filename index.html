@@ -69,6 +69,11 @@
         }
         .no-scrollbar::-webkit-scrollbar { height: 5px; }
         .no-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
+
+        /* Smooth Banner Slider Transitions */
+        .banner-slide {
+            transition: opacity 0.6s ease-in-out, transform 0.6s ease-in-out;
+        }
     </style>
 
     <!-- Supabase Client SDK -->
@@ -182,26 +187,33 @@
                 </div>
             </div>
 
-            <!-- Kindle-Style Curated Horizontal Book Sections (e.g., Most Popular, Recommended, New Additions) -->
+            <!-- Kindle-Style Curated Horizontal Book Sections (e.g., Most Popular, Recommended, New Additions, Accord Special Picks) -->
             <div id="curated-sections-wrapper" class="space-y-9 mb-10">
-                <!-- Rendered dynamically by index.js from homepage_sections -->
+                <!-- Rendered dynamically by index.js -->
             </div>
 
-            <!-- Main Catalog Grid (Top Batch + Mid-Grid Promotional Banner + Remaining Books) -->
+            <!-- Main Catalog Grid Header -->
             <div id="main-catalog-header" class="flex items-center justify-between mb-4">
                 <h2 class="serif-heading text-xl sm:text-2xl font-bold text-accord-slate">Complete Archive Directory</h2>
             </div>
 
+            <!-- First Batch of Books (Before Mid-Grid Banner Slider) -->
             <div id="book-grid-top" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <!-- First batch of books rendered dynamically by index.js -->
+                <!-- Rendered dynamically by index.js -->
             </div>
 
-            <!-- Mid-Grid Promotional Banner (Rendered dynamically after configured number of books) -->
-            <div id="mid-grid-banner" class="hidden my-8"></div>
+            <!-- Mid-Grid Responsive Image Banner Carousel (Desktop 3:1 + Mobile 1:1/4:5 Auto-Slider) -->
+            <div id="mid-grid-banner" class="hidden my-9">
+                <!-- Populated dynamically by index.js with uploaded Desktop & Mobile banner slides -->
+            </div>
 
+            <!-- Remaining Books (After Mid-Grid Banner Slider) -->
             <div id="book-grid-bottom" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <!-- Remaining books rendered dynamically by index.js -->
+                <!-- Rendered dynamically by index.js -->
             </div>
+
+            <!-- Legacy Fallback Grid Container (In case any cached script looks for #book-grid) -->
+            <div id="book-grid" class="hidden"></div>
 
             <!-- Empty Search State -->
             <div id="empty-library-state" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
@@ -445,6 +457,6 @@
             }
         });
     </script>
-    <script src="index.js?v=7"></script>
+    <script src="index.js?v=8"></script>
 </body>
 </html>

@@ -228,6 +228,111 @@
             </div>
         </div>
 
+        <!-- Add / Edit Responsive Banner Slide Modal (Desktop + Mobile Images) -->
+        <div id="banner-slide-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <div>
+                        <h3 id="banner-slide-modal-heading" class="font-bold text-accord-slate text-base">Add Promotional Banner Slide</h3>
+                        <p class="text-xs text-accord-muted">Upload Desktop (Wide) and Mobile (Square/Portrait) versions for crisp display</p>
+                    </div>
+                    <button type="button" onclick="closeBannerSlideModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="banner-slide-form" onsubmit="handleBannerSlideSubmit(event)" class="p-6 space-y-5 overflow-y-auto">
+                    <input type="hidden" id="edit-banner-slide-id">
+
+                    <!-- Dimension Reference Guide Box -->
+                    <div class="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="flex items-start space-x-2.5">
+                            <i class="fa-solid fa-desktop text-accord-blue mt-0.5"></i>
+                            <div>
+                                <p class="font-bold text-accord-slate">Desktop Banner (Landscape)</p>
+                                <p class="text-[11px] text-accord-muted">Recommended: <strong>1920 × 640 px</strong> (or 1200 × 400 px, 3:1 ratio)</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2.5">
+                            <i class="fa-solid fa-mobile-screen-button text-accord-blue mt-0.5"></i>
+                            <div>
+                                <p class="font-bold text-accord-slate">Mobile Banner (Square / Vertical)</p>
+                                <p class="text-[11px] text-accord-muted">Recommended: <strong>1080 × 1080 px</strong> (or 1080 × 1350 px, 1:1 / 4:5)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dual Upload Slots: Desktop + Mobile -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Desktop Image Upload -->
+                        <div class="space-y-2">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">
+                                1. Desktop Image (1920×640 px) *
+                            </label>
+                            <div class="relative group">
+                                <input type="file" id="banner-desktop-file" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                <div class="border-2 border-dashed border-slate-200 group-hover:border-accord-blue rounded-2xl p-3 text-center bg-slate-50 transition-all space-y-2">
+                                    <div id="banner-desktop-preview" class="w-full h-28 rounded-xl bg-slate-200/70 flex flex-col items-center justify-center overflow-hidden text-accord-muted">
+                                        <i class="fa-solid fa-panorama text-xl mb-1 text-accord-blue"></i>
+                                        <span class="text-[10px] font-semibold">Click to upload Desktop Banner</span>
+                                    </div>
+                                    <p id="banner-desktop-filename" class="text-[10px] text-accord-muted truncate">JPG, PNG, or WebP (3:1 wide)</p>
+                                </div>
+                            </div>
+                            <input type="url" id="banner-desktop-url-input" placeholder="Or paste Desktop Image URL..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+
+                        <!-- Mobile Image Upload -->
+                        <div class="space-y-2">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">
+                                2. Mobile Image (1080×1080 px)
+                            </label>
+                            <div class="relative group">
+                                <input type="file" id="banner-mobile-file" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                <div class="border-2 border-dashed border-slate-200 group-hover:border-accord-blue rounded-2xl p-3 text-center bg-slate-50 transition-all space-y-2">
+                                    <div id="banner-mobile-preview" class="w-full h-28 rounded-xl bg-slate-200/70 flex flex-col items-center justify-center overflow-hidden text-accord-muted">
+                                        <i class="fa-solid fa-mobile-screen text-xl mb-1 text-accord-gold"></i>
+                                        <span class="text-[10px] font-semibold">Click to upload Mobile Banner</span>
+                                    </div>
+                                    <p id="banner-mobile-filename" class="text-[10px] text-accord-muted truncate">Optional (Falls back to Desktop if empty)</p>
+                                </div>
+                            </div>
+                            <input type="url" id="banner-mobile-url-input" placeholder="Or paste Mobile Image URL..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                    </div>
+
+                    <!-- Slide Title & Click Action -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Banner Title / Alt Text</label>
+                            <input type="text" id="banner-slide-alt" placeholder="e.g., Accord 2026 Revival Conference" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">When Clicked Action</label>
+                            <select id="banner-slide-action" onchange="toggleBannerSlideLinkField()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                <option value="link">Open Custom URL / Link</option>
+                                <option value="contribute">Open "Submit a Manuscript" Modal</option>
+                                <option value="forum">Go to Testimonies Forum</option>
+                                <option value="none">No Click Action (Image Only)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="banner-slide-link-wrapper">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL (When Banner is Clicked)</label>
+                        <input type="text" id="banner-slide-link" placeholder="e.g., https://... or forum.html or ?book=12" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                        <button type="button" onclick="closeBannerSlideModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                        <button type="submit" id="save-banner-slide-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                            <i class="fa-solid fa-cloud-arrow-up mr-1.5"></i> Save Banner Slide
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Bulk Excel Upload Modal -->
         <div id="excel-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
             <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
@@ -304,7 +409,7 @@
                         <i class="fa-solid fa-book-bookmark mr-1"></i> Catalog
                     </button>
                     <button onclick="switchTab('shelves')" id="nav-tab-shelves" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        <i class="fa-solid fa-layer-group mr-1"></i> Home Shelves <span id="shelves-badge" class="ml-1 bg-blue-100 text-accord-blue text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                        <i class="fa-solid fa-layer-group mr-1"></i> Home Shelves & Banners <span id="shelves-badge" class="ml-1 bg-blue-100 text-accord-blue text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                     </button>
                     <button onclick="switchTab('categories')" id="nav-tab-categories" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
                         <i class="fa-solid fa-tags mr-1"></i> Categories <span id="categories-badge" class="ml-1 bg-slate-200 text-accord-slate text-[10px] px-1.5 py-0.5 rounded-full">0</span>
@@ -343,7 +448,7 @@
             <!-- Mobile / Tablet Tab Bar -->
             <div class="xl:hidden border-t border-slate-100 px-4 py-2 flex items-center space-x-2 overflow-x-auto bg-slate-50">
                 <button onclick="switchTab('catalog')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Catalog</button>
-                <button onclick="switchTab('shelves')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Home Shelves</button>
+                <button onclick="switchTab('shelves')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Home Shelves & Banners</button>
                 <button onclick="switchTab('categories')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Categories</button>
                 <button onclick="openPendingReviews('drafts')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Pending Reviews</button>
                 <button onclick="switchTab('downloads')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-accord-slate shadow-sm shrink-0">Downloads</button>
@@ -404,10 +509,10 @@
                         <i class="fa-solid fa-layer-group"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Home Shelves & Banner</p>
+                        <p class="text-xs font-bold uppercase tracking-wider text-accord-muted">Home Shelves & Banners</p>
                         <h3 id="stat-shelves-count" class="text-2xl font-extrabold text-accord-slate mt-0.5">4</h3>
                         <p class="text-[11px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
-                            <span>Manage Kindle-style rows</span>
+                            <span>Manage shelves & banner slider</span>
                             <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
                         </p>
                     </div>
@@ -459,12 +564,12 @@
                 </div>
             </section>
 
-            <!-- Tab 1B: Home Shelves & In-Feed Banner Manager (Kindle-Style Carousels) -->
+            <!-- Tab 1B: Home Shelves & Multi-Banner Image Slider Manager -->
             <section id="section-shelves" class="space-y-8 hidden">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Home Page Shelves & Promotional Banner</h2>
-                        <p class="text-xs text-accord-muted mt-1">Create, reorder, and curate horizontal Kindle-style book sections ("Most Popular", "Recommended for You", "Accord Special Picks") and customize the mid-page banner.</p>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Home Page Shelves & Rotating Banner Slider</h2>
+                        <p class="text-xs text-accord-muted mt-1">Create, reorder, and curate horizontal Kindle-style book sections and upload responsive Desktop + Mobile banner slides.</p>
                     </div>
                     <div class="flex items-center space-x-2.5">
                         <button type="button" onclick="resetDefaultShelves()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
@@ -477,7 +582,7 @@
                     </div>
                 </div>
 
-                <!-- Curated Shelves Table -->
+                <!-- 1. Curated Shelves Table -->
                 <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
                     <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                         <h3 class="text-xs font-bold uppercase tracking-wider text-accord-slate">Active Home Page Book Shelves (Ordered Top to Bottom)</h3>
@@ -502,64 +607,76 @@
                     </div>
                 </div>
 
-                <!-- Mid-Feed Promotional Banner Settings -->
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 sm:p-8 space-y-5">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                <!-- 2. Multi-Banner Responsive Image Carousel Manager -->
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 sm:p-8 space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                         <div>
-                            <h3 class="font-bold text-base text-accord-slate">In-Feed Promotional Banner</h3>
-                            <p class="text-xs text-accord-muted">Displayed automatically inside the main book grid after a specified number of books.</p>
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">Auto-Rotating Carousel</span>
+                                <h3 class="font-bold text-base text-accord-slate">In-Feed Promotional Image Banners</h3>
+                            </div>
+                            <p class="text-xs text-accord-muted mt-1">
+                                Upload multiple banners with Desktop (<strong>1920×640px</strong>) & Mobile (<strong>1080×1080px</strong>) versions. Banners slide automatically every few seconds.
+                            </p>
                         </div>
-                        <label class="inline-flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" id="banner-enabled" checked class="rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
-                            <span class="text-xs font-bold text-accord-slate">Show Banner on Home Page</span>
-                        </label>
-                    </div>
-
-                    <form onsubmit="handleSaveBannerConfig(event)" class="space-y-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Show After How Many Books?</label>
-                                <input type="number" id="banner-after-count" min="3" max="30" step="3" value="6" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Badge Label</label>
-                                <input type="text" id="banner-badge" value="ACCORD HERITAGE INITIATIVE" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Action</label>
-                                <select id="banner-action-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                                    <option value="contribute">Open "Submit a Manuscript" Modal</option>
-                                    <option value="forum">Go to Testimonies Forum (forum.html)</option>
-                                    <option value="custom">Open Custom URL Below</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Banner Headline</label>
-                                <input type="text" id="banner-headline" value="Do You Hold a Rare Christian Manuscript or Church Chronicle?" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Text & Custom URL (if Custom)</label>
-                                <div class="flex gap-2">
-                                    <input type="text" id="banner-btn-text" value="Submit a Manuscript" placeholder="Button Label" class="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                                    <input type="text" id="banner-custom-url" value="forum.html" placeholder="https://..." class="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Banner Subtext</label>
-                            <textarea id="banner-subtext" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.</textarea>
-                        </div>
-
-                        <div class="flex justify-end pt-2">
-                            <button type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3 rounded-xl shadow-md transition-all">
-                                <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Banner Settings
+                        <div class="flex items-center space-x-3 shrink-0">
+                            <button type="button" onclick="openBannerSlideModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center space-x-1.5">
+                                <i class="fa-solid fa-image"></i>
+                                <span>Add Banner Slide</span>
                             </button>
                         </div>
+                    </div>
+
+                    <!-- Global Slider Timing & Placement Settings -->
+                    <form onsubmit="handleSaveBannerConfig(event)" class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="inline-flex items-center space-x-2 cursor-pointer mb-2">
+                                    <input type="checkbox" id="banner-enabled" checked class="rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                                    <span class="text-xs font-bold text-accord-slate">Enable Banner on Home</span>
+                                </label>
+                                <p class="text-[10px] text-accord-muted">Uncheck to hide banner slot completely</p>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Place After # of Books</label>
+                                <input type="number" id="banner-after-count" min="3" max="30" step="3" value="6" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Slide Interval (Seconds)</label>
+                                <input type="number" id="banner-interval-seconds" min="2" max="20" value="5" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-accord-slate hover:bg-slate-800 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all">
+                                    <i class="fa-solid fa-floppy-disk mr-1"></i> Save Placement & Timing
+                                </button>
+                            </div>
+                        </div>
                     </form>
+
+                    <!-- Uploaded Banner Slides Table -->
+                    <div class="border border-slate-200/80 rounded-2xl overflow-hidden">
+                        <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Uploaded Banner Slides</span>
+                            <span class="text-[11px] text-accord-muted">Desktop: 1920×640px • Mobile: 1080×1080px</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-accord-muted">
+                                        <th class="py-3 px-5 w-20 text-center">Order</th>
+                                        <th class="py-3 px-5">Desktop Preview (3:1)</th>
+                                        <th class="py-3 px-5">Mobile Preview (1:1)</th>
+                                        <th class="py-3 px-5">Title & Click Action</th>
+                                        <th class="py-3 px-5 text-center">Status</th>
+                                        <th class="py-3 px-5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="banner-slides-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                    <!-- Populated dynamically by admin.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -795,7 +912,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v3.0</span>
+                    <span>• Secure CMS v3.2</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -919,6 +1036,6 @@
     </div><!-- End #dashboard-wrapper -->
 
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=7"></script>
+    <script src="admin.js?v=8"></script>
 </body>
 </html>

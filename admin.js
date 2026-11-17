@@ -1,3 +1,8 @@
+// =========================================================
+// ACCORD ADMIN.JS — PART 1 OF 2
+// Core Auth, Fast Parallel Fetching, Shelves & Multi-Banner Slider
+// =========================================================
+
 // 1. Initialize Supabase
 const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
@@ -16,7 +21,10 @@ let commentsModData = [];
 let parsedExcelRows = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
+let currentBannerDesktopCompressed = "";
+let currentBannerMobileCompressed = "";
 let autoRefreshIntervalId = null;
+let activeAdminTab = 'catalog';
 
 // Home Page Shelves & Banner State (Synced via Supabase + localStorage fallback)
 let homeLayoutConfig = getDefaultHomeLayoutConfig();
@@ -69,6 +77,8 @@ function getDefaultHomeLayoutConfig() {
         banner: {
             enabled: true,
             afterCount: 6,
+            intervalSeconds: 5,
+            slides: [],
             badge: 'ACCORD HERITAGE INITIATIVE',
             headline: 'Do You Hold a Rare Christian Manuscript or Church Chronicle?',
             subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
@@ -97,18 +107,21 @@ function unlockDashboard(user) {
 
     fetchAllData();
 
-    // Start single background refresh timer (every 30s) without resetting search input
+    // Background refresh every 45s without resetting search or freezing active modals
     if (!autoRefreshIntervalId) {
         autoRefreshIntervalId = setInterval(() => {
             const wrapper = document.getElementById('dashboard-wrapper');
             const archiveModal = document.getElementById('archive-modal');
             const shelfModal = document.getElementById('shelf-modal');
-            const isModalOpen = (archiveModal && !archiveModal.classList.contains('hidden')) ||
-                                (shelfModal && !shelfModal.classList.contains('hidden'));
+            const bannerModal = document.getElementById('banner-slide-modal');
+            const isModalOpen =
+                (archiveModal && !archiveModal.classList.contains('hidden')) ||
+                (shelfModal && !shelfModal.classList.contains('hidden')) ||
+                (bannerModal && !bannerModal.classList.contains('hidden'));
             if (wrapper && !wrapper.classList.contains('hidden') && !isModalOpen) {
                 fetchAllData(true);
             }
-        }, 30000);
+        }, 45000);
     }
 }
 
@@ -156,101 +169,132 @@ async function handleAdminLogout() {
     showToast("Signed out successfully.");
 }
 
+// FAST PARALLEL DATA FETCHING (Fixes slow refresh!)
 async function fetchAllData(isSilentRefresh = false) {
-    const { data: books, error: booksErr } = await supabaseClient
-        .from('books')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes] = await Promise.all([
+        supabaseClient.from('books').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('user_purchases').select('book_id, amount_paid'),
+        supabaseClient.from('categories').select('*').order('name', { ascending: true }),
+        supabaseClient.from('submissions').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('testimonies').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('testimony_comments').select('*').order('created_at', { ascending: false })
+    ]);
 
-    const { data: purchases, error: purchasesErr } = await supabaseClient
-        .from('user_purchases')
-        .select('book_id, amount_paid');
-
-    if (!purchasesErr && purchases) {
-        purchasesData = purchases;
+    if (!purchasesRes.error && purchasesRes.data) {
+        purchasesData = purchasesRes.data;
     }
 
-    if (!booksErr && books) {
-        // Extract hidden layout config record if stored in books table, or load from localStorage
+    if (!booksRes.error && booksRes.data) {
+        const books = booksRes.data;
         const configRecord = books.find(b => b.title === LAYOUT_CONFIG_CATEGORY_NAME);
         if (configRecord && configRecord.description) {
             try {
-                homeLayoutConfig = JSON.parse(configRecord.description);
+                const parsed = JSON.parse(configRecord.description);
+                homeLayoutConfig = {
+                    shelves: Array.isArray(parsed.shelves) ? parsed.shelves : getDefaultHomeLayoutConfig().shelves,
+                    banner: { ...getDefaultHomeLayoutConfig().banner, ...(parsed.banner || {}) }
+                };
+                if (!Array.isArray(homeLayoutConfig.banner.slides)) {
+                    homeLayoutConfig.banner.slides = [];
+                }
                 localStorage.setItem('accord_home_layout_config', JSON.stringify(homeLayoutConfig));
             } catch (e) {}
         } else {
             const localSaved = localStorage.getItem('accord_home_layout_config');
             if (localSaved) {
-                try { homeLayoutConfig = JSON.parse(localSaved); } catch (e) {}
+                try {
+                    const parsed = JSON.parse(localSaved);
+                    homeLayoutConfig = {
+                        shelves: Array.isArray(parsed.shelves) ? parsed.shelves : getDefaultHomeLayoutConfig().shelves,
+                        banner: { ...getDefaultHomeLayoutConfig().banner, ...(parsed.banner || {}) }
+                    };
+                } catch (e) {}
             }
         }
 
         const realBooks = books.filter(b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME);
         catalogData = realBooks.filter(b => !b.deleted_at);
         trashData = realBooks.filter(b => b.deleted_at);
-
-        // CRITICAL FIX: Always call filterAdminBooks() instead of renderCatalogTable(catalogData)
-        // so that any active search query or category filter stays applied!
-        filterAdminBooks();
-        renderDraftsTable();
-        renderTrashTable();
-        renderDownloadsTable();
     }
 
-    const { data: cats, error: catsErr } = await supabaseClient
-        .from('categories')
-        .select('*')
-        .order('name', { ascending: true });
-
-    if (!catsErr && cats) {
-        categoriesData = cats;
+    if (!catsRes.error && catsRes.data) {
+        categoriesData = catsRes.data;
         populateCategoryDropdowns();
-        renderCategoriesTable();
     }
 
-    const { data: subs, error: subsErr } = await supabaseClient
-        .from('submissions')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (!subsErr && subs) {
-        submissionsData = subs;
-        renderSubmissionsTable();
+    if (!subsRes.error && subsRes.data) {
+        submissionsData = subsRes.data;
     }
 
-    const { data: forumTestimonies, error: testModErr } = await supabaseClient
-        .from('testimonies')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    const { data: forumComments, error: commModErr } = await supabaseClient
-        .from('testimony_comments')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (!testModErr && forumTestimonies) {
-        testimoniesModData = forumTestimonies;
+    if (!testModRes.error && testModRes.data) {
+        testimoniesModData = testModRes.data;
     }
-    if (!commModErr && forumComments) {
-        commentsModData = forumComments;
-    }
-    renderForumModeration();
 
-    if (!isSilentRefresh) {
-        renderShelvesTable();
-        populateBannerForm();
+    if (!commModRes.error && commModRes.data) {
+        commentsModData = commModRes.data;
     }
+
+    // Always update lightweight badges & stats immediately
     updateStats();
+    updateAllTabBadges();
+
+    // Render the currently active tab immediately so the UI is snappy
+    renderActiveTabOnly(isSilentRefresh);
+}
+
+function updateAllTabBadges() {
+    const catBadge = document.getElementById('categories-badge');
+    if (catBadge) catBadge.innerText = categoriesData.length;
+
+    const trashBadge = document.getElementById('trash-badge');
+    if (trashBadge) trashBadge.innerText = trashData.length;
+
+    const forumBadge = document.getElementById('forum-badge');
+    if (forumBadge) forumBadge.innerText = testimoniesModData.length;
+
+    const draftCount = catalogData.filter(b => b.status === 'draft' || b.is_visible === false).length;
+    const draftBadge = document.getElementById('drafts-subtab-badge');
+    if (draftBadge) draftBadge.innerText = draftCount;
+
+    const subBadge = document.getElementById('submitted-subtab-badge');
+    if (subBadge) subBadge.innerText = submissionsData.length;
+
+    const shelves = homeLayoutConfig?.shelves || [];
+    const activeShelves = shelves.filter(s => s.enabled !== false).length;
+    const shelvesBadge = document.getElementById('shelves-badge');
+    const statShelves = document.getElementById('stat-shelves-count');
+    if (shelvesBadge) shelvesBadge.innerText = activeShelves;
+    if (statShelves) statShelves.innerText = activeShelves;
+}
+
+function renderActiveTabOnly(isSilentRefresh = false) {
+    if (activeAdminTab === 'catalog') {
+        filterAdminBooks();
+    } else if (activeAdminTab === 'shelves') {
+        renderShelvesTable();
+        renderBannerSlidesTable();
+        if (!isSilentRefresh) populateBannerForm();
+    } else if (activeAdminTab === 'categories') {
+        renderCategoriesTable();
+    } else if (activeAdminTab === 'submissions') {
+        renderDraftsTable();
+        renderSubmissionsTable();
+    } else if (activeAdminTab === 'trash') {
+        renderTrashTable();
+    } else if (activeAdminTab === 'downloads') {
+        renderDownloadsTable();
+    } else if (activeAdminTab === 'forum') {
+        renderForumModeration();
+    }
 }
 
 // ==========================================
-// HOME SHELVES & BANNER MANAGEMENT (KINDLE-STYLE SECTIONS)
+// HOME SHELVES & MULTI-BANNER SLIDER MANAGER
 // ==========================================
 
 async function persistHomeLayoutConfig() {
     localStorage.setItem('accord_home_layout_config', JSON.stringify(homeLayoutConfig));
 
-    // Also persist to Supabase as a hidden system row in `books` so all visitors see the exact same shelves & banner
     const { data: existing } = await supabaseClient
         .from('books')
         .select('id')
@@ -277,18 +321,14 @@ async function persistHomeLayoutConfig() {
     }
 
     renderShelvesTable();
+    renderBannerSlidesTable();
+    updateAllTabBadges();
     updateStats();
 }
 
 function renderShelvesTable() {
     const tbody = document.getElementById('shelves-table-body');
-    const badge = document.getElementById('shelves-badge');
-    const statCount = document.getElementById('stat-shelves-count');
     const shelves = homeLayoutConfig?.shelves || [];
-
-    const activeCount = shelves.filter(s => s.enabled !== false).length;
-    if (badge) badge.innerText = activeCount;
-    if (statCount) statCount.innerText = activeCount;
     if (!tbody) return;
 
     tbody.innerHTML = '';
@@ -384,10 +424,12 @@ async function deleteShelf(shelfId) {
 }
 
 async function resetDefaultShelves() {
+    const existingSlides = homeLayoutConfig?.banner?.slides || [];
     homeLayoutConfig = getDefaultHomeLayoutConfig();
+    homeLayoutConfig.banner.slides = existingSlides;
     await persistHomeLayoutConfig();
     populateBannerForm();
-    showToast("Default shelves and banner restored!");
+    showToast("Default shelves restored!");
 }
 
 function toggleShelfModeUI() {
@@ -404,7 +446,6 @@ function openShelfModal(mode, shelfId = null) {
     document.getElementById('shelf-book-search').value = '';
     selectedShelfBookIds = new Set();
 
-    // Populate category dropdown inside shelf modal
     const catSelect = document.getElementById('shelf-category-select');
     if (catSelect) {
         catSelect.innerHTML = categoriesData.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
@@ -528,34 +569,280 @@ async function handleShelfSubmit(e) {
     showToast(`Shelf "${title}" saved!`);
 }
 
+// ==========================================
+// MULTI-BANNER IMAGE SLIDES (DESKTOP + MOBILE)
+// ==========================================
+
 function populateBannerForm() {
     const b = homeLayoutConfig?.banner || getDefaultHomeLayoutConfig().banner;
     const enabledEl = document.getElementById('banner-enabled');
     if (enabledEl) enabledEl.checked = b.enabled !== false;
     if (document.getElementById('banner-after-count')) document.getElementById('banner-after-count').value = b.afterCount || 6;
-    if (document.getElementById('banner-badge')) document.getElementById('banner-badge').value = b.badge || '';
-    if (document.getElementById('banner-headline')) document.getElementById('banner-headline').value = b.headline || '';
-    if (document.getElementById('banner-subtext')) document.getElementById('banner-subtext').value = b.subtext || '';
-    if (document.getElementById('banner-btn-text')) document.getElementById('banner-btn-text').value = b.btnText || '';
-    if (document.getElementById('banner-action-type')) document.getElementById('banner-action-type').value = b.actionType || 'contribute';
-    if (document.getElementById('banner-custom-url')) document.getElementById('banner-custom-url').value = b.customUrl || '';
+    if (document.getElementById('banner-interval-seconds')) document.getElementById('banner-interval-seconds').value = b.intervalSeconds || 5;
 }
 
 async function handleSaveBannerConfig(e) {
     e.preventDefault();
-    homeLayoutConfig.banner = {
-        enabled: document.getElementById('banner-enabled').checked,
-        afterCount: parseInt(document.getElementById('banner-after-count').value, 10) || 6,
-        badge: document.getElementById('banner-badge').value.trim(),
-        headline: document.getElementById('banner-headline').value.trim(),
-        subtext: document.getElementById('banner-subtext').value.trim(),
-        btnText: document.getElementById('banner-btn-text').value.trim() || 'Learn More',
-        actionType: document.getElementById('banner-action-type').value,
-        customUrl: document.getElementById('banner-custom-url').value.trim()
-    };
+    if (!homeLayoutConfig.banner) homeLayoutConfig.banner = getDefaultHomeLayoutConfig().banner;
+    homeLayoutConfig.banner.enabled = document.getElementById('banner-enabled').checked;
+    homeLayoutConfig.banner.afterCount = parseInt(document.getElementById('banner-after-count').value, 10) || 6;
+    homeLayoutConfig.banner.intervalSeconds = parseInt(document.getElementById('banner-interval-seconds').value, 10) || 5;
+
     await persistHomeLayoutConfig();
-    showToast("In-feed promotional banner updated!");
+    showToast("Banner placement and slide timing saved!");
 }
+
+function renderBannerSlidesTable() {
+    const tbody = document.getElementById('banner-slides-table-body');
+    if (!tbody) return;
+
+    const slides = Array.isArray(homeLayoutConfig?.banner?.slides) ? homeLayoutConfig.banner.slides : [];
+    tbody.innerHTML = '';
+
+    if (slides.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-accord-muted">No image banner slides uploaded yet. Click "Add Banner Slide" above to upload Desktop (1920×640) & Mobile (1080×1080) banners.</td></tr>`;
+        return;
+    }
+
+    const actionLabels = {
+        link: 'Opens URL',
+        contribute: 'Opens Manuscript Modal',
+        forum: 'Opens Testimonies Forum',
+        none: 'Image Only (No Click)'
+    };
+
+    slides.forEach((slide, idx) => {
+        const isEnabled = slide.enabled !== false;
+        const desktopThumb = slide.desktopUrl
+            ? `<img src="${escapeHTML(slide.desktopUrl)}" class="w-28 h-10 object-cover rounded-lg border border-slate-200 shadow-sm">`
+            : `<span class="text-[10px] text-slate-400">None</span>`;
+        const mobileThumb = slide.mobileUrl
+            ? `<img src="${escapeHTML(slide.mobileUrl)}" class="w-10 h-10 object-cover rounded-lg border border-slate-200 shadow-sm">`
+            : `<span class="text-[10px] text-slate-400">Uses Desktop</span>`;
+
+        const actionText = slide.actionType === 'link'
+            ? `URL: ${slide.linkUrl || '#'}`
+            : (actionLabels[slide.actionType] || 'Opens URL');
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-3.5 px-5 text-center whitespace-nowrap">
+                <div class="inline-flex items-center space-x-1">
+                    <button type="button" onclick="moveBannerSlide(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 disabled:opacity-40 text-slate-600 hover:text-accord-blue flex items-center justify-center" title="Move Up">
+                        <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                    </button>
+                    <button type="button" onclick="moveBannerSlide(${idx}, 1)" ${idx === slides.length - 1 ? 'disabled' : ''} class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 disabled:opacity-40 text-slate-600 hover:text-accord-blue flex items-center justify-center" title="Move Down">
+                        <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                    </button>
+                </div>
+            </td>
+            <td class="py-3.5 px-5">${desktopThumb}</td>
+            <td class="py-3.5 px-5">${mobileThumb}</td>
+            <td class="py-3.5 px-5">
+                <p class="font-bold text-accord-slate text-xs">${escapeHTML(slide.alt || `Banner Slide #${idx + 1}`)}</p>
+                <p class="text-[10px] text-accord-muted truncate max-w-[220px]">${escapeHTML(actionText)}</p>
+            </td>
+            <td class="py-3.5 px-5 text-center">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                    ${isEnabled ? 'Active' : 'Hidden'}
+                </span>
+            </td>
+            <td class="py-3.5 px-5 text-right space-x-1.5 whitespace-nowrap">
+                <button type="button" onclick="toggleBannerSlideEnabled('${slide.id}')" class="w-8 h-8 rounded-xl ${isEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-600'} hover:opacity-80 transition-all inline-flex items-center justify-center" title="Toggle Slide">
+                    <i class="fa-solid ${isEnabled ? 'fa-eye' : 'fa-eye-slash'} text-xs"></i>
+                </button>
+                <button type="button" onclick="openBannerSlideModal('edit', '${slide.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Edit Slide">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button type="button" onclick="deleteBannerSlide('${slide.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete Slide">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function toggleBannerSlideLinkField() {
+    const action = document.getElementById('banner-slide-action')?.value || 'link';
+    document.getElementById('banner-slide-link-wrapper')?.classList.toggle('hidden', action !== 'link');
+}
+
+function openBannerSlideModal(mode, slideId = null) {
+    const modal = document.getElementById('banner-slide-modal');
+    const heading = document.getElementById('banner-slide-modal-heading');
+    document.getElementById('banner-slide-form').reset();
+    document.getElementById('edit-banner-slide-id').value = '';
+    currentBannerDesktopCompressed = "";
+    currentBannerMobileCompressed = "";
+
+    const deskPreview = document.getElementById('banner-desktop-preview');
+    const mobPreview = document.getElementById('banner-mobile-preview');
+    if (deskPreview) {
+        deskPreview.innerHTML = `<i class="fa-solid fa-panorama text-xl mb-1 text-accord-blue"></i><span class="text-[10px] font-semibold">Click to upload Desktop Banner</span>`;
+    }
+    if (mobPreview) {
+        mobPreview.innerHTML = `<i class="fa-solid fa-mobile-screen text-xl mb-1 text-accord-gold"></i><span class="text-[10px] font-semibold">Click to upload Mobile Banner</span>`;
+    }
+    document.getElementById('banner-desktop-filename').innerText = 'JPG, PNG, or WebP (3:1 wide)';
+    document.getElementById('banner-mobile-filename').innerText = 'Optional (Falls back to Desktop if empty)';
+
+    if (!homeLayoutConfig.banner) homeLayoutConfig.banner = getDefaultHomeLayoutConfig().banner;
+    if (!Array.isArray(homeLayoutConfig.banner.slides)) homeLayoutConfig.banner.slides = [];
+
+    if (mode === 'edit' && slideId) {
+        heading.innerText = "Edit Promotional Banner Slide";
+        const slide = homeLayoutConfig.banner.slides.find(s => s.id === slideId);
+        if (slide) {
+            document.getElementById('edit-banner-slide-id').value = slide.id;
+            document.getElementById('banner-desktop-url-input').value = slide.desktopUrl || '';
+            document.getElementById('banner-mobile-url-input').value = slide.mobileUrl || '';
+            document.getElementById('banner-slide-alt').value = slide.alt || '';
+            document.getElementById('banner-slide-action').value = slide.actionType || 'link';
+            document.getElementById('banner-slide-link').value = slide.linkUrl || '';
+            if (slide.desktopUrl && deskPreview) {
+                deskPreview.innerHTML = `<img src="${escapeHTML(slide.desktopUrl)}" class="w-full h-full object-cover">`;
+            }
+            if (slide.mobileUrl && mobPreview) {
+                mobPreview.innerHTML = `<img src="${escapeHTML(slide.mobileUrl)}" class="w-full h-full object-cover">`;
+            }
+        }
+    } else {
+        heading.innerText = "Add Promotional Banner Slide";
+        document.getElementById('banner-slide-action').value = 'link';
+    }
+
+    toggleBannerSlideLinkField();
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeBannerSlideModal() {
+    const modal = document.getElementById('banner-slide-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+async function uploadCompressedBannerImage(dataUrl, prefix) {
+    const blob = await (await fetch(dataUrl)).blob();
+    const fileName = `banners/${prefix}_${Date.now()}.webp`;
+    const { data: upData, error: upErr } = await supabaseClient.storage
+        .from('archive-files')
+        .upload(fileName, blob, {
+            contentType: 'image/webp',
+            cacheControl: '3600',
+            upsert: false
+        });
+    if (upErr) throw upErr;
+    const { data: pubData } = supabaseClient.storage
+        .from('archive-files')
+        .getPublicUrl(upData.path);
+    return pubData.publicUrl;
+}
+
+async function handleBannerSlideSubmit(e) {
+    e.preventDefault();
+    const editId = document.getElementById('edit-banner-slide-id').value;
+    const saveBtn = document.getElementById('save-banner-slide-btn');
+
+    let desktopUrl = document.getElementById('banner-desktop-url-input').value.trim();
+    let mobileUrl = document.getElementById('banner-mobile-url-input').value.trim();
+    const alt = document.getElementById('banner-slide-alt').value.trim() || 'Accord Promotional Banner';
+    const actionType = document.getElementById('banner-slide-action').value;
+    const linkUrl = document.getElementById('banner-slide-link').value.trim();
+
+    if (!desktopUrl && !currentBannerDesktopCompressed && !mobileUrl && !currentBannerMobileCompressed) {
+        showToast("Please upload or paste at least a Desktop Banner image.");
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "Uploading Banner...";
+    }
+
+    try {
+        if (currentBannerDesktopCompressed) {
+            desktopUrl = await uploadCompressedBannerImage(currentBannerDesktopCompressed, 'desktop_banner');
+        }
+        if (currentBannerMobileCompressed) {
+            mobileUrl = await uploadCompressedBannerImage(currentBannerMobileCompressed, 'mobile_banner');
+        }
+    } catch (err) {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "Save Banner Slide";
+        }
+        showToast(`Banner image upload failed: ${err.message}`);
+        return;
+    }
+
+    if (!desktopUrl && mobileUrl) desktopUrl = mobileUrl;
+
+    if (!homeLayoutConfig.banner) homeLayoutConfig.banner = getDefaultHomeLayoutConfig().banner;
+    if (!Array.isArray(homeLayoutConfig.banner.slides)) homeLayoutConfig.banner.slides = [];
+
+    const slideObj = {
+        id: editId || `banner_${Date.now()}`,
+        desktopUrl,
+        mobileUrl: mobileUrl || desktopUrl,
+        alt,
+        actionType,
+        linkUrl,
+        enabled: true
+    };
+
+    if (editId) {
+        const idx = homeLayoutConfig.banner.slides.findIndex(s => s.id === editId);
+        if (idx > -1) {
+            slideObj.enabled = homeLayoutConfig.banner.slides[idx].enabled;
+            homeLayoutConfig.banner.slides[idx] = slideObj;
+        }
+    } else {
+        homeLayoutConfig.banner.slides.push(slideObj);
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = "Save Banner Slide";
+    }
+
+    closeBannerSlideModal();
+    await persistHomeLayoutConfig();
+    showToast("Promotional banner slide saved!");
+}
+
+async function moveBannerSlide(index, direction) {
+    const slides = homeLayoutConfig?.banner?.slides || [];
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= slides.length) return;
+    const temp = slides[index];
+    slides[index] = slides[targetIdx];
+    slides[targetIdx] = temp;
+    await persistHomeLayoutConfig();
+    showToast("Banner slide order updated!");
+}
+
+async function toggleBannerSlideEnabled(slideId) {
+    const slide = (homeLayoutConfig?.banner?.slides || []).find(s => s.id === slideId);
+    if (!slide) return;
+    slide.enabled = slide.enabled === false ? true : false;
+    await persistHomeLayoutConfig();
+    showToast(slide.enabled ? "Banner slide enabled." : "Banner slide hidden.");
+}
+
+async function deleteBannerSlide(slideId) {
+    if (!homeLayoutConfig?.banner?.slides) return;
+    homeLayoutConfig.banner.slides = homeLayoutConfig.banner.slides.filter(s => s.id !== slideId);
+    await persistHomeLayoutConfig();
+    showToast("Banner slide removed.");
+}
+
+// =========================================================
+// ACCORD ADMIN.JS — PART 2 OF 2
+// Bulk Excel, Categories, Catalog CRUD, Trash, Analytics, Forum & Upload Listeners
+// =========================================================
 
 // ==========================================
 // BULK EXCEL / CSV UPLOAD (STRICT NO-DUPLICATES)
@@ -910,10 +1197,11 @@ function promptDeleteCategory(id, name, bookCount) {
 }
 
 // ==========================================
-// TAB SWITCHING & PENDING REVIEWS
+// TAB SWITCHING (LAZY-RENDERED FOR SPEED) & PENDING REVIEWS
 // ==========================================
 
 function switchTab(tabName) {
+    activeAdminTab = tabName;
     const tabs = ['catalog', 'shelves', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
@@ -927,6 +1215,9 @@ function switchTab(tabName) {
             if (btn) btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
         }
     });
+
+    // Lazy-render only the selected tab's tables when switched
+    renderActiveTabOnly(false);
 }
 
 function openPendingReviews(subTab = 'drafts') {
@@ -1059,7 +1350,7 @@ function renderCatalogTable(list) {
             : `<button onclick="toggleBookVisibility(${book.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Hidden / Draft (Click to Publish)"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
 
         const thumb = book.cover_url
-            ? `<img src="${escapeHTML(book.cover_url)}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
+            ? `<img src="${escapeHTML(book.cover_url)}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0" loading="lazy">`
             : `<div class="w-9 h-12 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
         const viewUrl = book.download_url
@@ -1536,7 +1827,6 @@ function renderSubmissionsTable() {
     }
 
     submissionsData.forEach(sub => {
-        // Extract attached manuscript PDF URL if stored in download_url or appended to description
         let pdfUrl = sub.download_url || '';
         let cleanDesc = sub.description || '';
         const urlMatch = cleanDesc.match(/\[Attached Manuscript PDF:\s*(https?:\/\/[^\s\]]+)\]/i);
@@ -1675,7 +1965,7 @@ function renderDownloadsTable() {
         const bookSales = salesByBook[Number(book.id)] || { count: 0, revenue: 0 };
 
         const thumb = book.cover_url
-            ? `<img src="${escapeHTML(book.cover_url)}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0">`
+            ? `<img src="${escapeHTML(book.cover_url)}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0" loading="lazy">`
             : `<div class="w-8 h-11 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
         const salesCell = book.is_for_sale
@@ -1854,6 +2144,10 @@ function showToast(message) {
     }, 3500);
 }
 
+// ==========================================
+// FILE & IMAGE COMPRESSION EVENT LISTENERS
+// ==========================================
+
 document.getElementById('form-file')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     const fileNameDisplay = document.getElementById('file-name-display');
@@ -1914,4 +2208,70 @@ document.getElementById('form-cover')?.addEventListener('change', function(e) {
         };
         reader.readAsDataURL(file);
     }
+});
+
+// Desktop Banner Upload Auto-Compressor (1920px Max Width WebP)
+document.getElementById('banner-desktop-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const previewBox = document.getElementById('banner-desktop-preview');
+    const nameLabel = document.getElementById('banner-desktop-filename');
+    if (!file) return;
+
+    if (nameLabel) {
+        nameLabel.textContent = file.name;
+        nameLabel.classList.add('text-accord-blue', 'font-bold');
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1920;
+            const scale = Math.min(1, MAX_WIDTH / img.width);
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            currentBannerDesktopCompressed = canvas.toDataURL('image/webp', 0.85);
+            if (previewBox) {
+                previewBox.innerHTML = `<img src="${currentBannerDesktopCompressed}" class="w-full h-full object-cover">`;
+            }
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+// Mobile Banner Upload Auto-Compressor (1080px Max Width WebP)
+document.getElementById('banner-mobile-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const previewBox = document.getElementById('banner-mobile-preview');
+    const nameLabel = document.getElementById('banner-mobile-filename');
+    if (!file) return;
+
+    if (nameLabel) {
+        nameLabel.textContent = file.name;
+        nameLabel.classList.add('text-accord-blue', 'font-bold');
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1080;
+            const scale = Math.min(1, MAX_WIDTH / img.width);
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            currentBannerMobileCompressed = canvas.toDataURL('image/webp', 0.85);
+            if (previewBox) {
+                previewBox.innerHTML = `<img src="${currentBannerMobileCompressed}" class="w-full h-full object-cover">`;
+            }
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
 });
