@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const ADMIN_EMAIL = 'accordmedia1@gmail.com';
+const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 
 let catalogData = [];
 let trashData = [];
@@ -15,6 +16,68 @@ let commentsModData = [];
 let parsedExcelRows = [];
 let deleteTargetId = null;
 let currentCompressedCover = "";
+let autoRefreshIntervalId = null;
+
+// Home Page Shelves & Banner State (Synced via Supabase + localStorage fallback)
+let homeLayoutConfig = getDefaultHomeLayoutConfig();
+let selectedShelfBookIds = new Set();
+
+function getDefaultHomeLayoutConfig() {
+    return {
+        shelves: [
+            {
+                id: 'shelf_special_picks',
+                title: 'Accord Special Picks',
+                subtitle: 'Foundational Christian classics & ministry landmarks',
+                mode: 'recommended',
+                category: '',
+                limit: 10,
+                bookIds: [],
+                enabled: true
+            },
+            {
+                id: 'shelf_most_popular',
+                title: 'Most Popular Publications',
+                subtitle: 'Most downloaded and read across the Accord library',
+                mode: 'popular',
+                category: '',
+                limit: 10,
+                bookIds: [],
+                enabled: true
+            },
+            {
+                id: 'shelf_new_additions',
+                title: 'New Additions to the Archive',
+                subtitle: 'Recently cataloged manuscripts, biographies, and devotionals',
+                mode: 'newest',
+                category: '',
+                limit: 10,
+                bookIds: [],
+                enabled: true
+            },
+            {
+                id: 'shelf_recommended',
+                title: 'Recommended for You',
+                subtitle: 'Essential readings on prayer, spiritual awakening, and leadership',
+                mode: 'category',
+                category: 'Prayer & Devotion',
+                limit: 10,
+                bookIds: [],
+                enabled: true
+            }
+        ],
+        banner: {
+            enabled: true,
+            afterCount: 6,
+            badge: 'ACCORD HERITAGE INITIATIVE',
+            headline: 'Do You Hold a Rare Christian Manuscript or Church Chronicle?',
+            subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
+            btnText: 'Submit a Manuscript',
+            actionType: 'contribute',
+            customUrl: 'forum.html'
+        }
+    };
+}
 
 // Check Auth Session on Page Load
 window.onload = async function() {
@@ -31,7 +94,22 @@ function unlockDashboard(user) {
     document.getElementById('dashboard-wrapper').classList.remove('hidden');
     const emailLabel = document.getElementById('admin-user-email');
     if (emailLabel && user?.email) emailLabel.innerText = user.email;
+
     fetchAllData();
+
+    // Start single background refresh timer (every 30s) without resetting search input
+    if (!autoRefreshIntervalId) {
+        autoRefreshIntervalId = setInterval(() => {
+            const wrapper = document.getElementById('dashboard-wrapper');
+            const archiveModal = document.getElementById('archive-modal');
+            const shelfModal = document.getElementById('shelf-modal');
+            const isModalOpen = (archiveModal && !archiveModal.classList.contains('hidden')) ||
+                                (shelfModal && !shelfModal.classList.contains('hidden'));
+            if (wrapper && !wrapper.classList.contains('hidden') && !isModalOpen) {
+                fetchAllData(true);
+            }
+        }, 30000);
+    }
 }
 
 async function handleAdminLogin(e) {
@@ -67,6 +145,10 @@ async function handleAdminLogin(e) {
 }
 
 async function handleAdminLogout() {
+    if (autoRefreshIntervalId) {
+        clearInterval(autoRefreshIntervalId);
+        autoRefreshIntervalId = null;
+    }
     await supabaseClient.auth.signOut();
     document.getElementById('dashboard-wrapper').classList.add('hidden');
     document.getElementById('auth-gate').classList.remove('hidden');
@@ -74,7 +156,7 @@ async function handleAdminLogout() {
     showToast("Signed out successfully.");
 }
 
-async function fetchAllData() {
+async function fetchAllData(isSilentRefresh = false) {
     const { data: books, error: booksErr } = await supabaseClient
         .from('books')
         .select('*')
@@ -89,9 +171,27 @@ async function fetchAllData() {
     }
 
     if (!booksErr && books) {
-        catalogData = books.filter(b => !b.deleted_at);
-        trashData = books.filter(b => b.deleted_at);
-        renderCatalogTable(catalogData);
+        // Extract hidden layout config record if stored in books table, or load from localStorage
+        const configRecord = books.find(b => b.title === LAYOUT_CONFIG_CATEGORY_NAME);
+        if (configRecord && configRecord.description) {
+            try {
+                homeLayoutConfig = JSON.parse(configRecord.description);
+                localStorage.setItem('accord_home_layout_config', JSON.stringify(homeLayoutConfig));
+            } catch (e) {}
+        } else {
+            const localSaved = localStorage.getItem('accord_home_layout_config');
+            if (localSaved) {
+                try { homeLayoutConfig = JSON.parse(localSaved); } catch (e) {}
+            }
+        }
+
+        const realBooks = books.filter(b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME);
+        catalogData = realBooks.filter(b => !b.deleted_at);
+        trashData = realBooks.filter(b => b.deleted_at);
+
+        // CRITICAL FIX: Always call filterAdminBooks() instead of renderCatalogTable(catalogData)
+        // so that any active search query or category filter stays applied!
+        filterAdminBooks();
         renderDraftsTable();
         renderTrashTable();
         renderDownloadsTable();
@@ -136,14 +236,325 @@ async function fetchAllData() {
     }
     renderForumModeration();
 
-    updateStats();
-
-    // Auto-refresh admin catalog data every 30 seconds to catch new downloads
-    setInterval(() => {
-    if (document.getElementById('dashboard-wrapper') && !document.getElementById('dashboard-wrapper').classList.contains('hidden')) {
-        fetchAllData();
+    if (!isSilentRefresh) {
+        renderShelvesTable();
+        populateBannerForm();
     }
-}, 30000);
+    updateStats();
+}
+
+// ==========================================
+// HOME SHELVES & BANNER MANAGEMENT (KINDLE-STYLE SECTIONS)
+// ==========================================
+
+async function persistHomeLayoutConfig() {
+    localStorage.setItem('accord_home_layout_config', JSON.stringify(homeLayoutConfig));
+
+    // Also persist to Supabase as a hidden system row in `books` so all visitors see the exact same shelves & banner
+    const { data: existing } = await supabaseClient
+        .from('books')
+        .select('id')
+        .eq('title', LAYOUT_CONFIG_CATEGORY_NAME)
+        .maybeSingle();
+
+    const configPayload = {
+        title: LAYOUT_CONFIG_CATEGORY_NAME,
+        author: 'System Config',
+        category: 'System',
+        year: '2026',
+        pages: '0',
+        description: JSON.stringify(homeLayoutConfig),
+        is_visible: false,
+        status: 'system_config',
+        is_for_sale: false,
+        price: 0
+    };
+
+    if (existing?.id) {
+        await supabaseClient.from('books').update(configPayload).eq('id', existing.id);
+    } else {
+        await supabaseClient.from('books').insert([configPayload]);
+    }
+
+    renderShelvesTable();
+    updateStats();
+}
+
+function renderShelvesTable() {
+    const tbody = document.getElementById('shelves-table-body');
+    const badge = document.getElementById('shelves-badge');
+    const statCount = document.getElementById('stat-shelves-count');
+    const shelves = homeLayoutConfig?.shelves || [];
+
+    const activeCount = shelves.filter(s => s.enabled !== false).length;
+    if (badge) badge.innerText = activeCount;
+    if (statCount) statCount.innerText = activeCount;
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (shelves.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-accord-muted">No shelves configured. Click "New Shelf Section" or "Reset Defaults".</td></tr>`;
+        return;
+    }
+
+    const modeLabels = {
+        manual: 'Hand-Picked Books',
+        popular: 'Auto: Most Popular (Downloads)',
+        newest: 'Auto: New Additions (Latest)',
+        recommended: 'Auto: Recommended Classics',
+        category: 'Auto: Category Filter'
+    };
+
+    shelves.forEach((shelf, idx) => {
+        const isEnabled = shelf.enabled !== false;
+        const modeDesc = shelf.mode === 'category'
+            ? `Category: ${shelf.category || 'All'}`
+            : (modeLabels[shelf.mode] || 'Auto');
+
+        const bookCountLabel = shelf.mode === 'manual'
+            ? `${(shelf.bookIds || []).length} selected`
+            : `Up to ${shelf.limit || 10}`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6 text-center whitespace-nowrap">
+                <div class="inline-flex items-center space-x-1">
+                    <button type="button" onclick="moveShelf(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 disabled:opacity-40 text-slate-600 hover:text-accord-blue flex items-center justify-center" title="Move Up">
+                        <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                    </button>
+                    <button type="button" onclick="moveShelf(${idx}, 1)" ${idx === shelves.length - 1 ? 'disabled' : ''} class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 disabled:opacity-40 text-slate-600 hover:text-accord-blue flex items-center justify-center" title="Move Down">
+                        <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                    </button>
+                </div>
+            </td>
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate text-sm">${escapeHTML(shelf.title)}</p>
+                <p class="text-[11px] text-accord-muted">${escapeHTML(shelf.subtitle || '')}</p>
+            </td>
+            <td class="py-4 px-6">
+                <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(modeDesc)}</span>
+            </td>
+            <td class="py-4 px-6 text-center font-semibold text-accord-muted">${bookCountLabel}</td>
+            <td class="py-4 px-6 text-center">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                    ${isEnabled ? 'Visible' : 'Hidden'}
+                </span>
+            </td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                <button type="button" onclick="toggleShelfEnabled('${shelf.id}')" class="w-8 h-8 rounded-xl ${isEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-600'} hover:opacity-80 transition-all inline-flex items-center justify-center" title="Toggle Visibility">
+                    <i class="fa-solid ${isEnabled ? 'fa-eye' : 'fa-eye-slash'} text-xs"></i>
+                </button>
+                <button type="button" onclick="openShelfModal('edit', '${shelf.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Edit Shelf & Choose Books">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button type="button" onclick="deleteShelf('${shelf.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete Shelf">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function moveShelf(index, direction) {
+    const shelves = homeLayoutConfig.shelves;
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= shelves.length) return;
+    const temp = shelves[index];
+    shelves[index] = shelves[targetIdx];
+    shelves[targetIdx] = temp;
+    await persistHomeLayoutConfig();
+    showToast("Shelf order updated!");
+}
+
+async function toggleShelfEnabled(shelfId) {
+    const shelf = homeLayoutConfig.shelves.find(s => s.id === shelfId);
+    if (!shelf) return;
+    shelf.enabled = shelf.enabled === false ? true : false;
+    await persistHomeLayoutConfig();
+    showToast(shelf.enabled ? `"${shelf.title}" enabled on home page.` : `"${shelf.title}" hidden.`);
+}
+
+async function deleteShelf(shelfId) {
+    homeLayoutConfig.shelves = homeLayoutConfig.shelves.filter(s => s.id !== shelfId);
+    await persistHomeLayoutConfig();
+    showToast("Shelf section removed.");
+}
+
+async function resetDefaultShelves() {
+    homeLayoutConfig = getDefaultHomeLayoutConfig();
+    await persistHomeLayoutConfig();
+    populateBannerForm();
+    showToast("Default shelves and banner restored!");
+}
+
+function toggleShelfModeUI() {
+    const mode = document.getElementById('shelf-mode').value;
+    document.getElementById('shelf-manual-picker')?.classList.toggle('hidden', mode !== 'manual');
+    document.getElementById('shelf-category-wrapper')?.classList.toggle('hidden', mode !== 'category');
+}
+
+function openShelfModal(mode, shelfId = null) {
+    const modal = document.getElementById('shelf-modal');
+    const heading = document.getElementById('shelf-modal-heading');
+    document.getElementById('shelf-form').reset();
+    document.getElementById('edit-shelf-id').value = '';
+    document.getElementById('shelf-book-search').value = '';
+    selectedShelfBookIds = new Set();
+
+    // Populate category dropdown inside shelf modal
+    const catSelect = document.getElementById('shelf-category-select');
+    if (catSelect) {
+        catSelect.innerHTML = categoriesData.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
+    }
+
+    if (mode === 'edit' && shelfId) {
+        heading.innerText = "Edit Home Shelf Section";
+        const shelf = homeLayoutConfig.shelves.find(s => s.id === shelfId);
+        if (shelf) {
+            document.getElementById('edit-shelf-id').value = shelf.id;
+            document.getElementById('shelf-title').value = shelf.title || '';
+            document.getElementById('shelf-subtitle').value = shelf.subtitle || '';
+            document.getElementById('shelf-mode').value = shelf.mode || 'manual';
+            document.getElementById('shelf-limit').value = shelf.limit || 10;
+            if (shelf.category && catSelect) catSelect.value = shelf.category;
+            (shelf.bookIds || []).forEach(id => selectedShelfBookIds.add(Number(id)));
+        }
+    } else {
+        heading.innerText = "Create Home Shelf Section";
+        document.getElementById('shelf-mode').value = 'manual';
+        document.getElementById('shelf-limit').value = 10;
+    }
+
+    toggleShelfModeUI();
+    renderShelfBookPicker();
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeShelfModal() {
+    const modal = document.getElementById('shelf-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+function renderShelfBookPicker() {
+    const container = document.getElementById('shelf-books-checklist');
+    const countEl = document.getElementById('shelf-selected-count');
+    if (countEl) countEl.innerText = selectedShelfBookIds.size;
+    if (!container) return;
+
+    const query = (document.getElementById('shelf-book-search')?.value || '').toLowerCase().trim();
+    const publishedBooks = catalogData.filter(b => b.is_visible !== false && b.status !== 'draft');
+
+    const filtered = publishedBooks.filter(b =>
+        (b.title || '').toLowerCase().includes(query) ||
+        (b.author || '').toLowerCase().includes(query) ||
+        (b.category || '').toLowerCase().includes(query)
+    );
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<p class="p-4 text-center text-xs text-accord-muted">No matching books found.</p>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(b => {
+        const checked = selectedShelfBookIds.has(Number(b.id)) ? 'checked' : '';
+        return `
+            <label class="flex items-center justify-between px-4 py-2.5 hover:bg-blue-50/50 cursor-pointer transition-colors">
+                <div class="flex items-center space-x-3 pr-3 min-w-0">
+                    <input type="checkbox" ${checked} onchange="toggleBookInShelf(${b.id}, this.checked)" class="rounded text-accord-blue focus:ring-accord-blue w-4 h-4 shrink-0">
+                    <div class="truncate">
+                        <p class="text-xs font-bold text-accord-slate truncate">${escapeHTML(b.title)}</p>
+                        <p class="text-[10px] text-accord-muted truncate">${escapeHTML(b.author)} • ${escapeHTML(b.category)}</p>
+                    </div>
+                </div>
+                <span class="text-[10px] font-semibold text-accord-muted shrink-0">${escapeHTML(b.year || '')}</span>
+            </label>
+        `;
+    }).join('');
+}
+
+function toggleBookInShelf(bookId, isChecked) {
+    if (isChecked) {
+        selectedShelfBookIds.add(Number(bookId));
+    } else {
+        selectedShelfBookIds.delete(Number(bookId));
+    }
+    const countEl = document.getElementById('shelf-selected-count');
+    if (countEl) countEl.innerText = selectedShelfBookIds.size;
+}
+
+async function handleShelfSubmit(e) {
+    e.preventDefault();
+    const editId = document.getElementById('edit-shelf-id').value;
+    const title = document.getElementById('shelf-title').value.trim();
+    const subtitle = document.getElementById('shelf-subtitle').value.trim();
+    const mode = document.getElementById('shelf-mode').value;
+    const category = document.getElementById('shelf-category-select')?.value || '';
+    const limit = parseInt(document.getElementById('shelf-limit').value, 10) || 10;
+
+    if (mode === 'manual' && selectedShelfBookIds.size === 0) {
+        showToast("Please select at least 1 book for a hand-picked shelf.");
+        return;
+    }
+
+    const shelfObj = {
+        id: editId || `shelf_${Date.now()}`,
+        title,
+        subtitle,
+        mode,
+        category,
+        limit,
+        bookIds: Array.from(selectedShelfBookIds),
+        enabled: true
+    };
+
+    if (editId) {
+        const idx = homeLayoutConfig.shelves.findIndex(s => s.id === editId);
+        if (idx > -1) {
+            shelfObj.enabled = homeLayoutConfig.shelves[idx].enabled;
+            homeLayoutConfig.shelves[idx] = shelfObj;
+        }
+    } else {
+        homeLayoutConfig.shelves.push(shelfObj);
+    }
+
+    closeShelfModal();
+    await persistHomeLayoutConfig();
+    showToast(`Shelf "${title}" saved!`);
+}
+
+function populateBannerForm() {
+    const b = homeLayoutConfig?.banner || getDefaultHomeLayoutConfig().banner;
+    const enabledEl = document.getElementById('banner-enabled');
+    if (enabledEl) enabledEl.checked = b.enabled !== false;
+    if (document.getElementById('banner-after-count')) document.getElementById('banner-after-count').value = b.afterCount || 6;
+    if (document.getElementById('banner-badge')) document.getElementById('banner-badge').value = b.badge || '';
+    if (document.getElementById('banner-headline')) document.getElementById('banner-headline').value = b.headline || '';
+    if (document.getElementById('banner-subtext')) document.getElementById('banner-subtext').value = b.subtext || '';
+    if (document.getElementById('banner-btn-text')) document.getElementById('banner-btn-text').value = b.btnText || '';
+    if (document.getElementById('banner-action-type')) document.getElementById('banner-action-type').value = b.actionType || 'contribute';
+    if (document.getElementById('banner-custom-url')) document.getElementById('banner-custom-url').value = b.customUrl || '';
+}
+
+async function handleSaveBannerConfig(e) {
+    e.preventDefault();
+    homeLayoutConfig.banner = {
+        enabled: document.getElementById('banner-enabled').checked,
+        afterCount: parseInt(document.getElementById('banner-after-count').value, 10) || 6,
+        badge: document.getElementById('banner-badge').value.trim(),
+        headline: document.getElementById('banner-headline').value.trim(),
+        subtext: document.getElementById('banner-subtext').value.trim(),
+        btnText: document.getElementById('banner-btn-text').value.trim() || 'Learn More',
+        actionType: document.getElementById('banner-action-type').value,
+        customUrl: document.getElementById('banner-custom-url').value.trim()
+    };
+    await persistHomeLayoutConfig();
+    showToast("In-feed promotional banner updated!");
 }
 
 // ==========================================
@@ -285,7 +696,6 @@ async function processExcelUpload() {
     const total = parsedExcelRows.length;
     const existingCatNames = new Set(categoriesData.map(c => c.name.toLowerCase()));
 
-    // Build set of existing catalog titles (case-insensitive) to strictly block duplicates
     const existingTitles = new Set(
         catalogData.map(b => (b.title || '').trim().toLowerCase())
     );
@@ -299,7 +709,6 @@ async function processExcelUpload() {
         const title = String(row.title || 'Untitled Book').trim();
         const normalizedTitle = title.toLowerCase();
 
-        // Skip duplicate book if already in catalog or already imported in this batch
         if (existingTitles.has(normalizedTitle)) {
             skippedCount++;
             statusText.innerText = `Skipped duplicate: "${title}"`;
@@ -362,7 +771,7 @@ function populateCategoryDropdowns() {
     if (filterSelect) {
         const currentFilter = filterSelect.value || 'All';
         filterSelect.innerHTML = `<option value="All">All Categories</option>` +
-            catNames.map(name => `<option value="${name}">${name}</option>`).join('');
+            catNames.map(name => `<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join('');
         filterSelect.value = catNames.includes(currentFilter) ? currentFilter : 'All';
     }
 
@@ -372,7 +781,7 @@ function populateCategoryDropdowns() {
         if (catNames.length === 0) {
             modalSelect.innerHTML = `<option value="Uncategorized">Uncategorized (Add categories in Categories tab)</option>`;
         } else {
-            modalSelect.innerHTML = catNames.map(name => `<option value="${name}">${name}</option>`).join('');
+            modalSelect.innerHTML = catNames.map(name => `<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join('');
             if (catNames.includes(currentModalVal)) {
                 modalSelect.value = currentModalVal;
             }
@@ -401,7 +810,7 @@ function renderCategoriesTable() {
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate">
-                <span class="bg-accord-lightBlue text-accord-blue text-xs font-bold px-3 py-1.5 rounded-lg inline-block">${cat.name}</span>
+                <span class="bg-accord-lightBlue text-accord-blue text-xs font-bold px-3 py-1.5 rounded-lg inline-block">${escapeHTML(cat.name)}</span>
             </td>
             <td class="py-4 px-6 text-center text-accord-muted font-semibold">${bookCount}</td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
@@ -505,17 +914,17 @@ function promptDeleteCategory(id, name, bookCount) {
 // ==========================================
 
 function switchTab(tabName) {
-    const tabs = ['catalog', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
+    const tabs = ['catalog', 'shelves', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`nav-tab-${t}`);
         if (!sec) return;
         if (t === tabName) {
             sec.classList.remove('hidden');
-            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
+            if (btn) btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
         } else {
             sec.classList.add('hidden');
-            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+            if (btn) btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
         }
     });
 }
@@ -562,7 +971,7 @@ function renderDraftsTable() {
 
     draftBooks.forEach(book => {
         const thumb = book.cover_url
-            ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
+            ? `<img src="${escapeHTML(book.cover_url)}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
             : `<div class="w-9 h-12 rounded-lg bg-amber-50 text-accord-gold flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-file-pen"></i></div>`;
 
         const saleTag = book.is_for_sale
@@ -575,16 +984,16 @@ function renderDraftsTable() {
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
                 ${thumb}
                 <div>
-                    <p class="leading-snug">${book.title}</p>
+                    <p class="leading-snug">${escapeHTML(book.title)}</p>
                     <div class="flex items-center gap-1 mt-0.5">
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-file-pen mr-1"></i> Draft</span>
                         ${saleTag}
                     </div>
                 </div>
             </td>
-            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
-            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
-            <td class="py-4 px-6 text-center text-accord-muted">${book.year}</td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(book.author)}</td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(book.category)}</span></td>
+            <td class="py-4 px-6 text-center text-accord-muted">${escapeHTML(book.year)}</td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
                 <button onclick="toggleBookVisibility(${book.id}, true)" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all" title="Publish Now">
                     <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Publish
@@ -607,6 +1016,7 @@ function renderDraftsTable() {
 
 function renderCatalogTable(list) {
     const tbody = document.getElementById('admin-book-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (list.length === 0) {
@@ -649,7 +1059,7 @@ function renderCatalogTable(list) {
             : `<button onclick="toggleBookVisibility(${book.id}, true)" class="w-8 h-8 rounded-xl bg-slate-200 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Hidden / Draft (Click to Publish)"><i class="fa-solid fa-eye-slash text-xs"></i></button>`;
 
         const thumb = book.cover_url
-            ? `<img src="${book.cover_url}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
+            ? `<img src="${escapeHTML(book.cover_url)}" class="w-9 h-12 rounded-lg object-cover shadow-sm border border-slate-200 shrink-0">`
             : `<div class="w-9 h-12 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
         const viewUrl = book.download_url
@@ -657,14 +1067,14 @@ function renderCatalogTable(list) {
             : '';
 
         const viewBtn = viewUrl
-            ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+            ? `<a href="${escapeHTML(viewUrl)}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
             : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
 
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
                 ${thumb}
                 <div>
-                    <p class="leading-snug">${book.title}</p>
+                    <p class="leading-snug">${escapeHTML(book.title)}</p>
                     <div class="flex flex-wrap items-center gap-1">
                         ${statusBadge}
                         ${visibilityBadge}
@@ -672,10 +1082,10 @@ function renderCatalogTable(list) {
                     </div>
                 </div>
             </td>
-            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
-            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block leading-tight">${book.category}</span></td>
-            <td class="py-4 px-6 text-center text-accord-muted">${book.year}</td>
-            <td class="py-4 px-6 text-center text-accord-muted">${book.pages || 'TBD'} p.</td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(book.author)}</td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block leading-tight">${escapeHTML(book.category)}</span></td>
+            <td class="py-4 px-6 text-center text-accord-muted">${escapeHTML(book.year)}</td>
+            <td class="py-4 px-6 text-center text-accord-muted">${escapeHTML(book.pages || 'TBD')} p.</td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
                 ${visibilityBtn}
                 ${viewBtn}
@@ -706,15 +1116,31 @@ async function toggleBookVisibility(id, makeVisible) {
 }
 
 function filterAdminBooks() {
-    const query = document.getElementById('admin-search').value.toLowerCase();
-    const cat = document.getElementById('admin-cat-filter').value;
+    const searchEl = document.getElementById('admin-search');
+    const clearBtn = document.getElementById('admin-clear-search');
+    const query = (searchEl?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('admin-cat-filter')?.value || 'All';
+
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', query.length === 0);
+    }
 
     const filtered = catalogData.filter(book => {
         const matchesCat = cat === 'All' || book.category === cat;
-        const matchesQuery = book.title.toLowerCase().includes(query) || book.author.toLowerCase().includes(query) || book.description.toLowerCase().includes(query);
+        const matchesQuery =
+            (book.title || '').toLowerCase().includes(query) ||
+            (book.author || '').toLowerCase().includes(query) ||
+            (book.category || '').toLowerCase().includes(query) ||
+            (book.description || '').toLowerCase().includes(query);
         return matchesCat && matchesQuery;
     });
     renderCatalogTable(filtered);
+}
+
+function clearAdminSearch() {
+    const searchEl = document.getElementById('admin-search');
+    if (searchEl) searchEl.value = '';
+    filterAdminBooks();
 }
 
 function togglePriceField() {
@@ -759,7 +1185,7 @@ function openArchiveModal(mode, id = null) {
 
             const catSelect = document.getElementById('form-category');
             if (book.category && ![...catSelect.options].some(o => o.value === book.category)) {
-                catSelect.innerHTML += `<option value="${book.category}">${book.category}</option>`;
+                catSelect.innerHTML += `<option value="${escapeHTML(book.category)}">${escapeHTML(book.category)}</option>`;
             }
             catSelect.value = book.category;
 
@@ -779,7 +1205,7 @@ function openArchiveModal(mode, id = null) {
             }
 
             if (book.cover_url && coverPreview) {
-                coverPreview.innerHTML = `<img src="${book.cover_url}" class="w-full h-full object-cover">`;
+                coverPreview.innerHTML = `<img src="${escapeHTML(book.cover_url)}" class="w-full h-full object-cover">`;
             }
         }
     } else {
@@ -828,7 +1254,6 @@ async function processArchiveSave(isDraft) {
     const editId = document.getElementById('edit-book-id').value;
     const title = document.getElementById('form-title').value.trim() || "Untitled Draft";
 
-    // Block duplicate titles when adding a new book
     if (!editId && title !== "Untitled Draft") {
         const isDuplicate = catalogData.some(
             b => (b.title || '').trim().toLowerCase() === title.toLowerCase()
@@ -897,7 +1322,7 @@ async function processArchiveSave(isDraft) {
     } else {
         catalogData.unshift(tempBook);
     }
-    renderCatalogTable(catalogData);
+    filterAdminBooks();
     renderDraftsTable();
 
     let downloadUrl = initialUrl;
@@ -928,7 +1353,7 @@ async function processArchiveSave(isDraft) {
             console.error("Supabase Storage Upload Error:", error);
             const target = catalogData.find(b => b.id === tempBook.id);
             if (target) target.status = 'failed';
-            renderCatalogTable(catalogData);
+            filterAdminBooks();
             showToast(`Upload failed: ${error.message}`);
             return;
         }
@@ -1002,15 +1427,15 @@ function renderTrashTable() {
             : '';
 
         const viewBtn = viewUrl
-            ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
+            ? `<a href="${escapeHTML(viewUrl)}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
             : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
 
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
         tr.innerHTML = `
-            <td class="py-4 px-6 font-bold text-accord-slate">${book.title}</td>
-            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
-            <td class="py-4 px-6"><span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
+            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(book.title)}</td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(book.author)}</td>
+            <td class="py-4 px-6"><span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(book.category)}</span></td>
             <td class="py-4 px-6 text-accord-muted">${deletedDate}</td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
                 ${viewBtn}
@@ -1111,17 +1536,36 @@ function renderSubmissionsTable() {
     }
 
     submissionsData.forEach(sub => {
+        // Extract attached manuscript PDF URL if stored in download_url or appended to description
+        let pdfUrl = sub.download_url || '';
+        let cleanDesc = sub.description || '';
+        const urlMatch = cleanDesc.match(/\[Attached Manuscript PDF:\s*(https?:\/\/[^\s\]]+)\]/i);
+        if (!pdfUrl && urlMatch) {
+            pdfUrl = urlMatch[1];
+            cleanDesc = cleanDesc.replace(urlMatch[0], '').trim();
+        }
+
+        const pdfBadge = pdfUrl
+            ? `<a href="${escapeHTML(pdfUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-1 bg-blue-50 hover:bg-accord-blue text-accord-blue hover:text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all mt-1.5">
+                   <i class="fa-solid fa-file-pdf"></i>
+                   <span>View Uploaded Manuscript PDF</span>
+               </a>`
+            : `<span class="inline-block text-[10px] text-slate-400 mt-1">No PDF file attached</span>`;
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
         tr.innerHTML = `
             <td class="py-4 px-6">
-                <p class="font-bold text-accord-slate">${sub.name}</p>
-                <p class="text-[10px] text-accord-muted">${sub.email}</p>
+                <p class="font-bold text-accord-slate">${escapeHTML(sub.name)}</p>
+                <p class="text-[10px] text-accord-muted">${escapeHTML(sub.email)}</p>
             </td>
-            <td class="py-4 px-6 font-bold text-accord-slate">${sub.title}</td>
-            <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${sub.category}</span></td>
-            <td class="py-4 px-6 text-accord-muted max-w-xs truncate">${sub.description}</td>
-            <td class="py-4 px-6 text-right space-x-2">
+            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(sub.title)}</td>
+            <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(sub.category)}</span></td>
+            <td class="py-4 px-6 text-accord-muted max-w-xs">
+                <p class="line-clamp-2">${escapeHTML(cleanDesc)}</p>
+                ${pdfBadge}
+            </td>
+            <td class="py-4 px-6 text-right space-x-2 whitespace-nowrap">
                 <button onclick="approveSubmission(${sub.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
                 <button onclick="rejectSubmission(${sub.id})" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
             </td>
@@ -1133,6 +1577,14 @@ function renderSubmissionsTable() {
 async function approveSubmission(id) {
     const sub = submissionsData.find(s => s.id === id);
     if (sub) {
+        let pdfUrl = sub.download_url || '';
+        let cleanDesc = sub.description || '';
+        const urlMatch = cleanDesc.match(/\[Attached Manuscript PDF:\s*(https?:\/\/[^\s\]]+)\]/i);
+        if (!pdfUrl && urlMatch) {
+            pdfUrl = urlMatch[1];
+            cleanDesc = cleanDesc.replace(urlMatch[0], '').trim();
+        }
+
         await supabaseClient.from('books').insert([{
             title: sub.title,
             author: sub.name,
@@ -1141,16 +1593,16 @@ async function approveSubmission(id) {
             pages: "TBD",
             is_for_sale: false,
             price: 0,
-            download_url: "",
+            download_url: pdfUrl,
             cover_url: "",
-            description: sub.description,
+            description: cleanDesc,
             gradient: "from-blue-900 via-blue-800 to-indigo-950",
             is_visible: true,
             status: 'published'
         }]);
         await supabaseClient.from('submissions').delete().eq('id', id);
         await fetchAllData();
-        showToast(`Submission "${sub.title}" approved!`);
+        showToast(`Submission "${sub.title}" approved and published!`);
     }
 }
 
@@ -1223,7 +1675,7 @@ function renderDownloadsTable() {
         const bookSales = salesByBook[Number(book.id)] || { count: 0, revenue: 0 };
 
         const thumb = book.cover_url
-            ? `<img src="${book.cover_url}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0">`
+            ? `<img src="${escapeHTML(book.cover_url)}" class="w-8 h-11 rounded-lg object-cover border border-slate-200 shrink-0">`
             : `<div class="w-8 h-11 rounded-lg bg-accord-lightBlue text-accord-blue flex items-center justify-center font-bold text-xs shrink-0"><i class="fa-solid fa-book"></i></div>`;
 
         const salesCell = book.is_for_sale
@@ -1240,12 +1692,12 @@ function renderDownloadsTable() {
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
                 ${thumb}
                 <div>
-                    <p>${book.title}</p>
+                    <p>${escapeHTML(book.title)}</p>
                     ${book.is_for_sale ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale</span>` : ''}
                 </div>
             </td>
-            <td class="py-4 px-6 text-accord-muted">${book.author}</td>
-            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${book.category}</span></td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(book.author)}</td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(book.category)}</span></td>
             <td class="py-4 px-6 text-right">${salesCell}</td>
             <td class="py-4 px-6 text-right">
                 <div class="inline-flex flex-col items-end min-w-[90px]">
@@ -1292,14 +1744,14 @@ function renderForumModeration() {
                 tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
                 tr.innerHTML = `
                     <td class="py-4 px-6">
-                        <p class="font-bold text-accord-slate">${item.author_name}</p>
-                        <p class="text-[10px] text-accord-muted">${item.location || 'Location not specified'}</p>
+                        <p class="font-bold text-accord-slate">${escapeHTML(item.author_name)}</p>
+                        <p class="text-[10px] text-accord-muted">${escapeHTML(item.location || 'Location not specified')}</p>
                     </td>
                     <td class="py-4 px-6 max-w-md">
-                        <p class="font-bold text-accord-slate mb-0.5">${item.title}</p>
-                        <p class="text-[11px] text-accord-muted line-clamp-2">${item.body}</p>
+                        <p class="font-bold text-accord-slate mb-0.5">${escapeHTML(item.title)}</p>
+                        <p class="text-[11px] text-accord-muted line-clamp-2">${escapeHTML(item.body)}</p>
                     </td>
-                    <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${item.category}</span></td>
+                    <td class="py-4 px-6"><span class="bg-amber-50 text-accord-gold text-[10px] font-bold px-2.5 py-1 rounded-md inline-block">${escapeHTML(item.category)}</span></td>
                     <td class="py-4 px-6 text-center">${statusPill}</td>
                     <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
                         ${toggleBtn}
@@ -1323,9 +1775,9 @@ function renderForumModeration() {
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
                 tr.innerHTML = `
-                    <td class="py-3.5 px-6 font-bold text-accord-slate">${c.author_name}</td>
-                    <td class="py-3.5 px-6 text-accord-muted max-w-[180px] truncate">${parent ? parent.title : `Post #${c.testimony_id}`}</td>
-                    <td class="py-3.5 px-6 text-slate-700 max-w-md">${c.comment_text}</td>
+                    <td class="py-3.5 px-6 font-bold text-accord-slate">${escapeHTML(c.author_name)}</td>
+                    <td class="py-3.5 px-6 text-accord-muted max-w-[180px] truncate">${escapeHTML(parent ? parent.title : `Post #${c.testimony_id}`)}</td>
+                    <td class="py-3.5 px-6 text-slate-700 max-w-md">${escapeHTML(c.comment_text)}</td>
                     <td class="py-3.5 px-6 text-right">
                         <button onclick="deleteModComment(${c.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Remove off-topic comment">
                             <i class="fa-solid fa-trash text-xs"></i>
@@ -1382,8 +1834,17 @@ async function exportApprovedTestimonies() {
     showToast(`Copied ${approved.length} approved testimonies to clipboard for book compilation!`);
 }
 
+function escapeHTML(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 function showToast(message) {
     const toast = document.getElementById('toast');
+    if (!toast) return;
     document.getElementById('toast-message').innerText = message;
     toast.classList.remove('translate-y-24', 'opacity-0');
     toast.classList.add('translate-y-0', 'opacity-100');

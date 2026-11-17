@@ -67,8 +67,7 @@
             background-color: #F5A623;
             border-radius: 2px;
         }
-        /* Subtle scrollbar for category row */
-        .no-scrollbar::-webkit-scrollbar { height: 4px; }
+        .no-scrollbar::-webkit-scrollbar { height: 5px; }
         .no-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
     </style>
 
@@ -84,7 +83,7 @@
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
     </div>
 
-    <!-- Header / Navigation -->
+    <!-- Header / Navigation (Single Clean Sign In CTA) -->
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
             <!-- Brand Logo -->
@@ -112,18 +111,14 @@
                     <span class="text-sm font-semibold">Saved</span>
                     <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                 </a>
-                <button id="auth-nav-btn" type="button" onclick="handleAuthNavClick()" class="text-xs font-bold text-accord-slate hover:text-accord-blue border border-slate-200 hover:border-accord-blue px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+            </nav>
+
+            <!-- Single Primary Sign In / Account CTA & Mobile Toggle -->
+            <div class="flex items-center space-x-2.5">
+                <button id="auth-nav-btn" type="button" onclick="handleAuthNavClick()" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
                     <i class="fa-regular fa-user"></i>
                     <span id="auth-nav-label">Sign In</span>
                 </button>
-            </nav>
-
-            <!-- Primary CTA & Mobile Toggle -->
-            <div class="flex items-center space-x-2.5">
-                <a href="#library" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
-                    <i class="fa-solid fa-book-open"></i>
-                    <span>Explore Books</span>
-                </a>
                 <button type="button" onclick="toggleMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue" aria-label="Toggle Menu">
                     <i class="fa-solid fa-bars text-xl"></i>
                 </button>
@@ -156,7 +151,7 @@
                 <h1 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate">Explore Historical Publications</h1>
             </div>
 
-            <!-- Search & Category Filter Box (Full-Width Search Row + Dedicated Category Row) -->
+            <!-- Search & Category Filter Box -->
             <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm mb-8 space-y-3.5">
                 <!-- Row 1: Full-Width Search Bar -->
                 <div class="relative w-full">
@@ -187,9 +182,25 @@
                 </div>
             </div>
 
-            <!-- Book Grid -->
-            <div id="book-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <!-- Cards rendered dynamically by index.js -->
+            <!-- Kindle-Style Curated Horizontal Book Sections (e.g., Most Popular, Recommended, New Additions) -->
+            <div id="curated-sections-wrapper" class="space-y-9 mb-10">
+                <!-- Rendered dynamically by index.js from homepage_sections -->
+            </div>
+
+            <!-- Main Catalog Grid (Top Batch + Mid-Grid Promotional Banner + Remaining Books) -->
+            <div id="main-catalog-header" class="flex items-center justify-between mb-4">
+                <h2 class="serif-heading text-xl sm:text-2xl font-bold text-accord-slate">Complete Archive Directory</h2>
+            </div>
+
+            <div id="book-grid-top" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- First batch of books rendered dynamically by index.js -->
+            </div>
+
+            <!-- Mid-Grid Promotional Banner (Rendered dynamically after configured number of books) -->
+            <div id="mid-grid-banner" class="hidden my-8"></div>
+
+            <div id="book-grid-bottom" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Remaining books rendered dynamically by index.js -->
             </div>
 
             <!-- Empty Search State -->
@@ -291,7 +302,7 @@
         </div>
     </div>
 
-    <!-- Modal 2: Contribute Archive Modal -->
+    <!-- Modal 2: Contribute Archive Modal (With PDF Document Upload) -->
     <div id="contribute-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
@@ -319,7 +330,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Manuscript Title</label>
-                        <input type="text" id="sub-title" required placeholder="e.g., History of the Gold Coast Church" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <input type="text" id="sub-title" required placeholder="e.g., History of the Church" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category</label>
@@ -335,10 +346,22 @@
 
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Summary & Provenance</label>
-                    <textarea id="sub-description" rows="4" required placeholder="Describe the publication, author, year, and where it can be sourced..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    <textarea id="sub-description" rows="3" required placeholder="Describe the publication, author, year, and context..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
 
-                <button type="submit" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
+                <!-- PDF File Upload Field -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Attach Manuscript (PDF / Document)</label>
+                    <div class="border-2 border-dashed border-slate-200 hover:border-accord-blue rounded-xl p-4 text-center cursor-pointer transition-all bg-slate-50 relative">
+                        <input type="file" id="sub-file" accept=".pdf,.doc,.docx" class="absolute inset-0 opacity-0 cursor-pointer">
+                        <div class="flex items-center justify-center space-x-2 text-accord-muted">
+                            <i class="fa-solid fa-file-arrow-up text-accord-blue text-lg"></i>
+                            <span id="sub-file-name" class="text-xs font-medium">Click to browse or drag PDF file here (Max 50MB)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="sub-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-sm">
                     Submit for Editorial Review
                 </button>
             </form>
@@ -412,6 +435,16 @@
         </div>
     </div>
 
-    <script src="index.js?v=5"></script>
+    <script>
+        document.getElementById('sub-file')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const nameSpan = document.getElementById('sub-file-name');
+            if (file && nameSpan) {
+                nameSpan.innerText = file.name;
+                nameSpan.classList.add('text-accord-blue', 'font-bold');
+            }
+        });
+    </script>
+    <script src="index.js?v=7"></script>
 </body>
 </html>

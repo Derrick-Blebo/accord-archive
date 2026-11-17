@@ -5,6 +5,17 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 let allBooks = [];
 let categoriesList = [];
+let homepageSections = [];
+let bannerConfig = {
+    enabled: true,
+    after_books: 6,
+    badge: 'Featured Initiative',
+    title: 'Share Your Faith Chronicle & Revival Testimony',
+    subtitle: 'Have a documented church history, missionary account, or personal testimony? Submit a manuscript or join our global forum.',
+    cta_text: 'Submit a Manuscript',
+    cta_action: 'contribute'
+};
+
 let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks') || '[]');
 let savedTestimonyIds = [];
 let purchasedBookIds = [];
@@ -95,11 +106,11 @@ function handleAuthNavClick() {
 }
 
 // ==========================================
-// LOAD BOOKS & CATEGORIES FROM SUPABASE
+// LOAD BOOKS, CATEGORIES, SECTIONS & BANNER
 // ==========================================
 
 async function loadLibraryData() {
-    const [booksRes, catsRes] = await Promise.all([
+    const [booksRes, catsRes, sectionsRes, bannerRes] = await Promise.all([
         supabaseClient
             .from('books')
             .select('*')
@@ -109,11 +120,20 @@ async function loadLibraryData() {
         supabaseClient
             .from('categories')
             .select('*')
-            .order('name', { ascending: true })
+            .order('name', { ascending: true }),
+        supabaseClient
+            .from('homepage_sections')
+            .select('*')
+            .eq('is_visible', true)
+            .order('display_order', { ascending: true }),
+        supabaseClient
+            .from('site_settings')
+            .select('value')
+            .eq('key', 'homepage_banner')
+            .maybeSingle()
     ]);
 
     if (!booksRes.error && booksRes.data) {
-        // Deduplicate books by lowercase title so duplicates never show on the homepage
         const seenTitles = new Set();
         allBooks = booksRes.data.filter(book => {
             const key = (book.title || '').trim().toLowerCase();
@@ -128,6 +148,15 @@ async function loadLibraryData() {
         renderCategoryButtons();
     }
 
+    if (!sectionsRes.error && sectionsRes.data) {
+        homepageSections = sectionsRes.data;
+    }
+
+    if (!bannerRes.error && bannerRes.data?.value) {
+        bannerConfig = { ...bannerConfig, ...bannerRes.data.value };
+    }
+
+    renderCuratedSections();
     renderBooks();
     checkSharedBookParam();
 }
@@ -192,14 +221,243 @@ function filterBooks() {
 }
 
 // ==========================================
-// RENDER RECTANGULAR BOOK GRID CARDS
+// KINDLE-STYLE CURATED HORIZONTAL BOOK ROWS
 // ==========================================
 
+function renderCuratedSections() {
+    const wrapper = document.getElementById('curated-sections-wrapper');
+    if (!wrapper) return;
+
+    const query = (document.getElementById('library-search')?.value || '').trim();
+    // Hide curated shelves while actively filtering/searching so results stay clean
+    if (query.length > 0 || currentCategory !== 'All' || currentAccessFilter !== 'all') {
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    if (!homepageSections || homepageSections.length === 0) {
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    homepageSections.forEach(section => {
+        const ids = Array.isArray(section.book_ids) ? section.book_ids.map(Number) : [];
+        const sectionBooks = ids
+            .map(id => allBooks.find(b => Number(b.id) === id))
+            .filter(Boolean);
+
+        if (sectionBooks.length === 0) return;
+
+        const rowId = `shelf-row-${section.id}`;
+        const cardsHtml = sectionBooks.map(book => {
+            const isPurchased = purchasedBookIds.includes(Number(book.id));
+            const priceLabel = book.is_for_sale
+                ? (isPurchased ? `<span class="text-[11px] font-bold text-emerald-600">Purchased</span>` : `<span class="text-xs font-extrabold text-accord-slate">USD ${Number(book.price || 0).toFixed(2)}</span>`)
+                : `<span class="text-[11px] font-bold text-accord-blue">Free Archive</span>`;
+
+            const coverImg = book.cover_url
+                ? `<div class="w-full h-52 rounded-2xl overflow-hidden border border-slate-200/90 shadow-sm bg-slate-100 relative">
+                       <img src="${escapeHTML(book.cover_url)}"
+                            alt="${escapeHTML(book.title)}"
+                            loading="lazy"
+                            onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='flex';"
+                            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                   </div>
+                   <div class="w-full h-52 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex-col justify-between text-white shadow-sm" style="display:none;">
+                       <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                       <h4 class="serif-heading text-xs font-bold leading-snug line-clamp-4">${escapeHTML(book.title)}</h4>
+                       <p class="text-[9px] text-slate-200 truncate">${escapeHTML(book.author)}</p>
+                   </div>`
+                : `<div class="w-full h-52 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex flex-col justify-between text-white shadow-sm">
+                       <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                       <h4 class="serif-heading text-xs font-bold leading-snug line-clamp-4">${escapeHTML(book.title)}</h4>
+                       <p class="text-[9px] text-slate-200 truncate">${escapeHTML(book.author)}</p>
+                   </div>`;
+
+            return `
+                <div onclick="openBookModal(${book.id})" class="w-36 sm:w-40 shrink-0 cursor-pointer group snap-start">
+                    ${coverImg}
+                    <div class="mt-2.5 space-y-0.5">
+                        <h3 class="font-bold text-accord-slate text-xs leading-snug line-clamp-2 group-hover:text-accord-blue transition-colors">
+                            ${escapeHTML(book.title)}
+                        </h3>
+                        <p class="text-[11px] text-accord-muted truncate">${escapeHTML(book.author)}</p>
+                        <div class="pt-0.5">${priceLabel}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        html += `
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate">${escapeHTML(section.title)}</h2>
+                        ${section.subtitle ? `<p class="text-xs text-accord-muted mt-0.5">${escapeHTML(section.subtitle)}</p>` : ''}
+                    </div>
+                    <div class="flex items-center space-x-1.5 shrink-0">
+                        <button type="button" onclick="scrollShelf('${rowId}', -340)" class="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-accord-slate flex items-center justify-center transition-all" aria-label="Scroll left">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <button type="button" onclick="scrollShelf('${rowId}', 340)" class="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-accord-slate flex items-center justify-center transition-all" aria-label="Scroll right">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="${rowId}" class="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth">
+                    ${cardsHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    wrapper.innerHTML = html;
+}
+
+function scrollShelf(rowId, delta) {
+    const row = document.getElementById(rowId);
+    if (row) row.scrollBy({ left: delta, behavior: 'smooth' });
+}
+
+// ==========================================
+// RENDER MAIN BOOK GRID + MID-GRID BANNER
+// ==========================================
+
+function buildBookCardElement(book) {
+    const isBookmarked = savedBookmarks.includes(book.title);
+    const isPurchased = purchasedBookIds.includes(Number(book.id));
+    const safeTitle = (book.title || '').replace(/'/g, "\\'");
+
+    const fallbackCoverHtml = `
+        <div class="fallback-cover w-full h-48 sm:h-full min-h-[195px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
+            <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
+            <div class="relative z-10">
+                <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
+                <h4 class="serif-heading text-xs font-bold mt-1.5 leading-snug line-clamp-4">${escapeHTML(book.title)}</h4>
+            </div>
+            <div class="relative z-10 text-[9px] text-slate-200/90 truncate">${escapeHTML(book.author)}</div>
+        </div>
+    `;
+
+    const coverVisual = book.cover_url
+        ? `<div class="w-full h-48 sm:h-full min-h-[195px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
+               <img src="${escapeHTML(book.cover_url)}"
+                    alt="${escapeHTML(book.title)}"
+                    loading="lazy"
+                    onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='flex';"
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+           </div>
+           ${fallbackCoverHtml}`
+        : fallbackCoverHtml;
+
+    const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
+    const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
+
+    const priceLine = (book.is_for_sale && !isPurchased)
+        ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`
+        : '';
+
+    let primaryActionButton = '';
+    if (book.is_for_sale && !isPurchased) {
+        primaryActionButton = `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5"><i class="fa-solid fa-cart-shopping text-[11px]"></i><span>Buy Now</span></button>`;
+    } else if (book.is_for_sale && isPurchased) {
+        primaryActionButton = cleanReadUrl
+            ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read</span></a>`
+            : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-emerald-600 text-white text-xs font-bold px-4 rounded-full">Read</button>`;
+    } else {
+        primaryActionButton = book.download_url
+            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-download text-[10px]"></i><span>Download</span></a>`
+            : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl">Details</button>`;
+    }
+
+    const card = document.createElement('article');
+    card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
+    card.innerHTML = `
+        <div onclick="openBookModal(${book.id})" class="w-28 sm:w-32 shrink-0 cursor-pointer">
+            ${coverVisual}
+        </div>
+        <div class="flex-1 flex flex-col justify-between min-w-0">
+            <div onclick="openBookModal(${book.id})" class="cursor-pointer">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
+                        ${escapeHTML(book.category || 'Archive')}
+                    </span>
+                    ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${escapeHTML(book.year)}</span>` : ''}
+                </div>
+                <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 group-hover:text-accord-blue transition-colors">
+                    ${escapeHTML(book.title)}
+                </h3>
+                <p class="text-[11px] font-bold text-accord-slate mb-1.5 truncate">
+                    ${escapeHTML(book.author)}
+                </p>
+                <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2 mb-2.5">
+                    ${escapeHTML(book.description || '')}
+                </p>
+                ${priceLine}
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                ${primaryActionButton}
+                <button type="button" onclick="toggleBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold border-slate-200 hover:border-accord-gold bg-slate-50'} rounded-xl flex items-center justify-center transition-all" title="${isBookmarked ? 'Remove from Saved' : 'Save Book'}">
+                    <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
+                </button>
+                <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Share Book">
+                    <i class="fa-solid fa-share-nodes text-[11px]"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    return card;
+}
+
+function renderMidGridBanner(showBanner) {
+    const bannerEl = document.getElementById('mid-grid-banner');
+    if (!bannerEl) return;
+
+    if (!showBanner || !bannerConfig.enabled) {
+        bannerEl.classList.add('hidden');
+        bannerEl.innerHTML = '';
+        return;
+    }
+
+    const ctaHtml = bannerConfig.cta_action === 'forum'
+        ? `<a href="forum.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+               <span>${escapeHTML(bannerConfig.cta_text || 'Explore Testimonies')}</span>
+               <i class="fa-solid fa-arrow-right text-[11px]"></i>
+           </a>`
+        : `<button type="button" onclick="openContributeModal()" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+               <span>${escapeHTML(bannerConfig.cta_text || 'Submit a Manuscript')}</span>
+               <i class="fa-solid fa-arrow-right text-[11px]"></i>
+           </button>`;
+
+    bannerEl.innerHTML = `
+        <div class="bg-gradient-to-r from-accord-slate via-blue-950 to-accord-darkBlue rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-blue-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px]"></div>
+            <div class="relative z-10 space-y-1.5 max-w-2xl">
+                <span class="inline-flex items-center space-x-1.5 bg-white/10 text-accord-gold px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                    <i class="fa-solid fa-sparkles"></i>
+                    <span>${escapeHTML(bannerConfig.badge || 'Featured Initiative')}</span>
+                </span>
+                <h3 class="serif-heading text-xl sm:text-2xl font-bold leading-snug">${escapeHTML(bannerConfig.title)}</h3>
+                <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${escapeHTML(bannerConfig.subtitle)}</p>
+            </div>
+            <div class="relative z-10">
+                ${ctaHtml}
+            </div>
+        </div>
+    `;
+    bannerEl.classList.remove('hidden');
+}
+
 function renderBooks() {
-    const grid = document.getElementById('book-grid');
+    const gridTop = document.getElementById('book-grid-top');
+    const gridBottom = document.getElementById('book-grid-bottom');
     const countLabel = document.getElementById('publication-count');
     const emptyState = document.getElementById('empty-library-state');
-    if (!grid) return;
+    if (!gridTop || !gridBottom) return;
+
+    renderCuratedSections();
 
     const query = (document.getElementById('library-search')?.value || '').toLowerCase();
 
@@ -222,101 +480,24 @@ function renderBooks() {
         countLabel.innerText = `Showing ${filtered.length} ${filtered.length === 1 ? 'publication' : 'publications'}`;
     }
 
-    grid.innerHTML = '';
+    gridTop.innerHTML = '';
+    gridBottom.innerHTML = '';
 
     if (filtered.length === 0) {
         emptyState?.classList.remove('hidden');
+        renderMidGridBanner(false);
         return;
     } else {
         emptyState?.classList.add('hidden');
     }
 
-    filtered.forEach(book => {
-        const isBookmarked = savedBookmarks.includes(book.title);
-        const isPurchased = purchasedBookIds.includes(Number(book.id));
-        const safeTitle = (book.title || '').replace(/'/g, "\\'");
+    const splitIndex = Math.max(1, Number(bannerConfig.after_books) || 6);
+    const topBooks = filtered.slice(0, splitIndex);
+    const bottomBooks = filtered.slice(splitIndex);
 
-        const fallbackCoverHtml = `
-            <div class="fallback-cover w-full h-48 sm:h-full min-h-[195px] rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-3.5 flex flex-col justify-between text-white shadow-sm relative overflow-hidden" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
-                <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px]"></div>
-                <div class="relative z-10">
-                    <p class="text-[7px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
-                    <h4 class="serif-heading text-xs font-bold mt-1.5 leading-snug line-clamp-4">${escapeHTML(book.title)}</h4>
-                </div>
-                <div class="relative z-10 text-[9px] text-slate-200/90 truncate">${escapeHTML(book.author)}</div>
-            </div>
-        `;
-
-        const coverVisual = book.cover_url
-            ? `<div class="w-full h-48 sm:h-full min-h-[195px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
-                   <img src="${escapeHTML(book.cover_url)}"
-                        alt="${escapeHTML(book.title)}"
-                        loading="lazy"
-                        onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='flex';"
-                        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-               </div>
-               ${fallbackCoverHtml}`
-            : fallbackCoverHtml;
-
-        const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-        const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
-
-        const priceLine = (book.is_for_sale && !isPurchased)
-            ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`
-            : '';
-
-        let primaryActionButton = '';
-        if (book.is_for_sale && !isPurchased) {
-            primaryActionButton = `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5"><i class="fa-solid fa-cart-shopping text-[11px]"></i><span>Buy Now</span></button>`;
-        } else if (book.is_for_sale && isPurchased) {
-            primaryActionButton = cleanReadUrl
-                ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read</span></a>`
-                : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-emerald-600 text-white text-xs font-bold px-4 rounded-full">Read</button>`;
-        } else {
-            primaryActionButton = book.download_url
-                ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-download text-[10px]"></i><span>Download</span></a>`
-                : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl">Details</button>`;
-        }
-
-        const card = document.createElement('article');
-        card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
-        card.innerHTML = `
-            <div onclick="openBookModal(${book.id})" class="w-28 sm:w-32 shrink-0 cursor-pointer">
-                ${coverVisual}
-            </div>
-            <div class="flex-1 flex flex-col justify-between min-w-0">
-                <div onclick="openBookModal(${book.id})" class="cursor-pointer">
-                    <div class="flex items-center justify-between gap-2 mb-1.5">
-                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
-                            ${escapeHTML(book.category || 'Archive')}
-                        </span>
-                        ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${escapeHTML(book.year)}</span>` : ''}
-                    </div>
-                    <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 group-hover:text-accord-blue transition-colors">
-                        ${escapeHTML(book.title)}
-                    </h3>
-                    <p class="text-[11px] font-bold text-accord-slate mb-1.5 truncate">
-                        ${escapeHTML(book.author)}
-                    </p>
-                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2 mb-2.5">
-                        ${escapeHTML(book.description || '')}
-                    </p>
-                    ${priceLine}
-                </div>
-
-                <div class="flex items-center gap-1.5">
-                    ${primaryActionButton}
-                    <button type="button" onclick="toggleBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold border-slate-200 hover:border-accord-gold bg-slate-50'} rounded-xl flex items-center justify-center transition-all" title="${isBookmarked ? 'Remove from Saved' : 'Save Book'}">
-                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
-                    </button>
-                    <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Share Book">
-                        <i class="fa-solid fa-share-nodes text-[11px]"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
+    topBooks.forEach(book => gridTop.appendChild(buildBookCardElement(book)));
+    renderMidGridBanner(filtered.length > splitIndex);
+    bottomBooks.forEach(book => gridBottom.appendChild(buildBookCardElement(book)));
 }
 
 // ==========================================
@@ -434,11 +615,9 @@ async function toggleBookmark(bookTitle) {
 async function recordBookDownload(bookId) {
     const book = allBooks.find(b => Number(b.id) === Number(bookId));
     if (!book) return;
-    
-    // Optimistically update local state so the UI updates instantly
+
     book.downloads = (Number(book.downloads) || 0) + 1;
 
-    // Call the secure atomic database function
     const { error } = await supabaseClient.rpc('increment_book_download', { book_id: Number(bookId) });
     if (error) {
         console.error("Failed to record download count:", error.message);
@@ -483,7 +662,7 @@ async function shareBookLink(bookId, title) {
 }
 
 // ==========================================
-// CONTRIBUTE ARCHIVE SUBMISSION MODAL
+// CONTRIBUTE ARCHIVE SUBMISSION MODAL (WITH PDF UPLOAD)
 // ==========================================
 
 function openContributeModal() {
@@ -505,10 +684,54 @@ async function handleContributeSubmit(e) {
     const title = document.getElementById('sub-title').value.trim();
     const category = document.getElementById('sub-category').value;
     const description = document.getElementById('sub-description').value.trim();
+    const fileInput = document.getElementById('sub-file');
+    const selectedFile = fileInput?.files?.[0] || null;
+    const submitBtn = document.getElementById('sub-submit-btn');
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = selectedFile ? 'Uploading manuscript...' : 'Submitting...';
+    }
+
+    let downloadUrl = '';
+    if (selectedFile) {
+        try {
+            const cleanName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fileName = `submissions/manuscript_${Date.now()}_${cleanName}`;
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('archive-files')
+                .upload(fileName, selectedFile, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) throw uploadError;
+
+            const { data: pubData } = supabaseClient.storage
+                .from('archive-files')
+                .getPublicUrl(uploadData.path);
+
+            downloadUrl = pubData.publicUrl;
+        } catch (err) {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Submit for Editorial Review';
+            }
+            showToast(`File upload failed: ${err.message}`);
+            return;
+        }
+    }
 
     const { error } = await supabaseClient.from('submissions').insert([{
-        name, email, title, category, description
+        name,
+        email,
+        title,
+        category,
+        description,
+        download_url: downloadUrl
     }]);
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Submit for Editorial Review';
+    }
 
     if (error) {
         showToast(`Submission failed: ${error.message}`);
@@ -516,6 +739,11 @@ async function handleContributeSubmit(e) {
     }
 
     document.getElementById('contribute-form').reset();
+    const nameSpan = document.getElementById('sub-file-name');
+    if (nameSpan) {
+        nameSpan.innerText = 'Click to browse or drag PDF file here (Max 50MB)';
+        nameSpan.classList.remove('text-accord-blue', 'font-bold');
+    }
     closeContributeModal();
     showToast("Thank you! Your manuscript has been submitted for editorial review.");
 }
