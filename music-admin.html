@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Gospel Music & Polls Admin — Curated Playlists & Voting Portal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- SheetJS for Exporting Poll Results & Submissions -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-emerald-600 selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Login Gate Overlay -->
+    <div id="auth-gate" class="fixed inset-0 z-40 bg-accord-bg flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-bold text-xl mx-auto shadow-md">
+                    <i class="fa-solid fa-music"></i>
+                </div>
+                <span class="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Music Portal Access</span>
+                <h1 class="serif-heading text-2xl font-bold text-accord-slate pt-1">Music & Polls Admin</h1>
+                <p class="text-xs text-accord-muted">Sign in with your authorized Supabase account to manage spotlights, playlists, and award polls.</p>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Admin Email</label>
+                    <input type="email" id="login-email" required placeholder="admin@accordarchives.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                </div>
+
+                <p id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 font-medium"></p>
+
+                <button type="submit" id="login-submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-600/20 transition-all">
+                    Unlock Music Portal
+                </button>
+            </form>
+
+            <div class="text-center pt-1 flex items-center justify-center space-x-4">
+                <a href="index.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Public Library
+                </a>
+                <span class="text-slate-300">•</span>
+                <a href="superadmin.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    Superadmin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Protected Dashboard Wrapper -->
+    <div id="dashboard-wrapper" class="hidden min-h-screen flex flex-col justify-between">
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Delete Item?</h3>
+                <p id="confirm-text" class="text-xs text-accord-muted">This action is permanent.</p>
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                    <button type="button" id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Confirm Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add / Edit Artiste Spotlight or Playlist Modal -->
+        <div id="music-item-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <div>
+                        <h3 id="music-modal-heading" class="font-bold text-accord-slate text-base">Add Spotlight or Playlist</h3>
+                        <p class="text-xs text-accord-muted">Feature gospel artists or curated playlist collections</p>
+                    </div>
+                    <button type="button" onclick="closeMusicModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="music-item-form" onsubmit="handleSaveMusicItem(event)" class="p-6 space-y-4 overflow-y-auto">
+                    <input type="hidden" id="edit-music-id">
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Entry Type *</label>
+                        <select id="item-type" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                            <option value="spotlight">Artiste Spotlight</option>
+                            <option value="playlist">Curated Playlist</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title / Artiste Name *</label>
+                        <input type="text" id="item-title" required placeholder="e.g., RichieO / AfroGospel Vol. 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Genre / Category</label>
+                            <input type="text" id="item-genre" placeholder="e.g., Contemporary Gospel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Cover Image / Photo URL</label>
+                            <input type="url" id="item-image" placeholder="https://images.unsplash.com/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link / Embed URL (Spotify, Audiomack, YouTube)</label>
+                        <input type="url" id="item-link" placeholder="https://open.spotify.com/embed/track/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Bio</label>
+                        <textarea id="item-description" rows="3" placeholder="Brief biography or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                        <button type="button" onclick="closeMusicModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                        <button type="submit" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all">
+                            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Entry
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add / Edit Award Poll Modal -->
+        <div id="poll-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <div>
+                        <h3 id="poll-modal-heading" class="font-bold text-accord-slate text-base">Create Award Voting Poll</h3>
+                        <p class="text-xs text-accord-muted">Set up periodic voting categories and nominees</p>
+                    </div>
+                    <button type="button" onclick="closePollModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="poll-form" onsubmit="handleSavePoll(event)" class="p-6 space-y-4 overflow-y-auto">
+                    <input type="hidden" id="edit-poll-id">
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Poll Title / Category *</label>
+                        <input type="text" id="poll-title" required placeholder="e.g., Song of the Year - 2026 Awards" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Nominees (Comma separated or one per line) *</label>
+                        <textarea id="poll-nominees" rows="4" required placeholder="RichieO - Higher Ground&#10;OK Muziq - Gratitude&#10;Pacome Ben Elohim - Grace" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
+                        <p class="text-[10px] text-accord-muted mt-1">Enter each nominee on a new line.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Poll Status</label>
+                            <select id="poll-status" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                                <option value="open">Open for Voting</option>
+                                <option value="closed">Closed / Concluded</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">End Date</label>
+                            <input type="date" id="poll-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                        <button type="button" onclick="closePollModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                        <button type="submit" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all">
+                            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Poll
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Header / Navigation -->
+        <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <!-- Brand Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="index.html" class="flex items-center space-x-3 group">
+                        <div class="w-11 h-11 bg-accord-slate rounded-xl flex items-center justify-center text-emerald-400 shadow-md group-hover:scale-105 transition-transform">
+                            <span class="font-bold text-xl tracking-tighter">Ac</span>
+                        </div>
+                        <div>
+                            <div class="flex items-center">
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                            </div>
+                            <p class="text-[10px] uppercase tracking-widest font-extrabold text-emerald-600">Music & Polls Admin</p>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Quick Portal Switcher -->
+                <nav class="hidden lg:flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl">
+                    <span class="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Jump to Portal:</span>
+                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-blue text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-book-bookmark text-accord-blue"></i>
+                        <span>Library Admin</span>
+                    </a>
+                    <a href="testimonies-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-500 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-comments text-accord-gold"></i>
+                        <span>Testimonies</span>
+                    </a>
+                    <a href="superadmin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-gold text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-user-shield text-accord-gold"></i>
+                        <span>Superadmin</span>
+                    </a>
+                </nav>
+
+                <!-- Admin User Info & Signout -->
+                <div class="flex items-center space-x-3">
+                    <div class="hidden sm:flex items-center space-x-3 pl-3 border-l border-slate-200">
+                        <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">MA</div>
+                        <div class="text-left">
+                            <p id="admin-user-email" class="text-xs font-bold text-accord-slate max-w-[150px] truncate">Music Admin</p>
+                            <button type="button" onclick="handleLogout()" class="text-[10px] font-bold text-red-500 hover:underline">Sign Out</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-12">
+
+            <!-- Stats Overview Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <i class="fa-solid fa-microphone-lines"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Spotlights</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-spotlights" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Featured Artistes</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center">
+                            <i class="fa-solid fa-list-music"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Playlists</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-playlists" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Curated Playlists</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center">
+                            <i class="fa-solid fa-square-poll-vertical"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">Voting</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-polls" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Active Award Polls</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                            <i class="fa-solid fa-compact-disc"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">Queue</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-submissions" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Song Submissions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 1: Artiste Spotlight & Playlists Management -->
+            <section class="space-y-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlights & Curated Playlists</h2>
+                        <p class="text-xs text-accord-muted mt-1">Manage featured artists, gospel playlists, streaming links, and homepage music features.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <button type="button" onclick="openMusicModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add Spotlight or Playlist</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Entry Title & Artiste</th>
+                                    <th class="py-4 px-6">Type</th>
+                                    <th class="py-4 px-6">Genre</th>
+                                    <th class="py-4 px-6">Streaming Link</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="music-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Gospel Award Voting Polls -->
+            <section class="space-y-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Gospel Award Voting Polls</h2>
+                        <p class="text-xs text-accord-muted mt-1">Configure periodic voting polls, monitor live results, and export voting data to Excel.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <button type="button" onclick="exportPollsToExcel()" class="bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                            <span>Export Poll Results</span>
+                        </button>
+                        <button type="button" onclick="openPollModal()" class="bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-square-poll-vertical"></i>
+                            <span>Create New Poll</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Poll Title & Nominees</th>
+                                    <th class="py-4 px-6 text-center">Total Votes</th>
+                                    <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="polls-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold text-accord-slate">Accord Gospel Music & Polls Admin</span>
+                    <span>• Management Portal v1.0</span>
+                </div>
+                <p>© 2026 Accord Media House. All rights reserved.</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Script -->
+    <script src="music-admin.js?v=1"></script>
+</body>
+</html>

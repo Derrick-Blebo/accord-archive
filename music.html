@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Music Hub — Curated Gospel Playlists, Artiste Spotlight & Award Polls</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Song Submission Modal -->
+    <div id="submission-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Submit Song for Promotion & Playlisting</h3>
+                    <p class="text-xs text-accord-muted">Independent artistes & promotion submissions via SoundSpace PR</p>
+                </div>
+                <button type="button" onclick="closeSubmissionModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="submission-form" onsubmit="handleSongSubmission(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste / Group Name *</label>
+                        <input type="text" id="sub-artist" required placeholder="e.g., RichieO" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Title *</label>
+                        <input type="text" id="sub-title" required placeholder="e.g., Higher Ground" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Contact Email *</label>
+                        <input type="email" id="sub-email" required placeholder="artist@gmail.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Genre / Category</label>
+                        <input type="text" id="sub-genre" placeholder="e.g., AfroGospel / Contemporary" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link (Spotify, Apple Music, Audiomack) *</label>
+                    <input type="url" id="sub-link" required placeholder="https://open.spotify.com/track/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste Bio / Song Background</label>
+                    <textarea id="sub-bio" rows="3" placeholder="Tell us about the song and ministry..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                    <button type="button" onclick="closeSubmissionModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                        <i class="fa-solid fa-paper-plane mr-1.5"></i> Submit Track
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Header / Navigation (Unified Accord Header) -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="index.html" class="flex items-center space-x-3 group">
+                <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <span class="font-bold text-xl tracking-tighter">Ac</span>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Official Archive & Library</p>
+                </div>
+            </a>
+
+            <!-- Desktop Navigation -->
+            <nav class="hidden md:flex items-center space-x-7">
+                <a href="index.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
+                <a href="forum.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Testimonies</a>
+                <a href="music.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Music</a>
+                <a href="saved.html" class="relative text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1.5" title="Saved">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved</span>
+                    <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                </a>
+            </nav>
+
+            <!-- Sign In CTA & Mobile Toggle -->
+            <div class="flex items-center space-x-2.5">
+                <button id="auth-nav-btn" type="button" onclick="handleAuthNavClick()" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                    <i class="fa-regular fa-user"></i>
+                    <span id="auth-nav-label">Sign In</span>
+                </button>
+                <button type="button" onclick="toggleMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue" aria-label="Toggle Menu">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
+            <a href="index.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
+            <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Testimonies</a>
+            <a href="music.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Music</a>
+            <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center justify-between text-base font-medium text-accord-slate pt-1">
+                <span class="flex items-center space-x-2">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved</span>
+                </span>
+                <span id="mobile-bookmark-count" class="bg-accord-gold text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </a>
+            <button type="button" onclick="handleAuthNavClick(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-2 w-full text-left border-t border-slate-100">
+                <i class="fa-regular fa-user"></i>
+                <span id="mobile-auth-label">Sign In / Create Account</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
+
+        <!-- Hero Banner / Featured Release Slider -->
+        <section class="relative bg-accord-slate rounded-3xl overflow-hidden shadow-xl text-white p-8 sm:p-12">
+            <div class="absolute inset-0 opacity-20 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1600');"></div>
+            <div class="relative z-10 max-w-2xl space-y-4">
+                <span class="inline-block bg-accord-gold text-accord-slate text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Featured Spotlight • UNVL Project</span>
+                <h1 class="serif-heading text-3xl sm:text-4xl font-bold tracking-tight">Elevating AfroGospel & Independent Christian Artistes</h1>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Powered by SoundSpace PR. Discover curated gospel playlists, explore exclusive artiste profiles, and vote in our periodic award polls.
+                </p>
+                <div class="flex items-center space-x-4 pt-2">
+                    <a href="#playlists" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md transition-all">
+                        Explore Playlists
+                    </a>
+                    <a href="#polls" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-6 py-3.5 rounded-xl transition-all">
+                        Vote in Awards
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 1: Artiste Spotlights -->
+        <section class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlight</h2>
+                    <p class="text-xs text-accord-muted">Highlighting exceptional ministers and emerging Christian talent.</p>
+                </div>
+            </div>
+
+            <div id="spotlight-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Populated dynamically by music.js -->
+            </div>
+        </section>
+
+        <!-- Section 2: Curated Playlists -->
+        <section id="playlists" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Curated Gospel Playlists</h2>
+                    <p class="text-xs text-accord-muted">Stream editorial selections curated by DJ ChristCentric & SoundSpace PR.</p>
+                </div>
+            </div>
+
+            <div id="playlist-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Populated dynamically by music.js -->
+            </div>
+        </section>
+
+        <!-- Section 3: Award Voting Polls -->
+        <section id="polls" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Periodic Award Voting Polls</h2>
+                    <p class="text-xs text-accord-muted">Cast your vote for your favorite songs and ministers.</p>
+                </div>
+            </div>
+
+            <div id="polls-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Populated dynamically by music.js -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Music Hub</span>
+                <span>• Powered by SoundSpace PR & Accord Media House</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Script -->
+    <script src="music.js?v=1"></script>
+</body>
+</html>

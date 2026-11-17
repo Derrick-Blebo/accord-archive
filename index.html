@@ -88,7 +88,7 @@
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
     </div>
 
-    <!-- Header / Navigation (Single Clean Sign In CTA) -->
+    <!-- Header / Navigation (Unified Accord Header) -->
     <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
             <!-- Brand Logo -->
@@ -106,19 +106,18 @@
             </a>
 
             <!-- Desktop Navigation -->
-            <nav class="hidden md:flex items-center space-x-6">
-                <a href="#library" class="text-sm font-bold text-accord-blue transition-colors">Digital Library</a>
+            <nav class="hidden md:flex items-center space-x-7">
+                <a href="index.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                 <a href="forum.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Testimonies</a>
-                <a href="#mission" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Our Mission</a>
-                <button type="button" onclick="openContributeModal()" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Contribute Archive</button>
-                <a href="saved.html" class="relative p-2 text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1" title="Saved">
-                    <i class="fa-solid fa-bookmark text-lg text-accord-gold"></i>
-                    <span class="text-sm font-semibold">Saved</span>
+                <a href="music.html" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Music</a>
+                <a href="saved.html" class="relative text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1.5" title="Saved">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved</span>
                     <span id="bookmark-badge" class="bg-accord-gold text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                 </a>
             </nav>
 
-            <!-- Single Primary Sign In / Account CTA & Mobile Toggle -->
+            <!-- Sign In CTA & Mobile Toggle -->
             <div class="flex items-center space-x-2.5">
                 <button id="auth-nav-btn" type="button" onclick="handleAuthNavClick()" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 sm:px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
                     <i class="fa-regular fa-user"></i>
@@ -132,15 +131,17 @@
 
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
-            <a href="#library" onclick="toggleMobileMenu()" class="block text-base font-bold text-accord-blue">Digital Library</a>
-            <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Testimonies Forum</a>
-            <a href="#mission" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Our Mission</a>
-            <button type="button" onclick="openContributeModal(); toggleMobileMenu();" class="block text-base font-medium text-accord-slate">Contribute Archive</button>
-            <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center space-x-2 text-base font-medium text-accord-slate pt-1">
-                <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                <span>Saved (<span id="mobile-bookmark-count">0</span>)</span>
+            <a href="index.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Digital Library</a>
+            <a href="forum.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Testimonies</a>
+            <a href="music.html" onclick="toggleMobileMenu()" class="block text-base font-medium text-accord-slate">Music</a>
+            <a href="saved.html" onclick="toggleMobileMenu()" class="flex items-center justify-between text-base font-medium text-accord-slate pt-1">
+                <span class="flex items-center space-x-2">
+                    <i class="fa-solid fa-bookmark text-accord-gold"></i>
+                    <span>Saved</span>
+                </span>
+                <span id="mobile-bookmark-count" class="bg-accord-gold text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
             </a>
-            <button type="button" onclick="handleAuthNavClick(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-1">
+            <button type="button" onclick="handleAuthNavClick(); toggleMobileMenu();" class="flex items-center space-x-2 text-base font-medium text-accord-blue pt-2 w-full text-left border-t border-slate-100">
                 <i class="fa-regular fa-user"></i>
                 <span id="mobile-auth-label">Sign In / Create Account</span>
             </button>

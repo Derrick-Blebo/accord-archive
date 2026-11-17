@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Superadmin — Master Access & Portal Control</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- SheetJS for Exporting Access Logs -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Master Superadmin Login Gate Overlay -->
+    <div id="auth-gate" class="fixed inset-0 z-40 bg-accord-bg flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-accord-slate rounded-2xl flex items-center justify-center text-accord-gold font-bold text-xl mx-auto shadow-md">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+                <span class="inline-block bg-accord-goldLight text-accord-gold text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Master Control</span>
+                <h1 class="serif-heading text-2xl font-bold text-accord-slate pt-1">Accord Superadmin</h1>
+                <p class="text-xs text-accord-muted">Sign in with your master superadmin credentials to assign portal permissions and oversee all departments.</p>
+            </div>
+
+            <form id="superadmin-login-form" onsubmit="handleSuperadminLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Master Email</label>
+                    <input type="email" id="login-email" required placeholder="accordmedia1@gmail.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <p id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 font-medium"></p>
+
+                <button type="submit" id="login-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                    Unlock Superadmin Command Center
+                </button>
+            </form>
+
+            <div class="text-center pt-1 flex items-center justify-center space-x-4">
+                <a href="index.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Public Library
+                </a>
+                <span class="text-slate-300">•</span>
+                <a href="admin.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    Library Admin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Protected Superadmin Wrapper -->
+    <div id="dashboard-wrapper" class="hidden min-h-screen flex flex-col justify-between">
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Revoke Admin Access?</h3>
+                <p id="confirm-text" class="text-xs text-accord-muted">This user will immediately lose access to all assigned Accord admin portals.</p>
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                    <button type="button" id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Confirm Revoke</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add / Edit Admin Account Modal -->
+        <div id="admin-role-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <div>
+                        <h3 id="role-modal-heading" class="font-bold text-accord-slate text-base">Assign Admin Portal Access</h3>
+                        <p class="text-xs text-accord-muted">Grant an approved Supabase user account access to specific portals</p>
+                    </div>
+                    <button type="button" onclick="closeAdminRoleModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="admin-role-form" onsubmit="handleSaveAdminRole(event)" class="p-6 space-y-5 overflow-y-auto">
+                    <input type="hidden" id="edit-role-original-email">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Team Member Name *</label>
+                            <input type="text" id="role-user-name" required placeholder="e.g., Emmanuel Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Role Title / Department</label>
+                            <input type="text" id="role-user-title" placeholder="e.g., Music Curator / Editor" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Account Email Address (Supabase Auth) *</label>
+                        <input type="email" id="role-user-email" required placeholder="editor@accordarchives.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <p class="text-[10px] text-accord-muted mt-1">The user will sign in to their assigned portal(s) using this email and their account password.</p>
+                    </div>
+
+                    <!-- Portal Checkboxes -->
+                    <div class="space-y-2.5 pt-2 border-t border-slate-100">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Assigned Admin Portals *</label>
+
+                        <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-accord-blue bg-slate-50/70 cursor-pointer transition-all">
+                            <input type="checkbox" id="perm-library" class="mt-0.5 rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book-bookmark text-accord-blue"></i>
+                                    <span>Library & Archive Admin (admin.html)</span>
+                                </p>
+                                <p class="text-[11px] text-accord-muted mt-0.5">Manage books, bulk Excel uploads, categories, Kindle shelves, banners, and manuscript submissions.</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-accord-blue bg-slate-50/70 cursor-pointer transition-all">
+                            <input type="checkbox" id="perm-music" class="mt-0.5 rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate flex items-center gap-1.5">
+                                    <i class="fa-solid fa-music text-emerald-600"></i>
+                                    <span>Music, Artiste Spotlight & Polls Admin (music-admin.html)</span>
+                                </p>
+                                <p class="text-[11px] text-accord-muted mt-0.5">Manage gospel playlists, artiste spotlight, music banners, award polls, Excel poll exports, and song releases.</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-slate-200 hover:border-accord-blue bg-slate-50/70 cursor-pointer transition-all">
+                            <input type="checkbox" id="perm-testimonies" class="mt-0.5 rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate flex items-center gap-1.5">
+                                    <i class="fa-solid fa-comments text-accord-gold"></i>
+                                    <span>Testimonies & Forum Admin (testimonies-admin.html)</span>
+                                </p>
+                                <p class="text-[11px] text-accord-muted mt-0.5">Approve or hide community testimonies, moderate reader comments, and export stories for book compilation.</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start space-x-3 p-3.5 rounded-2xl border border-amber-200 hover:border-accord-gold bg-amber-50/40 cursor-pointer transition-all">
+                            <input type="checkbox" id="perm-superadmin" class="mt-0.5 rounded text-accord-gold focus:ring-accord-gold w-4 h-4">
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate flex items-center gap-1.5">
+                                    <i class="fa-solid fa-user-shield text-accord-gold"></i>
+                                    <span>Co-Superadmin Access (superadmin.html)</span>
+                                </p>
+                                <p class="text-[11px] text-accord-muted mt-0.5">Full administrative authority across all portals and ability to manage team permissions.</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                        <button type="button" onclick="closeAdminRoleModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                        <button type="submit" id="save-role-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Permissions
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Header / Superadmin Navigation -->
+        <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <!-- Brand Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="index.html" class="flex items-center space-x-3 group">
+                        <div class="w-11 h-11 bg-accord-slate rounded-xl flex items-center justify-center text-accord-gold shadow-md group-hover:scale-105 transition-transform">
+                            <span class="font-bold text-xl tracking-tighter">Ac</span>
+                        </div>
+                        <div>
+                            <div class="flex items-center">
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                            </div>
+                            <p class="text-[10px] uppercase tracking-widest font-extrabold text-accord-gold">Master Superadmin</p>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Quick Portal Switcher Links -->
+                <nav class="hidden lg:flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl">
+                    <span class="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Jump to Portal:</span>
+                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-blue text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-book-bookmark text-accord-blue group-hover:text-white"></i>
+                        <span>Library Admin</span>
+                    </a>
+                    <a href="music-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-emerald-600 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-music text-emerald-600"></i>
+                        <span>Music & Polls</span>
+                    </a>
+                    <a href="testimonies-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-500 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-comments text-accord-gold"></i>
+                        <span>Testimonies</span>
+                    </a>
+                </nav>
+
+                <!-- Superadmin Profile & Actions -->
+                <div class="flex items-center space-x-3">
+                    <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
+                        <i class="fa-solid fa-user-plus"></i>
+                        <span class="hidden sm:inline">Assign New Admin</span>
+                    </button>
+                    <div class="hidden sm:flex items-center space-x-3 pl-3 border-l border-slate-200">
+                        <div class="w-9 h-9 rounded-full bg-accord-slate text-accord-gold font-bold flex items-center justify-center text-xs">SA</div>
+                        <div class="text-left">
+                            <p id="superadmin-user-email" class="text-xs font-bold text-accord-slate max-w-[150px] truncate">Master Admin</p>
+                            <button type="button" onclick="handleSuperadminLogout()" class="text-[10px] font-bold text-red-500 hover:underline">Sign Out</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-10">
+
+            <!-- Section 1: Department Portals Overview & Quick Launch -->
+            <section class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Department Admin Workspaces</h2>
+                        <p class="text-xs text-accord-muted">Launch any dedicated management portal or review live metrics across the Accord ecosystem.</p>
+                    </div>
+                    <a href="index.html" target="_blank" class="text-xs font-bold text-accord-blue hover:underline inline-flex items-center space-x-1.5">
+                        <span>View Live Public Website</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Workspace 1: Library Admin -->
+                    <div class="bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-book-bookmark"></i>
+                                </div>
+                                <span class="bg-blue-50 text-accord-blue text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Library Portal</span>
+                            </div>
+                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Library & Archive Admin</h3>
+                            <p class="text-xs text-accord-muted leading-relaxed">
+                                Manage publications, Kindle-style homepage shelves, promotional banners, categories, bulk Excel uploads, and manuscript reviews.
+                            </p>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 space-y-3">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Live Publications:</span>
+                                <span id="stat-lib-books" class="font-extrabold text-accord-slate">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Pending Manuscripts:</span>
+                                <span id="stat-lib-pending" class="font-extrabold text-amber-600">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
+                                <span id="stat-lib-admins" class="font-extrabold text-accord-blue">1</span>
+                            </div>
+                            <a href="admin.html" class="w-full mt-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                <span>Open Library Admin</span>
+                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Workspace 2: Music & Polls Admin -->
+                    <div class="bg-white border border-slate-200/90 hover:border-emerald-500 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-music"></i>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Music Portal</span>
+                            </div>
+                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Gospel Music & Polls Admin</h3>
+                            <p class="text-xs text-accord-muted leading-relaxed">
+                                Manage curated playlists, Artiste Spotlight profiles, music banners, periodic award voting polls, Excel result exports, and new song submissions.
+                            </p>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 space-y-3">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Spotlight Artistes & Playlists:</span>
+                                <span id="stat-music-items" class="font-extrabold text-accord-slate">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Active Award Polls:</span>
+                                <span id="stat-music-polls" class="font-extrabold text-emerald-600">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
+                                <span id="stat-music-admins" class="font-extrabold text-emerald-600">1</span>
+                            </div>
+                            <a href="music-admin.html" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                <span>Open Music Admin</span>
+                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Workspace 3: Testimonies & Forum Admin -->
+                    <div class="bg-white border border-slate-200/90 hover:border-accord-gold rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-comments"></i>
+                                </div>
+                                <span class="bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Forum Portal</span>
+                            </div>
+                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Testimonies & Forum Admin</h3>
+                            <p class="text-xs text-accord-muted leading-relaxed">
+                                Review and moderate community testimonies, manage reader comments and replies, and export approved faith chronicles for book compilation.
+                            </p>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 space-y-3">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Published Testimonies:</span>
+                                <span id="stat-forum-posts" class="font-extrabold text-accord-slate">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Reader Comments:</span>
+                                <span id="stat-forum-comments" class="font-extrabold text-accord-gold">0</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
+                                <span id="stat-forum-admins" class="font-extrabold text-amber-600">1</span>
+                            </div>
+                            <a href="testimonies-admin.html" class="w-full mt-2 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                <span>Open Testimonies Admin</span>
+                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Admin Accounts & Role Assignment Matrix -->
+            <section class="space-y-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Approved Admin Accounts & Portal Permissions</h2>
+                        <p class="text-xs text-accord-muted mt-1">Control which team members can sign in to the Library, Music, and Testimonies admin dashboards.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
+                            <input type="text" id="role-search" oninput="renderAdminRolesTable()" placeholder="Search name or email..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-56">
+                        </div>
+                        <button type="button" onclick="exportRolesToExcel()" class="bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                            <span>Export Access Sheet</span>
+                        </button>
+                        <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add Approved Account</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Permissions Table -->
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Team Member & Email</th>
+                                    <th class="py-4 px-6">Role / Title</th>
+                                    <th class="py-4 px-6 text-center">Library Admin</th>
+                                    <th class="py-4 px-6 text-center">Music Admin</th>
+                                    <th class="py-4 px-6 text-center">Testimonies Admin</th>
+                                    <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-roles-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically by superadmin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3: How Role-Based Access Works (Quick Reference) -->
+            <section class="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-sm">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="flex items-start space-x-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-accord-blue flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-user-check"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">1. Create or Use Account</h4>
+                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
+                                Have your team member create an account on the main site (or in Supabase Auth) using their email address.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-sliders"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">2. Toggle Portal Checkboxes</h4>
+                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
+                                Add their email above and check which portals they are allowed to access. You can toggle individual portals on or off anytime with one click.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-amber-50 text-accord-gold flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">3. Automatic Gate Enforcement</h4>
+                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
+                                Each admin portal verifies the signed-in user's email against this registry and blocks unauthorized accounts automatically.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold text-accord-slate">Accord Superadmin Command Center</span>
+                    <span>• Role-Based Access v1.0</span>
+                </div>
+                <p>© 2026 Accord Media House. All rights reserved.</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Superadmin Logic -->
+    <script src="superadmin.js?v=1"></script>
+</body>
+</html>

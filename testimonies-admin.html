@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Testimonies & Forum Admin — Moderation & Stories Portal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- SheetJS for Exporting Testimonies -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-gold selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Login Gate Overlay -->
+    <div id="auth-gate" class="fixed inset-0 z-40 bg-accord-bg flex items-center justify-center p-4">
+        <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-accord-gold font-bold text-xl mx-auto shadow-md">
+                    <i class="fa-solid fa-comments"></i>
+                </div>
+                <span class="inline-block bg-accord-goldLight text-accord-gold text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Portal Access Control</span>
+                <h1 class="serif-heading text-2xl font-bold text-accord-slate pt-1">Testimonies Admin</h1>
+                <p class="text-xs text-accord-muted">Sign in with your authorized Supabase account to moderate testimonies and reader discussions.</p>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Admin Email</label>
+                    <input type="email" id="login-email" required placeholder="admin@accordarchives.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-gold focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-gold focus:bg-white">
+                </div>
+
+                <p id="login-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 font-medium"></p>
+
+                <button type="submit" id="login-submit-btn" class="w-full bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-amber-500/20 transition-all">
+                    Unlock Testimonies Portal
+                </button>
+            </form>
+
+            <div class="text-center pt-1 flex items-center justify-center space-x-4">
+                <a href="index.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Public Library
+                </a>
+                <span class="text-slate-300">•</span>
+                <a href="superadmin.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue transition-colors">
+                    Superadmin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Protected Dashboard Wrapper -->
+    <div id="dashboard-wrapper" class="hidden min-h-screen flex flex-col justify-between">
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Delete Testimony?</h3>
+                <p id="confirm-text" class="text-xs text-accord-muted">This action is permanent and will remove the testimony and all associated comments.</p>
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl transition-all">Cancel</button>
+                    <button type="button" id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl transition-all">Confirm Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- View / Review Testimony Modal -->
+        <div id="view-testimony-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <div>
+                        <span id="modal-category-badge" class="bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">Testimony</span>
+                        <h3 id="modal-title" class="serif-heading text-lg font-bold text-accord-slate mt-1">Testimony Details</h3>
+                    </div>
+                    <button type="button" onclick="closeViewModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="p-6 space-y-5 overflow-y-auto text-xs text-accord-slate leading-relaxed">
+                    <div class="flex items-center justify-between text-accord-muted pb-3 border-b border-slate-100">
+                        <div>
+                            <span class="font-bold text-accord-slate" id="modal-author">Anonymous</span>
+                            <span class="mx-2">•</span>
+                            <span id="modal-date">Oct 2026</span>
+                        </div>
+                        <span id="modal-status" class="px-2.5 py-1 rounded-full font-bold text-[10px]">Published</span>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="font-bold uppercase tracking-wider text-[11px] text-accord-muted">Full Story / Testimony</h4>
+                        <div id="modal-content" class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 whitespace-pre-wrap"></div>
+                    </div>
+
+                    <div class="space-y-3 pt-2">
+                        <h4 class="font-bold uppercase tracking-wider text-[11px] text-accord-muted">Reader Comments (<span id="modal-comment-count">0</span>)</h4>
+                        <div id="modal-comments-list" class="space-y-2.5 max-h-48 overflow-y-auto">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end space-x-3 shrink-0">
+                    <button type="button" id="modal-toggle-status-btn" onclick="toggleCurrentModalStatus()" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-all">
+                        Hide / Unpublish
+                    </button>
+                    <button type="button" onclick="closeViewModal()" class="px-4 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-accord-slate font-bold transition-all">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header / Navigation -->
+        <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <!-- Brand Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="index.html" class="flex items-center space-x-3 group">
+                        <div class="w-11 h-11 bg-accord-slate rounded-xl flex items-center justify-center text-accord-gold shadow-md group-hover:scale-105 transition-transform">
+                            <span class="font-bold text-xl tracking-tighter">Ac</span>
+                        </div>
+                        <div>
+                            <div class="flex items-center">
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                            </div>
+                            <p class="text-[10px] uppercase tracking-widest font-extrabold text-accord-gold">Testimonies & Forum Admin</p>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Quick Portal Switcher -->
+                <nav class="hidden lg:flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl">
+                    <span class="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Jump to Portal:</span>
+                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-blue text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-book-bookmark text-accord-blue"></i>
+                        <span>Library Admin</span>
+                    </a>
+                    <a href="music-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-emerald-600 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-music text-emerald-600"></i>
+                        <span>Music & Polls</span>
+                    </a>
+                    <a href="superadmin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-gold text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-user-shield text-accord-gold"></i>
+                        <span>Superadmin</span>
+                    </a>
+                </nav>
+
+                <!-- Admin User info & Signout -->
+                <div class="flex items-center space-x-3">
+                    <div class="hidden sm:flex items-center space-x-3 pl-3 border-l border-slate-200">
+                        <div class="w-9 h-9 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs">TA</div>
+                        <div class="text-left">
+                            <p id="admin-user-email" class="text-xs font-bold text-accord-slate max-w-[150px] truncate">Testimonies Admin</p>
+                            <button type="button" onclick="handleLogout()" class="text-[10px] font-bold text-red-500 hover:underline">Sign Out</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-10">
+
+            <!-- Stats Overview Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">Live</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-total-testimonies" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Total Testimonies</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Published</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-published-testimonies" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Visible on Portal</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                            <i class="fa-solid fa-message"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">Discussion</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-total-comments" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Reader Comments</p>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <i class="fa-solid fa-book-tanakh"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">Book Prep</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-compilation-ready" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5">Exportable for Book</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Testimonies Moderation Table Section -->
+            <section class="space-y-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Community Testimonies Moderation</h2>
+                        <p class="text-xs text-accord-muted mt-1">Review faith chronicles, toggle publication visibility, or export stories for future book compilations.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
+                            <input type="text" id="testimony-search" oninput="renderTestimoniesTable()" placeholder="Search title, author, text..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-gold w-56">
+                        </div>
+                        <select id="testimony-filter" onchange="renderTestimoniesTable()" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-gold">
+                            <option value="all">All Statuses</option>
+                            <option value="published">Published Only</option>
+                            <option value="hidden">Hidden / Unpublished</option>
+                        </select>
+                        <button type="button" onclick="exportTestimoniesToExcel()" class="bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                            <span>Export to Excel</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Wrapper -->
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Author & Title</th>
+                                    <th class="py-4 px-6">Category</th>
+                                    <th class="py-4 px-6">Snippet / Excerpt</th>
+                                    <th class="py-4 px-6 text-center">Comments</th>
+                                    <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="testimonies-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically by testimonies-admin.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold text-accord-slate">Accord Testimonies & Forum Admin</span>
+                    <span>• Moderation Portal v1.0</span>
+                </div>
+                <p>© 2026 Accord Media House. All rights reserved.</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Script -->
+    <script src="testimonies-admin.js?v=1"></script>
+</body>
+</html>
