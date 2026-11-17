@@ -3,17 +3,20 @@ const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
+
 let allBooks = [];
 let categoriesList = [];
-let homepageSections = [];
+let homepageShelves = [];
 let bannerConfig = {
     enabled: true,
-    after_books: 6,
-    badge: 'Featured Initiative',
-    title: 'Share Your Faith Chronicle & Revival Testimony',
-    subtitle: 'Have a documented church history, missionary account, or personal testimony? Submit a manuscript or join our global forum.',
-    cta_text: 'Submit a Manuscript',
-    cta_action: 'contribute'
+    afterCount: 6,
+    badge: 'ACCORD HERITAGE INITIATIVE',
+    headline: 'Do You Hold a Rare Christian Manuscript or Church Chronicle?',
+    subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
+    btnText: 'Submit a Manuscript',
+    actionType: 'contribute',
+    customUrl: 'forum.html'
 };
 
 let savedBookmarks = JSON.parse(localStorage.getItem('accord_bookmarks') || '[]');
@@ -106,36 +109,45 @@ function handleAuthNavClick() {
 }
 
 // ==========================================
-// LOAD BOOKS, CATEGORIES, SECTIONS & BANNER
+// LOAD BOOKS, CATEGORIES, SHELVES & BANNER
 // ==========================================
 
 async function loadLibraryData() {
-    const [booksRes, catsRes, sectionsRes, bannerRes] = await Promise.all([
+    const [booksRes, catsRes] = await Promise.all([
         supabaseClient
             .from('books')
             .select('*')
-            .is('deleted_at', null)
-            .eq('is_visible', true)
             .order('created_at', { ascending: false }),
         supabaseClient
             .from('categories')
             .select('*')
-            .order('name', { ascending: true }),
-        supabaseClient
-            .from('homepage_sections')
-            .select('*')
-            .eq('is_visible', true)
-            .order('display_order', { ascending: true }),
-        supabaseClient
-            .from('site_settings')
-            .select('value')
-            .eq('key', 'homepage_banner')
-            .maybeSingle()
+            .order('name', { ascending: true })
     ]);
 
     if (!booksRes.error && booksRes.data) {
+        // Extract layout config if stored in books table
+        const configRecord = booksRes.data.find(b => b.title === LAYOUT_CONFIG_CATEGORY_NAME);
+        if (configRecord && configRecord.description) {
+            try {
+                const parsedConfig = JSON.parse(configRecord.description);
+                if (parsedConfig.shelves) homepageShelves = parsedConfig.shelves;
+                if (parsedConfig.banner) bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                localStorage.setItem('accord_home_layout_config', configRecord.description);
+            } catch (e) {}
+        } else {
+            const localSaved = localStorage.getItem('accord_home_layout_config');
+            if (localSaved) {
+                try {
+                    const parsedConfig = JSON.parse(localSaved);
+                    if (parsedConfig.shelves) homepageShelves = parsedConfig.shelves;
+                    if (parsedConfig.banner) bannerConfig = { ...bannerConfig, ...parsedConfig.banner };
+                } catch (e) {}
+            }
+        }
+
+        const realBooks = booksRes.data.filter(b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME && !b.deleted_at && b.is_visible !== false);
         const seenTitles = new Set();
-        allBooks = booksRes.data.filter(book => {
+        allBooks = realBooks.filter(book => {
             const key = (book.title || '').trim().toLowerCase();
             if (!key || seenTitles.has(key)) return false;
             seenTitles.add(key);
@@ -148,15 +160,7 @@ async function loadLibraryData() {
         renderCategoryButtons();
     }
 
-    if (!sectionsRes.error && sectionsRes.data) {
-        homepageSections = sectionsRes.data;
-    }
-
-    if (!bannerRes.error && bannerRes.data?.value) {
-        bannerConfig = { ...bannerConfig, ...bannerRes.data.value };
-    }
-
-    renderCuratedSections();
+    renderCuratedShelves();
     renderBooks();
     checkSharedBookParam();
 }
@@ -221,36 +225,48 @@ function filterBooks() {
 }
 
 // ==========================================
-// KINDLE-STYLE CURATED HORIZONTAL BOOK ROWS
+// KINDLE-STYLE CURATED HORIZONTAL SHELVES
 // ==========================================
 
-function renderCuratedSections() {
+function renderCuratedShelves() {
     const wrapper = document.getElementById('curated-sections-wrapper');
     if (!wrapper) return;
 
     const query = (document.getElementById('library-search')?.value || '').trim();
-    // Hide curated shelves while actively filtering/searching so results stay clean
     if (query.length > 0 || currentCategory !== 'All' || currentAccessFilter !== 'all') {
         wrapper.innerHTML = '';
         return;
     }
 
-    if (!homepageSections || homepageSections.length === 0) {
+    const enabledShelves = (homepageShelves || []).filter(s => s.enabled !== false);
+    if (enabledShelves.length === 0) {
         wrapper.innerHTML = '';
         return;
     }
 
     let html = '';
-    homepageSections.forEach(section => {
-        const ids = Array.isArray(section.book_ids) ? section.book_ids.map(Number) : [];
-        const sectionBooks = ids
-            .map(id => allBooks.find(b => Number(b.id) === id))
-            .filter(Boolean);
+    enabledShelves.forEach(shelf => {
+        let shelfBooks = [];
+        const limit = Number(shelf.limit) || 10;
 
-        if (sectionBooks.length === 0) return;
+        if (shelf.mode === 'manual') {
+            const ids = Array.isArray(shelf.bookIds) ? shelf.bookIds.map(Number) : [];
+            shelfBooks = ids.map(id => allBooks.find(b => Number(b.id) === id)).filter(Boolean);
+        } else if (shelf.mode === 'popular') {
+            shelfBooks = [...allBooks].sort((a, b) => (Number(b.downloads) || 0) - (Number(a.downloads) || 0)).slice(0, limit);
+        } else if (shelf.mode === 'newest') {
+            shelfBooks = [...allBooks].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, limit);
+        } else if (shelf.mode === 'recommended') {
+            shelfBooks = [...allBooks].filter(b => b.is_for_sale || (Number(b.downloads) || 0) > 0).slice(0, limit);
+            if (shelfBooks.length === 0) shelfBooks = allBooks.slice(0, limit);
+        } else if (shelf.mode === 'category') {
+            shelfBooks = allBooks.filter(b => b.category === shelf.category).slice(0, limit);
+        }
 
-        const rowId = `shelf-row-${section.id}`;
-        const cardsHtml = sectionBooks.map(book => {
+        if (shelfBooks.length === 0) return;
+
+        const rowId = `shelf-row-${shelf.id}`;
+        const cardsHtml = shelfBooks.map(book => {
             const isPurchased = purchasedBookIds.includes(Number(book.id));
             const priceLabel = book.is_for_sale
                 ? (isPurchased ? `<span class="text-[11px] font-bold text-emerald-600">Purchased</span>` : `<span class="text-xs font-extrabold text-accord-slate">USD ${Number(book.price || 0).toFixed(2)}</span>`)
@@ -293,8 +309,8 @@ function renderCuratedSections() {
             <div class="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-sm">
                 <div class="flex items-center justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate">${escapeHTML(section.title)}</h2>
-                        ${section.subtitle ? `<p class="text-xs text-accord-muted mt-0.5">${escapeHTML(section.subtitle)}</p>` : ''}
+                        <h2 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate">${escapeHTML(shelf.title)}</h2>
+                        ${shelf.subtitle ? `<p class="text-xs text-accord-muted mt-0.5">${escapeHTML(shelf.subtitle)}</p>` : ''}
                     </div>
                     <div class="flex items-center space-x-1.5 shrink-0">
                         <button type="button" onclick="scrollShelf('${rowId}', -340)" class="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-accord-slate flex items-center justify-center transition-all" aria-label="Scroll left">
@@ -421,15 +437,23 @@ function renderMidGridBanner(showBanner) {
         return;
     }
 
-    const ctaHtml = bannerConfig.cta_action === 'forum'
-        ? `<a href="forum.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-               <span>${escapeHTML(bannerConfig.cta_text || 'Explore Testimonies')}</span>
-               <i class="fa-solid fa-arrow-right text-[11px]"></i>
-           </a>`
-        : `<button type="button" onclick="openContributeModal()" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-               <span>${escapeHTML(bannerConfig.cta_text || 'Submit a Manuscript')}</span>
-               <i class="fa-solid fa-arrow-right text-[11px]"></i>
-           </button>`;
+    let ctaHtml = '';
+    if (bannerConfig.actionType === 'forum') {
+        ctaHtml = `<a href="forum.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+                       <span>${escapeHTML(bannerConfig.btnText || 'Explore Testimonies')}</span>
+                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
+                   </a>`;
+    } else if (bannerConfig.actionType === 'custom') {
+        ctaHtml = `<a href="${escapeHTML(bannerConfig.customUrl || 'forum.html')}" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+                       <span>${escapeHTML(bannerConfig.btnText || 'Learn More')}</span>
+                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
+                   </a>`;
+    } else {
+        ctaHtml = `<button type="button" onclick="openContributeModal()" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+                       <span>${escapeHTML(bannerConfig.btnText || 'Submit a Manuscript')}</span>
+                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
+                   </button>`;
+    }
 
     bannerEl.innerHTML = `
         <div class="bg-gradient-to-r from-accord-slate via-blue-950 to-accord-darkBlue rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-blue-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
@@ -439,8 +463,8 @@ function renderMidGridBanner(showBanner) {
                     <i class="fa-solid fa-sparkles"></i>
                     <span>${escapeHTML(bannerConfig.badge || 'Featured Initiative')}</span>
                 </span>
-                <h3 class="serif-heading text-xl sm:text-2xl font-bold leading-snug">${escapeHTML(bannerConfig.title)}</h3>
-                <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${escapeHTML(bannerConfig.subtitle)}</p>
+                <h3 class="serif-heading text-xl sm:text-2xl font-bold leading-snug">${escapeHTML(bannerConfig.headline)}</h3>
+                <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${escapeHTML(bannerConfig.subtext)}</p>
             </div>
             <div class="relative z-10">
                 ${ctaHtml}
@@ -457,7 +481,7 @@ function renderBooks() {
     const emptyState = document.getElementById('empty-library-state');
     if (!gridTop || !gridBottom) return;
 
-    renderCuratedSections();
+    renderCuratedShelves();
 
     const query = (document.getElementById('library-search')?.value || '').toLowerCase();
 
@@ -491,7 +515,7 @@ function renderBooks() {
         emptyState?.classList.add('hidden');
     }
 
-    const splitIndex = Math.max(1, Number(bannerConfig.after_books) || 6);
+    const splitIndex = Math.max(1, Number(bannerConfig.afterCount) || 6);
     const topBooks = filtered.slice(0, splitIndex);
     const bottomBooks = filtered.slice(splitIndex);
 
@@ -662,7 +686,7 @@ async function shareBookLink(bookId, title) {
 }
 
 // ==========================================
-// CONTRIBUTE ARCHIVE SUBMISSION MODAL (WITH PDF UPLOAD)
+// CONTRIBUTE ARCHIVE SUBMISSION MODAL
 // ==========================================
 
 function openContributeModal() {
@@ -724,7 +748,7 @@ async function handleContributeSubmit(e) {
         email,
         title,
         category,
-        description,
+        description: downloadUrl ? `${description}\n\n[Attached Manuscript PDF: ${downloadUrl}]` : description,
         download_url: downloadUrl
     }]);
 
@@ -798,39 +822,6 @@ async function handleGoogleSignIn() {
 async function handleAuthSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('auth-email').value.trim();
-    const password = document.getElementById('auth-password').value;
-    const fullName = document.getElementById('auth-name')?.value.trim() || '';
-    const submitBtn = document.getElementById('auth-submit-btn');
-
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerText = 'Please wait...';
-    }
-
-    if (authMode === 'signup') {
-        const { data, error } = await supabaseClient.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: fullName } }
-        });
-        if (error) showToast(error.message);
-        else {
-            showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
-            closeAuthModal();
-        }
-    } else {
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) showToast(error.message);
-        else {
-            showToast('Signed in successfully!');
-            closeAuthModal();
-        }
-    }
-
-    if (submitBtn) {
-        submitBtn.disabled = false;
-        switchAuthMode(authMode);
-    }
 }
 
 async function handleSignOut() {
