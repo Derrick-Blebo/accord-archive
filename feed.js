@@ -80,7 +80,7 @@ function setFeedTab(tab) {
     loadFeedData();
 }
 
-// --- LOAD FEED DATA FROM SUPABASE ---
+// --- LOAD FEED DATA FROM SUPABASE (Sermons & Testimonies) ---
 async function loadFeedData() {
     const streamContainer = document.getElementById('feed-stream');
     if (!streamContainer) return;
@@ -92,34 +92,68 @@ async function loadFeedData() {
         </div>
     `;
 
-    let query = supabaseClient.from('sermons').select('*').eq('status', 'published').eq('is_visible', true).order('created_at', { ascending: false });
+    let allItems = [];
 
-    if (currentTab === 'sermons') {
-        query = query.in('media_type', ['video', 'audio', 'text']);
-    } else if (currentTab === 'video') {
-        query = query.eq('media_type', 'video');
-    } else if (currentTab === 'audio') {
-        query = query.eq('media_type', 'audio');
-    } else if (currentTab === 'testimonies') {
-        query = query.ilike('category', '%Testimony%');
-    } else if (currentTab === 'text') {
-        query = query.eq('media_type', 'text');
+    // 1. Fetch Sermons if tab is NOT exclusively 'testimonies'
+    if (currentTab !== 'testimonies') {
+        let sermonsQuery = supabaseClient.from('sermons').select('*').eq('status', 'published').eq('is_visible', true);
+
+        if (currentTab === 'sermons') {
+            sermonsQuery = sermonsQuery.in('media_type', ['video', 'audio']);
+        } else if (currentTab === 'video') {
+            sermonsQuery = sermonsQuery.eq('media_type', 'video');
+        } else if (currentTab === 'audio') {
+            sermonsQuery = sermonsQuery.eq('media_type', 'audio');
+        } else if (currentTab === 'text') {
+            sermonsQuery = sermonsQuery.eq('media_type', 'text');
+        }
+
+        const { data: sermonsData, error: sermonsError } = await sermonsQuery;
+        if (!sermonsError && sermonsData) {
+            sermonsData.forEach(item => {
+                allItems.push({
+                    id: item.id,
+                    title: item.title,
+                    author: item.author || 'Anonymous',
+                    category: item.category || 'General',
+                    media_type: item.media_type,
+                    media_url: item.media_url,
+                    content: item.content,
+                    created_at: item.created_at,
+                    source_table: 'sermons'
+                });
+            });
+        }
     }
 
-    const { data, error } = await query;
+    // 2. Fetch Testimonies if tab is 'all' or 'testimonies'
+    if (currentTab === 'all' || currentTab === 'testimonies') {
+        const { data: testimoniesData, error: testimoniesError } = await supabaseClient
+            .from('testimonies')
+            .select('*')
+            .eq('is_approved', true);
 
-    if (error) {
-        streamContainer.innerHTML = `
-            <div class="bg-white border border-red-200 rounded-3xl p-8 text-center space-y-2">
-                <i class="fa-solid fa-triangle-exclamation text-xl text-red-500"></i>
-                <p class="text-xs font-bold text-accord-slate">Unable to load feed items.</p>
-                <p class="text-[11px] text-accord-muted">Please check your network or database connection.</p>
-            </div>
-        `;
-        return;
+        if (!testimoniesError && testimoniesData) {
+            testimoniesData.forEach(item => {
+                allItems.push({
+                    id: item.id,
+                    title: item.title,
+                    author: item.author_name || 'Anonymous Believer',
+                    category: item.category || 'Testimony',
+                    media_type: 'testimony',
+                    media_url: null,
+                    content: item.body || item.content,
+                    created_at: item.created_at,
+                    source_table: 'testimonies'
+                });
+            });
+        }
     }
 
-    if (!data || data.length === 0) {
+    // Sort combined feed items by creation date (newest first)
+    allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (allItems.length === 0) {
         streamContainer.innerHTML = `
             <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
                 <i class="fa-regular fa-folder-open text-3xl text-slate-300"></i>
@@ -131,7 +165,7 @@ async function loadFeedData() {
     }
 
     streamContainer.innerHTML = '';
-    data.forEach(item => {
+    allItems.forEach(item => {
         streamContainer.appendChild(renderFeedCard(item));
     });
 }
@@ -173,6 +207,9 @@ function renderFeedCard(item) {
         `;
     }
 
+    const badgeLabel = item.media_type === 'testimony' ? 'Testimony' : item.category;
+    const badgeStyle = item.media_type === 'testimony' ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'text-accord-blue';
+
     card.innerHTML = `
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -180,8 +217,8 @@ function renderFeedCard(item) {
                     ${escapeHtml(item.author ? item.author.charAt(0).toUpperCase() : 'A')}
                 </div>
                 <div>
-                    <h4 class="text-xs font-bold text-accord-slate">${escapeHtml(item.author || 'Anonymous Believer')}</h4>
-                    <p class="text-[10px] text-accord-muted">${dateFormatted} • <span class="text-accord-blue font-medium">${escapeHtml(item.category)}</span></p>
+                    <h4 class="text-xs font-bold text-accord-slate">${escapeHtml(item.author)}</h4>
+                    <p class="text-[10px] text-accord-muted">${dateFormatted} • <span class="font-medium px-2 py-0.5 rounded-full ${badgeStyle}">${escapeHtml(badgeLabel)}</span></p>
                 </div>
             </div>
             <div class="flex items-center space-x-2">
@@ -318,7 +355,7 @@ async function handleReportSubmit(e) {
     const { error } = await supabaseClient.from('post_reports').insert([{
         sermon_id,
         user_id: currentUser.id,
-    reason
+        reason
     }]);
 
     if (error) {
