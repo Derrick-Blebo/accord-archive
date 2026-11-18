@@ -95,11 +95,13 @@ async function loadFeedData() {
     let query = supabaseClient.from('sermons').select('*').eq('status', 'published').eq('is_visible', true).order('created_at', { ascending: false });
 
     if (currentTab === 'sermons') {
-        query = query.in('media_type', ['video', 'audio']);
+        query = query.in('media_type', ['video', 'audio', 'text']);
     } else if (currentTab === 'video') {
         query = query.eq('media_type', 'video');
     } else if (currentTab === 'audio') {
         query = query.eq('media_type', 'audio');
+    } else if (currentTab === 'testimonies') {
+        query = query.ilike('category', '%Testimony%');
     } else if (currentTab === 'text') {
         query = query.eq('media_type', 'text');
     }
@@ -273,7 +275,7 @@ async function handleCreatePostSubmit(e) {
         content: media_type === 'text' ? content : null,
         author: currentUser.email.split('@')[0],
         user_id: currentUser.id,
-        status: media_type === 'text' ? 'published' : 'pending', // Text posts publish instantly, link submissions go to admin queue
+        status: media_type === 'text' ? 'published' : 'pending',
         is_visible: true
     }]);
 
@@ -316,7 +318,7 @@ async function handleReportSubmit(e) {
     const { error } = await supabaseClient.from('post_reports').insert([{
         sermon_id,
         user_id: currentUser.id,
-        reason
+    reason
     }]);
 
     if (error) {
