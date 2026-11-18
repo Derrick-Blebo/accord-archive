@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Admin — Fellowship Feed & Sermons Moderation</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: 0px;
+            width: 14px;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Admin Header -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <a href="feed.html" class="flex items-center space-x-3 group">
+                <div class="w-11 h-11 bg-accord-slate rounded-xl flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
+                    <span class="font-bold text-xl tracking-tighter">Ad</span>
+                </div>
+                <div>
+                    <div class="flex items-center">
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                        <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                    </div>
+                    <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Admin Moderation Portal</p>
+                </div>
+            </a>
+
+            <div class="flex items-center space-x-4">
+                <a href="feed.html" class="text-xs font-bold text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1.5">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back to Feed</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Publish New Sermon Modal -->
+    <div id="admin-sermon-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Publish Sermon / Media Directly</h3>
+                    <p class="text-xs text-accord-muted">Add video, audio, or text sermons to the live feed</p>
+                </div>
+                <button type="button" onclick="closeAdminSermonModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="admin-sermon-form" onsubmit="handleAdminPublishSermon(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Sermon Title *</label>
+                    <input type="text" id="admin-s-title" required placeholder="e.g., Walking in Divine Favor" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Media Type *</label>
+                        <select id="admin-s-type" required onchange="toggleAdminMediaTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="video">Video (YouTube)</option>
+                            <option value="audio">Audio (Spotify / Audiomack)</option>
+                            <option value="text">Text Sermon / Note</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category *</label>
+                        <input type="text" id="admin-s-category" required placeholder="e.g., Faith & Grace" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                </div>
+
+                <div id="admin-url-group">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Media URL (YouTube / Spotify Embed Link) *</label>
+                    <input type="url" id="admin-s-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+
+                <div id="admin-content-group" class="hidden">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Sermon Full Text *</label>
+                    <textarea id="admin-s-content" rows="4" placeholder="Enter sermon notes or message content..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Preacher / Author Name *</label>
+                    <input type="text" id="admin-s-author" required placeholder="e.g., Pastor John Doe" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                    <button type="button" onclick="closeAdminSermonModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                        Publish Immediately
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
+
+        <!-- Page Header -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="space-y-2 text-center md:text-left">
+                <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Admin Dashboard</span>
+                <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Sermons & Community Moderation</h1>
+                <p class="text-xs sm:text-sm text-accord-muted">Review pending link submissions, manage active feed posts, and handle spam reports.</p>
+            </div>
+            <button type="button" onclick="openAdminSermonModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2 shrink-0">
+                <i class="fa-solid fa-plus"></i>
+                <span>Publish New Sermon</span>
+            </button>
+        </div>
+
+        <!-- Admin Tabs -->
+        <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-2">
+            <button type="button" onclick="setAdminTab('pending')" id="tab-pending" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">Pending Submissions</button>
+            <button type="button" onclick="setAdminTab('reports')" id="tab-reports" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Flagged Spam Reports</button>
+            <button type="button" onclick="setAdminTab('published')" id="tab-published" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Active Live Posts</button>
+        </div>
+
+        <!-- Admin Table / List Container -->
+        <div id="admin-content-container" class="space-y-4">
+            <!-- Populated dynamically via script below -->
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Admin Portal</span>
+                <span>• Secure Moderation Environment</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Admin Logic Script -->
+    <script>
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentAdminTab = 'pending';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await verifyAdminAccess();
+            loadAdminData();
+        });
+
+        async function verifyAdminAccess() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                showToast('Please sign in with an admin account.', true);
+                setTimeout(() => window.location.href = 'signin.html', 1500);
+                return;
+            }
+            // Additional role checking can be hooked here if needed
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+            if (!toast) return;
+            msgEl.textContent = message;
+            iconEl.className = isError ? 'fa-solid fa-circle-exclamation text-red-500 text-lg' : 'fa-solid fa-circle-check text-accord-gold text-lg';
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-24', 'opacity-0'), 3500);
+        }
+
+        function setAdminTab(tab) {
+            currentAdminTab = tab;
+            document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+                btn.className = 'admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200';
+            });
+            const activeBtn = document.getElementById(`tab-${tab}`);
+            if (activeBtn) {
+                activeBtn.className = 'admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm';
+            }
+            loadAdminData();
+        }
+
+        async function loadAdminData() {
+            const container = document.getElementById('admin-content-container');
+            container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue"></i></div>`;
+
+            if (currentAdminTab === 'pending' || currentAdminTab === 'published') {
+                const statusQuery = currentAdminTab === 'pending' ? 'pending' : 'published';
+                const { data, error } = await supabaseClient.from('sermons').select('*').eq('status', statusQuery).order('created_at', { ascending: false });
+
+                if (error || !data || data.length === 0) {
+                    container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center text-xs text-accord-muted">No ${statusQuery} items found.</div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                data.forEach(item => {
+                    container.appendChild(renderSermonAdminCard(item));
+                });
+            } else if (currentAdminTab === 'reports') {
+                const { data, error } = await supabaseClient.from('post_reports').select('*, sermons(*)').order('created_at', { ascending: false });
+
+                if (error || !data || data.length === 0) {
+                    container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center text-xs text-accord-muted">No spam reports flagged.</div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                data.forEach(report => {
+                    container.appendChild(renderReportAdminCard(report));
+                });
+            }
+        }
+
+        function renderSermonAdminCard(item) {
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-slate-200 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm';
+            card.innerHTML = `
+                <div class="space-y-1">
+                    <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">${item.media_type}</span>
+                    <h3 class="font-bold text-accord-slate text-sm">${escapeHtml(item.title)}</h3>
+                    <p class="text-xs text-accord-muted">By ${escapeHtml(item.author || 'User')} • Category: ${escapeHtml(item.category)}</p>
+                    ${item.media_url ? `<a href="${item.media_url}" target="_blank" class="text-[11px] text-accord-blue hover:underline block truncate max-w-md">${item.media_url}</a>` : ''}
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    ${item.status === 'pending' ? `
+                        <button onclick="updatePostStatus('${item.id}', 'published')" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold">Approve & Publish</button>
+                    ` : `
+                        <button onclick="updatePostStatus('${item.id}', 'hidden')" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">Hide Post</button>
+                    `}
+                    <button onclick="deletePost('${item.id}')" class="px-4 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold">Delete</button>
+                </div>
+            `;
+            return card;
+        }
+
+        function renderReportAdminCard(report) {
+            const post = report.sermons;
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-red-200 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm';
+            card.innerHTML = `
+                <div class="space-y-1">
+                    <span class="bg-red-100 text-red-600 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">Flagged Report</span>
+                    <h3 class="font-bold text-accord-slate text-sm">${post ? escapeHtml(post.title) : 'Post Removed'}</h3>
+                    <p class="text-xs text-red-700 font-medium">Reason: "${escapeHtml(report.reason)}"</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    ${post ? `<button onclick="deletePost('${post.id}')" class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold">Remove Flagged Post</button>` : ''}
+                    <button onclick="dismissReport('${report.id}')" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">Dismiss Report</button>
+                </div>
+            `;
+            return card;
+        }
+
+        async function updatePostStatus(id, newStatus) {
+            const { error } = await supabaseClient.from('sermons').update({ status: newStatus }).eq('id', id);
+            if (error) {
+                showToast('Failed to update status.', true);
+                return;
+            }
+            showToast(`Post status updated to ${newStatus}.`);
+            loadAdminData();
+        }
+
+        async function deletePost(id) {
+            if (!confirm('Are you sure you want to permanently delete this post?')) return;
+            const { error } = await supabaseClient.from('sermons').delete().eq('id', id);
+            if (error) {
+                showToast('Failed to delete post.', true);
+                return;
+            }
+            showToast('Post deleted successfully.');
+            loadAdminData();
+        }
+
+        async function dismissReport(reportId) {
+            const { error } = await supabaseClient.from('post_reports').delete().eq('id', reportId);
+            if (error) {
+                showToast('Failed to dismiss report.', true);
+                return;
+            }
+            showToast('Report dismissed.');
+            loadAdminData();
+        }
+
+        function openAdminSermonModal() {
+            document.getElementById('admin-sermon-modal').classList.remove('hidden');
+            document.getElementById('admin-sermon-modal').classList.add('flex');
+        }
+
+        function closeAdminSermonModal() {
+            document.getElementById('admin-sermon-modal').classList.remove('flex');
+            document.getElementById('admin-sermon-modal').classList.add('hidden');
+            document.getElementById('admin-sermon-form').reset();
+        }
+
+        function toggleAdminMediaTypeFields() {
+            const type = document.getElementById('admin-s-type').value;
+            const urlGroup = document.getElementById('admin-url-group');
+            const contentGroup = document.getElementById('admin-content-group');
+            if (type === 'text') {
+                urlGroup.classList.add('hidden');
+                contentGroup.classList.remove('hidden');
+            } else {
+                urlGroup.classList.remove('hidden');
+                contentGroup.classList.add('hidden');
+            }
+        }
+
+        async function handleAdminPublishSermon(e) {
+            e.preventDefault();
+            const title = document.getElementById('admin-s-title').value.trim();
+            const media_type = document.getElementById('admin-s-type').value;
+            const category = document.getElementById('admin-s-category').value.trim();
+            const media_url = document.getElementById('admin-s-url').value.trim();
+            const content = document.getElementById('admin-s-content').value.trim();
+            const author = document.getElementById('admin-s-author').value.trim();
+
+            const { error } = await supabaseClient.from('sermons').insert([{
+                title,
+                media_type,
+                category,
+                media_url: media_type === 'text' ? null : media_url,
+                content: media_type === 'text' ? content : null,
+                author,
+                status: 'published',
+                is_visible: true
+            }]);
+
+            if (error) {
+                showToast('Error publishing sermon.', true);
+                return;
+            }
+
+            closeAdminSermonModal();
+            showToast('Sermon published successfully to live feed!');
+            loadAdminData();
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
