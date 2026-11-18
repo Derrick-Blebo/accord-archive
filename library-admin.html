@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Admin — Accord Archive</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PDF.js for auto page count extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SheetJS for Excel imports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Auth Gate (Login Screen) -->
+    <div id="auth-gate" class="flex-grow flex items-center justify-center px-4 py-12">
+        <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-accord-blue rounded-2xl flex items-center justify-center text-white mx-auto shadow-md">
+                    <i class="fa-solid fa-book-bookmark text-lg"></i>
+                </div>
+                <h1 class="text-xl font-bold text-accord-slate">Library Admin Portal</h1>
+                <p class="text-xs text-accord-muted">Sign in with authorized librarian credentials</p>
+            </div>
+
+            <div id="login-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-xs p-3 rounded-xl text-center font-semibold"></div>
+
+            <form id="admin-login-form" onsubmit="handleAdminLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Email</label>
+                    <input type="email" id="login-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+                <button type="submit" id="login-submit-btn" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all">
+                    Sign In to Library Portal
+                </button>
+            </form>
+            <div class="text-center pt-2">
+                <a href="index.html" class="text-xs font-semibold text-accord-muted hover:text-accord-blue">← Return to Public Library</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Wrapper (Hidden until authenticated) -->
+    <div id="dashboard-wrapper" class="hidden flex-grow flex flex-col justify-between">
+        
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-accord-blue text-white rounded-xl flex items-center justify-center font-bold">L</div>
+                <div>
+                    <h2 class="font-bold text-sm text-accord-slate">Library Management Console</h2>
+                    <p id="admin-user-email" class="text-[10px] text-accord-muted"></p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <a href="superadmin.html" class="text-xs font-semibold text-accord-blue hover:underline">Superadmin Control Center</a>
+                <button type="button" onclick="handleAdminLogout()" class="text-xs font-semibold text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition-all">Log out</button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
+            
+            <!-- Quick Stats Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-books"></i></div>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Publications</p>
+                        <h3 id="stat-total" class="text-2xl font-black text-accord-slate">0</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-download"></i></div>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
+                        <h3 id="stat-downloads" class="text-2xl font-black text-accord-slate">0</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Submissions</p>
+                        <h3 id="stat-pending" class="text-2xl font-black text-accord-slate">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Toolbar & Tabs -->
+            <div class="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-2xl">
+                    <button type="button" id="nav-tab-catalog" onclick="switchTab('catalog')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">Catalog Directory</button>
+                    <button type="button" id="nav-tab-submissions" onclick="switchTab('submissions')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                        Manuscript Reviews (<span id="submitted-subtab-badge">0</span>)
+                    </button>
+                    <button type="button" id="nav-tab-trash" onclick="switchTab('trash')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
+                        Recycle Bin (<span id="trash-badge">0</span>)
+                    </button>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button type="button" onclick="openExcelUploadModal()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-2.5 rounded-xl transition-all">
+                        <i class="fa-solid fa-file-excel text-emerald-600 mr-1.5"></i> Bulk Excel Import
+                    </button>
+                    <button type="button" onclick="openArchiveModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition-all">
+                        <i class="fa-solid fa-plus mr-1.5"></i> Add New Book
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION 1: Catalog Directory -->
+            <div id="section-catalog" class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <div class="relative flex-1 max-w-md">
+                        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
+                        <input type="text" id="admin-search" oninput="filterAdminBooks()" placeholder="Search catalog by title, author..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        <button type="button" id="admin-clear-search" onclick="clearAdminSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none">
+                        <option value="All">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Publication</th>
+                                <th class="py-3 px-6">Author</th>
+                                <th class="py-3 px-6">Category</th>
+                                <th class="py-3 px-6 text-center">Year</th>
+                                <th class="py-3 px-6 text-center">Pages</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-book-table-body">
+                            <!-- Populated dynamically by admin.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Manuscript Submissions -->
+            <div id="section-submissions" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
+                <h3 class="font-bold text-accord-slate text-sm">Submitted Reader Manuscripts</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Author & Email</th>
+                                <th class="py-3 px-6">Title</th>
+                                <th class="py-3 px-6">Category</th>
+                                <th class="py-3 px-6">Summary / PDF</th>
+                                <th class="py-3 px-6 text-right">Review Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="submissions-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Recycle Bin -->
+            <div id="section-trash" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-accord-slate text-sm">Recycle Bin</h3>
+                    <button onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3.5 py-2 rounded-xl transition-all">Empty Bin</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Title</th>
+                                <th class="py-3 px-6">Author</th>
+                                <th class="py-3 px-6">Category</th>
+                                <th class="py-3 px-6">Deleted On</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trash-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals (Add/Edit Book & Excel Upload) are shared via admin.js -->
+
+    <!-- Core & Library Admin Scripts -->
+    <script src="admin-core.js"></script>
+    <script src="admin.js"></script>
+    <script>
+        // Override login handling for Library Admin
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorBox = document.getElementById('login-error');
+            const submitBtn = document.getElementById('login-submit-btn');
+
+            errorBox.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Signing in...";
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            submitBtn.disabled = false;
+            submitBtn.innerText = "Sign In to Library Portal";
+
+            if (error) {
+                errorBox.innerText = error.message || "Invalid credentials.";
+                errorBox.classList.remove('hidden');
+            } else if (data?.user) {
+                unlockDashboard(data.user);
+                showToast("Welcome to Library Admin!");
+            }
+        }
+    </script>
+</body>
+</html>
