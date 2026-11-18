@@ -9,20 +9,16 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP';
 
     if (!window.supabaseClient && window.supabase) {
-        window.supabaseClient = window.supabase.createClient(
-            window.SUPABASE_URL || 'https://mzblgajftvyyosyrawcx.supabase.co',
-            window.SUPABASE_ANON_KEY || 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP'
-        );
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
 
-    // 1. Inject Header HTML into the placeholder
     const headerContainer = document.getElementById('accord-header');
     if (!headerContainer) return;
 
     headerContainer.innerHTML = `
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <!-- Using a 3-column grid layout so the center navigation is 100% stable and never shifts -->
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 grid grid-cols-[auto_1fr_auto] items-center gap-4">
+            <!-- 3-Column Grid ensuring center nav remains perfectly locked regardless of auth state -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 grid grid-cols-[minmax(200px,1fr)_auto_minmax(200px,1fr)] items-center gap-4">
                 
                 <!-- Left: Brand Logo -->
                 <a href="index.html" class="flex items-center space-x-3 group justify-self-start">
@@ -38,7 +34,7 @@
                     </div>
                 </a>
 
-                <!-- Center: Navigation (Explicitly Centered) -->
+                <!-- Center: Navigation Links -->
                 <nav class="hidden md:flex items-center justify-center space-x-7 justify-self-center">
                     <a href="index.html" id="nav-library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                     <a href="feed.html" id="nav-feed" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Feed</a>
@@ -52,8 +48,8 @@
 
                 <!-- Right: Auth / Profile Dropdown & Mobile Toggle -->
                 <div class="flex items-center space-x-3 justify-self-end">
-                    <div id="auth-area" class="flex items-center space-x-3">
-                        <!-- Dynamically injected via initGlobalHeaderAuth() -->
+                    <div id="auth-area" class="flex items-center space-x-3 min-w-[140px] justify-end">
+                        <!-- Dynamically injected -->
                     </div>
                     <button type="button" onclick="toggleGlobalMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue" aria-label="Toggle Menu">
                         <i class="fa-solid fa-bars text-xl"></i>
@@ -101,9 +97,7 @@ function setActive(id) {
 
 async function initGlobalHeaderAuth() {
     try {
-        const client = window.supabaseClient || (window.supabase && window.supabase.createClient('https://mzblgajftvyyosyrawcx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'));
-        if (!client) return;
-
+        const client = window.supabaseClient || window.supabase.createClient('https://mzsblgajftvvyosyrawcx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
         const { data: { session } } = await client.auth.getSession();
         const user = session?.user || null;
         
@@ -111,8 +105,11 @@ async function initGlobalHeaderAuth() {
         const mobileAuthArea = document.getElementById('mobile-auth-area');
         if (!authArea) return;
 
+        // Define authorized admin emails here
+        const adminEmails = ['rickblebs1@gmail.com']; 
+        const isAdmin = user && adminEmails.includes(user.email);
+
         if (!user) {
-            // Not signed in: Show both Log In and Sign Up buttons explicitly
             authArea.innerHTML = `
                 <a href="signin.html" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
                     Log in
@@ -130,7 +127,6 @@ async function initGlobalHeaderAuth() {
                 `;
             }
         } else {
-            // Signed in: Show Circular Profile Avatar with Dropdown Menu
             const email = user.email || 'user@accord.com';
             const avatarUrl = user.user_metadata?.avatar_url || null;
             const initial = email.charAt(0).toUpperCase();
@@ -139,17 +135,24 @@ async function initGlobalHeaderAuth() {
                 ? `<img src="${avatarUrl}" class="w-full h-full object-cover" alt="Profile">`
                 : `<span class="text-white font-bold text-sm">${initial}</span>`;
 
+            // Admin link only rendered if isAdmin is true
+            const adminLinkHtml = isAdmin ? `
+                <a href="feed-admin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-shield-halved text-emerald-600 w-4"></i>
+                    <span>Admin Moderation</span>
+                </a>
+            ` : '';
+
             authArea.innerHTML = `
                 <div class="relative">
                     <button type="button" onclick="toggleProfileDropdown(event)" class="w-11 h-11 rounded-full bg-accord-blue overflow-hidden ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer">
                         ${avatarContent}
                     </button>
 
-                    <!-- Dropdown Menu -->
                     <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
                         <div class="px-4 py-3 border-b border-slate-100">
                             <p class="text-xs font-bold text-accord-slate truncate">${email}</p>
-                            <p class="text-[10px] text-accord-muted">Authenticated Member</p>
+                            <p class="text-[10px] text-accord-muted">${isAdmin ? 'Administrator' : 'Authenticated Member'}</p>
                         </div>
                         <div class="py-1">
                             <a href="profile.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
@@ -160,10 +163,7 @@ async function initGlobalHeaderAuth() {
                                 <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
                                 <span>Saved Collections</span>
                             </a>
-                            <a href="feed-admin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-shield-halved text-emerald-600 w-4"></i>
-                                <span>Admin Moderation</span>
-                            </a>
+                            ${adminLinkHtml}
                         </div>
                         <div class="border-t border-slate-100 pt-1">
                             <button type="button" onclick="handleGlobalSignOut()" class="w-full flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors text-left">
@@ -179,7 +179,7 @@ async function initGlobalHeaderAuth() {
                 mobileAuthArea.innerHTML = `
                     <div class="space-y-2">
                         <a href="profile.html" class="block text-base font-medium text-accord-slate">Edit Profile</a>
-                        <a href="feed-admin.html" class="block text-base font-medium text-accord-slate">Admin Moderation</a>
+                        ${isAdmin ? '<a href="feed-admin.html" class="block text-base font-medium text-accord-slate">Admin Moderation</a>' : ''}
                         <button onclick="handleGlobalSignOut()" class="text-base font-medium text-red-600 text-left">Log out</button>
                     </div>
                 `;
@@ -193,9 +193,7 @@ async function initGlobalHeaderAuth() {
 function toggleProfileDropdown(e) {
     e.stopPropagation();
     const dropdown = document.getElementById('profile-dropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('hidden');
-    }
+    if (dropdown) dropdown.classList.toggle('hidden');
 }
 
 window.addEventListener('click', () => {
@@ -212,9 +210,7 @@ function toggleGlobalMobileMenu() {
 
 async function handleGlobalSignOut() {
     const client = window.supabaseClient || window.supabase;
-    if (client) {
-        await client.auth.signOut();
-    }
+    if (client) await client.auth.signOut();
     localStorage.removeItem('accord_user_session');
     window.location.href = 'index.html';
 }
