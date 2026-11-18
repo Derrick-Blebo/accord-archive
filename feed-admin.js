@@ -1,10 +1,7 @@
-// 1. Initialize Supabase
-const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ==========================================
+// ACCORD TESTIMONIES & FORUM ADMIN
+// ==========================================
 
-const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
-const ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__';
 
 let allTestimonies = [];
 let allComments = [];
@@ -269,7 +266,6 @@ async function openViewModal(id) {
         ? 'px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-all' 
         : 'px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all';
 
-    // Load comments for this testimony
     const commentsContainer = document.getElementById('modal-comments-list');
     const matchedComments = allComments.filter(c => c.testimony_id === id);
     document.getElementById('modal-comment-count').innerText = matchedComments.length;
@@ -357,9 +353,7 @@ function closeConfirmModal() {
 }
 
 async function executeDeleteTestimony(id) {
-    // Delete associated comments first
     await supabaseClient.from('testimony_comments').delete().eq('testimony_id', id);
-
     const { error } = await supabaseClient.from('testimonies').delete().eq('id', id);
 
     if (error) {
@@ -413,24 +407,4 @@ function exportTestimoniesToExcel() {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Book_Compilation_Testimonies');
     XLSX.writeFile(workbook, 'Accord_Testimonies_Book_Compilation.xlsx');
     showToast('Exported published testimonies for book compilation!');
-}
-
-function escapeHTML(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    if (!toast) return;
-    document.getElementById('toast-message').innerText = message;
-    toast.classList.remove('translate-y-24', 'opacity-0');
-    toast.classList.add('translate-y-0', 'opacity-100');
-    setTimeout(() => {
-        toast.classList.remove('translate-y-0', 'opacity-100');
-        toast.classList.add('translate-y-24', 'opacity-0');
-    }, 3500);
 }

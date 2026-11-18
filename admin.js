@@ -3,13 +3,7 @@
 // Core Auth, Fast Parallel Fetching, Shelves & Multi-Banner Slider
 // =========================================================
 
-// 1. Initialize Supabase
-const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const ADMIN_EMAIL = 'accordmedia1@gmail.com';
-const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 
 let catalogData = [];
 let trashData = [];

@@ -1,12 +1,6 @@
-// 1. Initialize Supabase
-const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
-const ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__';
-const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
-const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
+// ==========================================
+// ACCORD SUPERADMIN COMMAND CENTER
+// ==========================================
 
 let rolesRegistry = getDefaultRolesRegistry();
 let revokeTargetEmail = null;
@@ -209,7 +203,6 @@ async function fetchEcosystemMetrics() {
     if (!booksRes.error && booksRes.data) {
         const systemTitles = [ROLES_CONFIG_RECORD_NAME, LAYOUT_CONFIG_CATEGORY_NAME, MUSIC_CONFIG_RECORD_NAME];
 
-        // Extract roles if updated
         const roleRow = booksRes.data.find(b => b.title === ROLES_CONFIG_RECORD_NAME);
         if (roleRow?.description) {
             try {
@@ -218,7 +211,6 @@ async function fetchEcosystemMetrics() {
             } catch (e) {}
         }
 
-        // Extract Music stats if configured
         const musicRow = booksRes.data.find(b => b.title === MUSIC_CONFIG_RECORD_NAME);
         let musicItemsCount = 0;
         let activePollsCount = 0;
@@ -232,7 +224,6 @@ async function fetchEcosystemMetrics() {
         document.getElementById('stat-music-items').innerText = musicItemsCount;
         document.getElementById('stat-music-polls').innerText = activePollsCount;
 
-        // Library stats
         const realBooks = booksRes.data.filter(b => !systemTitles.includes(b.title) && !b.deleted_at);
         const liveBooks = realBooks.filter(b => b.is_visible !== false && b.status !== 'draft');
         const draftBooks = realBooks.filter(b => b.status === 'draft' || b.is_visible === false);
@@ -525,24 +516,4 @@ function exportRolesToExcel() {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Accord_Admin_Access');
     XLSX.writeFile(workbook, 'Accord_Admin_Access_Registry.xlsx');
     showToast('Exported Admin Access Registry to Excel!');
-}
-
-function escapeHTML(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    if (!toast) return;
-    document.getElementById('toast-message').innerText = message;
-    toast.classList.remove('translate-y-24', 'opacity-0');
-    toast.classList.add('translate-y-0', 'opacity-100');
-    setTimeout(() => {
-        toast.classList.remove('translate-y-0', 'opacity-100');
-        toast.classList.add('translate-y-24', 'opacity-0');
-    }, 3500);
 }

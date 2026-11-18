@@ -1,11 +1,8 @@
-// 1. Initialize Supabase
-const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ==========================================
+// ACCORD GOSPEL MUSIC & POLLS ADMIN
+// ==========================================
 
-const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
-const ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__';
-const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
+
 
 let musicConfig = {
     artistes: [],
@@ -371,7 +368,6 @@ async function handleSaveMusicItem(e) {
 
     const record = { id, title, genre, image, link, description };
 
-    // Remove from both first
     musicConfig.artistes = musicConfig.artistes.filter(x => x.id !== id);
     musicConfig.playlists = musicConfig.playlists.filter(x => x.id !== id);
 
@@ -501,24 +497,4 @@ function exportPollsToExcel() {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Award_Poll_Results');
     XLSX.writeFile(workbook, 'Accord_Music_Award_Poll_Results.xlsx');
     showToast('Exported award poll results to Excel!');
-}
-
-function escapeHTML(str) {
-    return String(str || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    if (!toast) return;
-    document.getElementById('toast-message').innerText = message;
-    toast.classList.remove('translate-y-24', 'opacity-0');
-    toast.classList.add('translate-y-0', 'opacity-100');
-    setTimeout(() => {
-        toast.classList.remove('translate-y-0', 'opacity-100');
-        toast.classList.add('translate-y-24', 'opacity-0');
-    }, 3500);
 }
