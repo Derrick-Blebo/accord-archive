@@ -279,9 +279,11 @@ function renderActiveTabOnly(isSilentRefresh = false) {
     } else if (activeAdminTab === 'categories') {
         renderCategoriesTable();
     } else if (activeAdminTab === 'submissions') {
-        renderDraftsTable();
         renderSubmissionsTable();
         renderUserBookSubmissionsTable();
+        renderTakedownRequestsTable();
+    } else if (activeAdminTab === 'drafts') {
+        renderDraftsTable();
     } else if (activeAdminTab === 'trash') {
         renderTrashTable();
     } else if (activeAdminTab === 'downloads') {
@@ -1200,19 +1202,20 @@ function promptDeleteCategory(id, name, bookCount) {
 // TAB SWITCHING (LAZY-RENDERED FOR SPEED) & PENDING REVIEWS
 // ==========================================
 
+// 1. Add 'drafts' to switchTab and renderActiveTabOnly
 function switchTab(tabName) {
     activeAdminTab = tabName;
-    const tabs = ['catalog', 'shelves', 'categories', 'submissions', 'trash', 'downloads', 'forum'];
+    const tabs = ['catalog', 'shelves', 'categories', 'submissions', 'drafts', 'trash', 'downloads', 'forum'];
     tabs.forEach(t => {
         const sec = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`nav-tab-${t}`);
         if (!sec) return;
         if (t === tabName) {
             sec.classList.remove('hidden');
-            if (btn) btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
+            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm";
         } else {
             sec.classList.add('hidden');
-            if (btn) btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
+            if (btn) btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate";
         }
     });
 
@@ -1244,9 +1247,10 @@ function switchPendingSubTab(subTab) {
     }
 }
 
+// 4. Update Admin Drafts Table (Admin-only drafts)
 function renderDraftsTable() {
     const tbody = document.getElementById('drafts-table-body');
-    const draftBooks = catalogData.filter(b => b.status === 'draft' || b.is_visible === false);
+    const draftBooks = getAdminDraftBooks();
 
     const draftBadge = document.getElementById('drafts-subtab-badge');
     if (draftBadge) draftBadge.innerText = draftBooks.length;
@@ -1255,7 +1259,7 @@ function renderDraftsTable() {
     tbody.innerHTML = '';
 
     if (draftBooks.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No draft or hidden books at the moment.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No admin draft or hidden books at the moment.</td></tr>`;
         return;
     }
 
@@ -1276,7 +1280,7 @@ function renderDraftsTable() {
                 <div>
                     <p class="leading-snug">${escapeHTML(book.title)}</p>
                     <div class="flex items-center gap-1 mt-0.5">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-file-pen mr-1"></i> Draft</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-file-pen mr-1"></i> Admin Draft</span>
                         ${saleTag}
                     </div>
                 </div>
@@ -1405,24 +1409,37 @@ async function toggleBookVisibility(id, makeVisible) {
     }
 }
 
+
+// 3. Update Catalog Filter to separate Live Admin Books vs. Live Author Books
 function filterAdminBooks() {
     const searchEl = document.getElementById('admin-search');
     const clearBtn = document.getElementById('admin-clear-search');
     const query = (searchEl?.value || '').toLowerCase().trim();
     const cat = document.getElementById('admin-cat-filter')?.value || 'All';
+    const sourceFilter = document.getElementById('admin-source-filter')?.value || 'all';
 
     if (clearBtn) {
         clearBtn.classList.toggle('hidden', query.length === 0);
     }
 
     const filtered = catalogData.filter(book => {
+        const isLive = book.is_visible !== false && book.status !== 'draft';
+        const isAuthorBook = Boolean(book.author_id);
+
+        let matchesSource = true;
+        if (sourceFilter === 'live-admin') matchesSource = isLive && !isAuthorBook;
+        else if (sourceFilter === 'live-author') matchesSource = isLive && isAuthorBook;
+        else if (sourceFilter === 'live-all') matchesSource = isLive;
+        else if (sourceFilter === 'drafts-hidden') matchesSource = !isLive;
+
         const matchesCat = cat === 'All' || book.category === cat;
         const matchesQuery =
             (book.title || '').toLowerCase().includes(query) ||
             (book.author || '').toLowerCase().includes(query) ||
             (book.category || '').toLowerCase().includes(query) ||
             (book.description || '').toLowerCase().includes(query);
-        return matchesCat && matchesQuery;
+
+        return matchesSource && matchesCat && matchesQuery;
     });
     renderCatalogTable(filtered);
 }
@@ -1907,20 +1924,60 @@ async function rejectSubmission(id) {
     showToast("Submission rejected and removed.");
 }
 
+// 5. Show Author-Submitted Draft Books inside Pending Reviews > User Book Submissions
 function renderUserBookSubmissionsTable() {
     const tbody = document.getElementById('user-books-table-body');
     const badge = document.getElementById('user-books-subtab-badge');
-    if (badge) badge.innerText = userBookSubmissionsData.length;
+
+    const authorPendingBooks = getPendingAuthorBooks();
+    const seenTitles = new Set(authorPendingBooks.map(b => (b.title || '').trim().toLowerCase()));
+    const extraSubmissions = userBookSubmissionsData.filter(s => !seenTitles.has((s.title || '').trim().toLowerCase()));
+    const totalPendingUserBooks = authorPendingBooks.length + extraSubmissions.length;
+
+    if (badge) badge.innerText = totalPendingUserBooks;
     if (!tbody) return;
 
     tbody.innerHTML = '';
 
-    if (userBookSubmissionsData.length === 0) {
+    if (totalPendingUserBooks === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-accord-muted">No user book submissions awaiting approval.</td></tr>`;
         return;
     }
 
-    userBookSubmissionsData.forEach(item => {
+    // Author Studio uploads (stored directly in `books` with author_id + status='draft')
+    authorPendingBooks.forEach(book => {
+        const priceBadge = book.is_for_sale
+            ? `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">For Sale • USD ${Number(book.price || 0).toFixed(2)}</span>`
+            : `<span class="bg-blue-50 text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded">Free Book</span>`;
+
+        const pdfLink = book.download_url
+            ? `<a href="${escapeHTML(book.download_url.split('?')[0])}" target="_blank" rel="noopener noreferrer" class="text-accord-blue hover:underline text-[11px] font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>Preview File</a>`
+            : `<span class="text-[10px] text-slate-400">No file</span>`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(book.author)}</p>
+                <p class="text-[10px] text-accord-muted">Author Studio Upload</p>
+            </td>
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(book.title)}</p>
+                <p class="text-[10px] text-accord-muted">${escapeHTML(book.year || '')} • ${escapeHTML(book.pages || 'TBD')} p.</p>
+            </td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md">${escapeHTML(book.category)}</span></td>
+            <td class="py-4 px-6">${priceBadge}</td>
+            <td class="py-4 px-6">${pdfLink}</td>
+            <td class="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                <button onclick="toggleBookVisibility(${book.id}, true)" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
+                <button onclick="promptDelete(${book.id})" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Legacy / direct `user_book_submissions` rows
+    extraSubmissions.forEach(item => {
         const priceBadge = item.is_for_sale
             ? `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">For Sale • USD ${Number(item.price || 0).toFixed(2)}</span>`
             : `<span class="bg-blue-50 text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded">Free Book</span>`;
@@ -2408,4 +2465,74 @@ async function rejectBookTakedown(bookId) {
 
     await fetchAllData();
     showToast('Takedown request rejected.');
+}
+
+// 2. Separate Admin Drafts from Author Pending Books
+function getAdminDraftBooks() {
+    return catalogData.filter(b => !b.author_id && (b.status === 'draft' || b.is_visible === false));
+}
+
+function getPendingAuthorBooks() {
+    return catalogData.filter(b => Boolean(b.author_id) && (b.status === 'draft' || b.is_visible === false));
+}
+
+
+// 6. Render Author Takedown Requests inside Pending Reviews
+function renderTakedownRequestsTable() {
+    const tbody = document.getElementById('takedown-requests-tbody');
+    const badge = document.getElementById('takedown-requests-badge');
+    const pendingTakedowns = catalogData.filter(b => b.takedown_status === 'pending');
+
+    if (badge) badge.innerText = pendingTakedowns.length;
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (pendingTakedowns.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-accord-muted">No pending author takedown requests.</td></tr>`;
+        return;
+    }
+
+    pendingTakedowns.forEach(book => {
+        const reqDate = book.takedown_requested_at
+            ? new Date(book.takedown_requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '—';
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(book.title)}</p>
+                <p class="text-[10px] text-accord-muted">By ${escapeHTML(book.author)}</p>
+            </td>
+            <td class="py-4 px-6 text-slate-700 max-w-md">${escapeHTML(book.takedown_reason || '')}</td>
+            <td class="py-4 px-6 text-center text-accord-muted">${reqDate}</td>
+            <td class="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                <button onclick="approveBookTakedown(${book.id})" class="bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
+                <button onclick="rejectBookTakedown(${book.id})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+
+// 7. Keep Pending Reviews Count & Admin Drafts Badge Accurate
+function updateStats() {
+    document.getElementById('stat-total').innerText = catalogData.length;
+
+    const totalDownloads = catalogData.reduce((sum, book) => sum + (Number(book.downloads) || 0), 0);
+    const downloadsEl = document.getElementById('stat-downloads');
+    if (downloadsEl) downloadsEl.innerText = totalDownloads.toLocaleString();
+
+    const pendingAuthorBooks = getPendingAuthorBooks().length;
+    const pendingTakedowns = catalogData.filter(b => b.takedown_status === 'pending').length;
+    const totalPending = pendingAuthorBooks + submissionsData.length + userBookSubmissionsData.length + pendingTakedowns;
+
+    const statPendingEl = document.getElementById('stat-pending');
+    if (statPendingEl) statPendingEl.innerText = totalPending;
+
+    const pendingBadgeEl = document.getElementById('pending-badge');
+    if (pendingBadgeEl) pendingBadgeEl.innerText = totalPending;
+
+    const draftBadge = document.getElementById('drafts-subtab-badge');
+    if (draftBadge) draftBadge.innerText = getAdminDraftBooks().length;
 }

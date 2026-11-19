@@ -298,36 +298,36 @@
         <!-- Content Area -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
 
-            <!-- Quick Stats Row -->
+            <!-- Quick Stats Row (Clickable) -->
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
-                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                    <div class="w-12 h-12 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-book"></i></div>
+                <button type="button" onclick="switchTab('catalog')" class="text-left bg-white p-6 rounded-3xl border border-slate-200 hover:border-accord-blue hover:shadow-md shadow-sm flex items-center space-x-4 transition-all cursor-pointer">
+                    <div class="w-12 h-12 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-book"></i></div>
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Publications</p>
                         <h3 id="stat-total" class="text-2xl font-black text-accord-slate">0</h3>
                     </div>
-                </div>
-                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-download"></i></div>
+                </button>
+                <button type="button" onclick="switchTab('catalog')" class="text-left bg-white p-6 rounded-3xl border border-slate-200 hover:border-emerald-500 hover:shadow-md shadow-sm flex items-center space-x-4 transition-all cursor-pointer">
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-download"></i></div>
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
                         <h3 id="stat-downloads" class="text-2xl font-black text-accord-slate">0</h3>
                     </div>
-                </div>
-                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                    <div class="w-12 h-12 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                </button>
+                <button type="button" onclick="switchTab('submissions')" class="text-left bg-white p-6 rounded-3xl border border-slate-200 hover:border-accord-gold hover:shadow-md shadow-sm flex items-center space-x-4 transition-all cursor-pointer">
+                    <div class="w-12 h-12 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Reviews</p>
                         <h3 id="stat-pending" class="text-2xl font-black text-accord-slate">0</h3>
                     </div>
-                </div>
-                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                    <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-layer-group"></i></div>
+                </button>
+                <button type="button" onclick="switchTab('shelves')" class="text-left bg-white p-6 rounded-3xl border border-slate-200 hover:border-purple-500 hover:shadow-md shadow-sm flex items-center space-x-4 transition-all cursor-pointer">
+                    <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-lg shrink-0"><i class="fa-solid fa-layer-group"></i></div>
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Active Shelves</p>
                         <h3 id="stat-shelves-count" class="text-2xl font-black text-accord-slate">4</h3>
                     </div>
-                </div>
+                </button>
             </div>
 
             <!-- Action Toolbar & Tabs -->
@@ -336,6 +336,7 @@
                     <button type="button" id="nav-tab-catalog" onclick="switchTab('catalog')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">Catalog</button>
                     <button type="button" id="nav-tab-shelves" onclick="switchTab('shelves')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Home Shelves & Banners</button>
                     <button type="button" id="nav-tab-categories" onclick="switchTab('categories')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Categories</button>
+                    <button type="button" id="nav-tab-drafts" onclick="switchTab('drafts')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Admin Drafts <span id="drafts-subtab-badge" class="ml-1 bg-slate-200 text-accord-slate px-1.5 py-0.5 rounded-full text-[10px]">0</span></button>
                     <button type="button" id="nav-tab-submissions" onclick="switchTab('submissions')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Pending Reviews</button>
                     <button type="button" id="nav-tab-trash" onclick="switchTab('trash')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Bin</button>
                 </div>
@@ -360,6 +361,19 @@
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
+                    <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none">
+                        <option value="All">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <select id="admin-source-filter" onchange="filterAdminBooks()" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none">
+                        <option value="all">All Books (Live & Drafts)</option>
+                        <option value="live-admin">Live Books — Admin</option>
+                        <option value="live-author">Live Books — Authors</option>
+                        <option value="live-all">All Live Books</option>
+                        <option value="drafts-hidden">Hidden / Drafts</option>
+                    </select>
                     <select id="admin-cat-filter" onchange="filterAdminBooks()" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none">
                         <option value="All">All Categories</option>
                     </select>
@@ -526,6 +540,28 @@
                 </div>
             </div>
 
+            <!-- SECTION 3B: Admin Drafts -->
+            <div id="section-drafts" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-sm">Admin Drafts & Hidden Books</h3>
+                    <p class="text-[11px] text-accord-muted">Unpublished drafts or hidden books created by Library Admins (author-submitted books appear in Pending Reviews).</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Publication</th>
+                                <th class="py-3 px-6">Author</th>
+                                <th class="py-3 px-6">Category</th>
+                                <th class="py-3 px-6 text-center">Year</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="drafts-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- SECTION 4: Recycle Bin -->
             <div id="section-trash" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
                 <div class="flex items-center justify-between">
@@ -553,7 +589,7 @@
     <!-- Core, Unified Footer & Library Admin Scripts -->
     <script src="admin-core.js"></script>
     <script src="footer.js"></script>
-    <script src="admin.js"></script>
+    <script src="admin.js?v=2"></script>
     <script>
         async function handleAdminLogin(e) {
             e.preventDefault();
