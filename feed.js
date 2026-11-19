@@ -210,9 +210,28 @@ function renderFeedCard(post) {
 
     const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
     const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
+    const ministryUrl = (isVerifiedAuthor && post.author_id)
+        ? `ministry.html?id=${encodeURIComponent(post.author_id)}`
+        : null;
+
     const roleBadge = isVerifiedAuthor
         ? `<span class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-accord-gold border border-amber-200"><i class="fa-solid fa-circle-check text-[9px]"></i>Ministry / Minister</span>`
         : '';
+
+    const avatarInner = `
+        <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-xs shrink-0">
+            <span>${escapeHtml(displayAuthor.charAt(0).toUpperCase())}</span>
+            ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
+        </div>
+    `;
+
+    const authorAvatarHtml = ministryUrl
+        ? `<a href="${escapeHtml(ministryUrl)}" class="shrink-0 hover:opacity-90 transition-opacity" title="View ${escapeHtml(displayAuthor)}">${avatarInner}</a>`
+        : avatarInner;
+
+    const authorNameHtml = ministryUrl
+        ? `<a href="${escapeHtml(ministryUrl)}" class="text-xs font-bold text-accord-slate hover:text-accord-blue hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
+        : `<h4 class="text-xs font-bold text-accord-slate truncate">${escapeHtml(displayAuthor)}</h4>`;
 
     const typeMeta = getPostTypeMeta(post.post_type);
     let mediaHtml = '';
@@ -247,13 +266,10 @@ function renderFeedCard(post) {
     card.innerHTML = `
         <div class="flex items-center justify-between gap-3">
             <div class="flex items-center space-x-3 min-w-0">
-                <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-xs shrink-0">
-                    <span>${escapeHtml(displayAuthor.charAt(0).toUpperCase())}</span>
-                    ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
-                </div>
+                ${authorAvatarHtml}
                 <div class="min-w-0">
                     <div class="flex items-center flex-wrap">
-                        <h4 class="text-xs font-bold text-accord-slate truncate">${escapeHtml(displayAuthor)}</h4>
+                        ${authorNameHtml}
                         ${roleBadge}
                     </div>
                     <p class="text-[10px] text-accord-muted">${dateFormatted}</p>

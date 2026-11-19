@@ -4,6 +4,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
+const HIDDEN_CONFIG_TITLES = [
+    '__ACCORD_ROLES_CONFIG__',
+    '__ACCORD_LAYOUT_CONFIG__',
+    '__ACCORD_MUSIC_CONFIG__'
+];
 
 let allBooks = [];
 let categoriesList = [];
@@ -208,9 +213,9 @@ async function loadLibraryData() {
             }
         }
 
-        // 2. Filter published books & deduplicate by title
+        // 2. Filter published books (excluding hidden system config rows) & deduplicate by title
         const realBooks = booksRes.data.filter(
-            b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME && !b.deleted_at && b.is_visible !== false && b.status !== 'draft'
+            b => !HIDDEN_CONFIG_TITLES.includes(b.title) && !b.deleted_at && b.is_visible !== false && b.status !== 'draft'
         );
         const seenTitles = new Set();
         allBooks = realBooks.filter(book => {
@@ -709,84 +714,19 @@ function renderBooks() {
 }
 
 // ==========================================
-// BOOK DETAIL MODAL, BOOKMARKS & DOWNLOADS
+// BOOK DETAIL ROUTING, BOOKMARKS & DOWNLOADS
 // ==========================================
 
 function checkSharedBookParam() {
     const params = new URLSearchParams(window.location.search);
     const sharedBookId = params.get('book');
     if (sharedBookId) {
-        openBookModal(Number(sharedBookId));
+        window.location.replace(`book.html?id=${encodeURIComponent(sharedBookId)}`);
     }
 }
 
 function openBookModal(bookId) {
-    const book = allBooks.find(b => Number(b.id) === Number(bookId));
-    if (!book) return;
-
-    const modal = document.getElementById('book-detail-modal');
-    const content = document.getElementById('book-modal-content');
-    if (!modal || !content) return;
-
-    const isPurchased = purchasedBookIds.includes(Number(book.id));
-    const isBookmarked = savedBookmarks.includes(book.title);
-    const safeTitle = (book.title || '').replace(/'/g, "\\'");
-    const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-
-    const actionHtml = (book.is_for_sale && !isPurchased)
-        ? `<button type="button" onclick="initiateBookPurchase(${book.id})" class="flex-1 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center space-x-2">
-               <i class="fa-solid fa-cart-shopping"></i>
-               <span>Purchase Publication — USD ${Number(book.price || 0).toFixed(2)}</span>
-           </button>`
-        : (book.download_url
-            ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center space-x-2">
-                   <i class="fa-solid fa-download"></i>
-                   <span>Download / Read Full Publication</span>
-               </a>`
-            : `<button disabled class="flex-1 bg-slate-200 text-slate-500 text-xs font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed">Digital File Coming Soon</button>`);
-
-    content.innerHTML = `
-        <div class="flex flex-col sm:flex-row gap-6">
-            <div class="w-36 sm:w-44 shrink-0 mx-auto sm:mx-0">
-                ${book.cover_url
-                    ? `<img src="${escapeHTML(book.cover_url)}" alt="${escapeHTML(book.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-full h-56 object-cover rounded-2xl border border-slate-200 shadow-md">`
-                    : ''}
-                <div class="w-full h-56 rounded-2xl bg-gradient-to-br ${book.gradient || 'from-blue-900 via-indigo-900 to-slate-900'} p-4 flex-col justify-between text-white shadow-md" style="${book.cover_url ? 'display:none;' : 'display:flex;'}">
-                    <p class="text-[8px] uppercase tracking-widest text-accord-gold font-bold">Accord Archive</p>
-                    <h4 class="serif-heading text-sm font-bold leading-snug">${escapeHTML(book.title)}</h4>
-                    <p class="text-[10px] text-slate-200">${escapeHTML(book.author)}</p>
-                </div>
-            </div>
-
-            <div class="flex-1 space-y-3">
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="bg-accord-lightBlue text-accord-blue text-[11px] font-bold px-3 py-1 rounded-lg">${escapeHTML(book.category)}</span>
-                    <span class="text-xs font-semibold text-accord-muted">Published: ${escapeHTML(book.year || 'TBD')}</span>
-                    <span class="text-xs font-semibold text-accord-muted">• ${escapeHTML(book.pages || 'TBD')} pages</span>
-                </div>
-
-                <h2 class="serif-heading text-2xl font-bold text-accord-slate leading-snug">${escapeHTML(book.title)}</h2>
-                <p class="text-xs font-bold text-accord-slate">Author / Source: ${escapeHTML(book.author)}</p>
-
-                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed pt-2 border-t border-slate-100">
-                    ${escapeHTML(book.description || '')}
-                </p>
-
-                <div class="pt-4 flex flex-wrap items-center gap-2.5">
-                    ${actionHtml}
-                    <button type="button" onclick="toggleBookmark('${safeTitle}'); openBookModal(${book.id});" class="px-4 py-3.5 rounded-2xl border ${isBookmarked ? 'border-accord-gold bg-amber-50 text-accord-gold' : 'border-slate-200 bg-slate-50 text-accord-slate hover:border-accord-gold'} text-xs font-bold transition-all">
-                        <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark mr-1"></i> ${isBookmarked ? 'Saved' : 'Save'}
-                    </button>
-                    <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue text-xs font-bold transition-all">
-                        <i class="fa-solid fa-share-nodes mr-1"></i> Share
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    window.location.href = `book.html?id=${encodeURIComponent(bookId)}`;
 }
 
 function closeBookModal() {
@@ -852,21 +792,19 @@ async function initiateBookPurchase(bookId) {
         purchasedBookIds.push(Number(book.id));
         showToast(`Unlocked "${book.title}"! You can now read or download it.`);
         renderBooks();
-        openBookModal(book.id);
     } else {
         showToast(`Purchase notice: ${error.message}`);
     }
 }
 
 async function shareBookLink(bookId, title) {
-    const shareUrl = `${window.location.origin}/?book=${bookId}`;
+    const shareUrl = `${window.location.origin}/book.html?id=${bookId}`;
     const isDesktop = window.innerWidth >= 768;
     if (!isDesktop && navigator.share) {
-        try { await navigator.share({ title, url: shareUrl }); } catch (err) {}
-    } else {
-        await navigator.clipboard.writeText(shareUrl);
-        showToast("Book link copied to clipboard!");
+        try { await navigator.share({ title, url: shareUrl }); return; } catch (err) {}
     }
+    await navigator.clipboard.writeText(shareUrl);
+    showToast("Book link copied to clipboard!");
 }
 
 // ==========================================

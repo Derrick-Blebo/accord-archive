@@ -1,16 +1,15 @@
 /**
  * Accord Archive - Unified Global Header Component
- * Automatically injects the navbar, handles auth state, avatar dropdown, and bookmark counts.
+ * Automatically injects the navbar, handles auth state, notifications, avatar dropdown, and bookmark counts.
  */
+
+let globalHeaderUser = null;
+let globalNotifications = [];
 
 (function () {
     // Ensure Supabase client is available globally inside header.js
     const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-
-    if (!window.supabaseClient && window.supabase) {
-        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
 
     if (!window.supabaseClient && window.supabase) {
         window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -50,7 +49,7 @@
                     </a>
                 </nav>
 
-                <!-- Right: Auth / Profile Dropdown & Mobile Toggle -->
+                <!-- Right: Notifications, Auth / Profile Dropdown & Mobile Toggle -->
                 <div class="flex items-center space-x-3 justify-self-end">
                     <div id="auth-area" class="flex items-center space-x-3 min-w-[140px] justify-end">
                         <!-- Dynamically injected -->
@@ -86,8 +85,8 @@
 
 function highlightActiveNavLink() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
-    if (path.includes('index')) setActive('nav-library');
-    else if (path.includes('feed')) setActive('nav-feed');
+    if (path.includes('index') || path.includes('book')) setActive('nav-library');
+    else if (path.includes('feed') || path.includes('ministry') || path.includes('post')) setActive('nav-feed');
     else if (path.includes('music')) setActive('nav-music');
     else if (path.includes('saved')) setActive('nav-saved');
 }
@@ -102,15 +101,17 @@ function setActive(id) {
 async function initGlobalHeaderAuth() {
     try {
         const client = window.supabaseClient;
-        if (!client) return;        const { data: { session } } = await client.auth.getSession();
+        if (!client) return;
+
+        const { data: { session } } = await client.auth.getSession();
         const user = session?.user || null;
-        
+        globalHeaderUser = user;
+
         const authArea = document.getElementById('auth-area');
         const mobileAuthArea = document.getElementById('mobile-auth-area');
         if (!authArea) return;
 
-        // Define authorized admin emails here
-        const adminEmails = ['rickblebs1@gmail.com']; 
+        const adminEmails = ['rickblebs1@gmail.com'];
         const isAdmin = user && adminEmails.includes(user.email);
 
         if (!user) {
@@ -135,11 +136,10 @@ async function initGlobalHeaderAuth() {
             const avatarUrl = user.user_metadata?.avatar_url || null;
             const initial = email.charAt(0).toUpperCase();
 
-            const avatarContent = avatarUrl 
+            const avatarContent = avatarUrl
                 ? `<img src="${avatarUrl}" class="w-full h-full object-cover" alt="Profile">`
                 : `<span class="text-white font-bold text-sm">${initial}</span>`;
 
-            // Admin link only rendered if isAdmin is true
             const adminLinkHtml = isAdmin ? `
                 <a href="feed-admin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                     <i class="fa-solid fa-shield-halved text-emerald-600 w-4"></i>
@@ -148,6 +148,27 @@ async function initGlobalHeaderAuth() {
             ` : '';
 
             authArea.innerHTML = `
+                <!-- Notification Bell Dropdown -->
+                <div class="relative">
+                    <button type="button" onclick="toggleNotificationsDropdown(event)" class="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all focus:outline-none cursor-pointer" aria-label="Notifications" title="Notifications">
+                        <i class="fa-regular fa-bell text-base"></i>
+                        <span id="notif-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">0</span>
+                    </button>
+
+                    <div id="notifications-dropdown" onclick="event.stopPropagation()" class="hidden absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+                        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                            <span class="text-xs font-bold text-accord-slate">Notifications</span>
+                            <button type="button" id="mark-all-read-btn" onclick="markAllNotificationsRead()" class="text-[11px] font-bold text-accord-blue hover:underline">
+                                Mark all as read
+                            </button>
+                        </div>
+                        <div id="notifications-list" class="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                            <div class="px-4 py-8 text-center text-xs text-accord-muted">Loading notifications...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Avatar Dropdown -->
                 <div class="relative">
                     <button type="button" onclick="toggleProfileDropdown(event)" class="w-11 h-11 rounded-full bg-accord-blue overflow-hidden ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer">
                         ${avatarContent}
@@ -163,11 +184,10 @@ async function initGlobalHeaderAuth() {
                                 <i class="fa-regular fa-user text-accord-blue w-4"></i>
                                 <span>Edit Profile</span>
                             </a>
-                        
-                        <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                            <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
-                            <span>My Author Page</span>
-                        </a>
+                            <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                                <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
+                                <span>My Author Page</span>
+                            </a>
                             <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                                 <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
                                 <span>Saved Collections</span>
@@ -193,23 +213,185 @@ async function initGlobalHeaderAuth() {
                     </div>
                 `;
             }
+
+            await loadGlobalNotifications();
         }
     } catch (err) {
         console.error('Header auth check error:', err);
     }
 }
 
+// ==========================================
+// GLOBAL NOTIFICATIONS
+// ==========================================
+
+async function loadGlobalNotifications() {
+    const client = window.supabaseClient;
+    if (!client || !globalHeaderUser) return;
+
+    const { data, error } = await client
+        .from('notifications')
+        .select('*')
+        .eq('user_id', globalHeaderUser.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+    if (error) {
+        console.warn('Could not load notifications:', error.message);
+        return;
+    }
+
+    globalNotifications = data || [];
+    renderGlobalNotifications();
+}
+
+function renderGlobalNotifications() {
+    const badge = document.getElementById('notif-unread-badge');
+    const listEl = document.getElementById('notifications-list');
+    const markAllBtn = document.getElementById('mark-all-read-btn');
+    if (!listEl) return;
+
+    const unreadCount = globalNotifications.filter(n => !n.is_read).length;
+
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    if (markAllBtn) {
+        markAllBtn.classList.toggle('hidden', unreadCount === 0);
+    }
+
+    if (globalNotifications.length === 0) {
+        listEl.innerHTML = `
+            <div class="px-4 py-8 text-center space-y-1.5">
+                <i class="fa-regular fa-bell-slash text-2xl text-slate-300"></i>
+                <p class="text-xs font-semibold text-accord-slate">You're all caught up</p>
+                <p class="text-[11px] text-accord-muted">Follow ministries or join discussions to see updates here.</p>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = globalNotifications.map(n => {
+        const iconMeta = getNotificationIconMeta(n.type);
+        const timeAgo = formatNotifTimeAgo(n.created_at);
+        const unreadBg = n.is_read ? 'bg-white hover:bg-slate-50' : 'bg-accord-lightBlue/40 hover:bg-accord-lightBlue/70';
+
+        return `
+            <button type="button" onclick="handleNotificationClick('${n.id}')" class="w-full text-left px-4 py-3.5 flex items-start space-x-3 transition-colors ${unreadBg}">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconMeta.bgClass}">
+                    <i class="fa-solid ${iconMeta.icon} text-xs"></i>
+                </div>
+                <div class="flex-1 min-w-0 space-y-0.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <p class="text-xs font-bold text-accord-slate leading-snug">${escapeHeaderHtml(n.title)}</p>
+                        ${!n.is_read ? '<span class="w-2 h-2 rounded-full bg-accord-blue shrink-0 mt-1"></span>' : ''}
+                    </div>
+                    <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2">${escapeHeaderHtml(n.message)}</p>
+                    <p class="text-[10px] font-semibold text-slate-400 pt-0.5">${timeAgo}</p>
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+function getNotificationIconMeta(type) {
+    switch (type) {
+        case 'new_follow':
+            return { icon: 'fa-user-plus', bgClass: 'bg-accord-lightBlue text-accord-blue' };
+        case 'new_post':
+            return { icon: 'fa-bullhorn', bgClass: 'bg-accord-goldLight text-accord-gold' };
+        case 'book_comment':
+            return { icon: 'fa-book-open', bgClass: 'bg-emerald-50 text-emerald-600' };
+        case 'post_comment':
+            return { icon: 'fa-comment-dots', bgClass: 'bg-rose-50 text-rose-500' };
+        default:
+            return { icon: 'fa-bell', bgClass: 'bg-slate-100 text-accord-slate' };
+    }
+}
+
+async function handleNotificationClick(notifId) {
+    const client = window.supabaseClient;
+    const notif = globalNotifications.find(n => String(n.id) === String(notifId));
+    if (!notif) return;
+
+    if (!notif.is_read && client && globalHeaderUser) {
+        notif.is_read = true;
+        renderGlobalNotifications();
+        await client
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', notifId)
+            .eq('user_id', globalHeaderUser.id);
+    }
+
+    if (notif.link_url) {
+        window.location.href = notif.link_url;
+    }
+}
+
+async function markAllNotificationsRead() {
+    const client = window.supabaseClient;
+    if (!client || !globalHeaderUser) return;
+
+    globalNotifications = globalNotifications.map(n => ({ ...n, is_read: true }));
+    renderGlobalNotifications();
+
+    await client
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', globalHeaderUser.id)
+        .eq('is_read', false);
+}
+
+function formatNotifTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function escapeHeaderHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// ==========================================
+// DROPDOWNS, MOBILE MENU & BOOKMARKS
+// ==========================================
+
+function toggleNotificationsDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('profile-dropdown')?.classList.add('hidden');
+    const dropdown = document.getElementById('notifications-dropdown');
+    if (dropdown) {
+        const willOpen = dropdown.classList.contains('hidden');
+        dropdown.classList.toggle('hidden');
+        if (willOpen) loadGlobalNotifications();
+    }
+}
+
 function toggleProfileDropdown(e) {
     e.stopPropagation();
+    document.getElementById('notifications-dropdown')?.classList.add('hidden');
     const dropdown = document.getElementById('profile-dropdown');
     if (dropdown) dropdown.classList.toggle('hidden');
 }
 
 window.addEventListener('click', () => {
-    const dropdown = document.getElementById('profile-dropdown');
-    if (dropdown && !dropdown.classList.contains('hidden')) {
-        dropdown.classList.add('hidden');
-    }
+    document.getElementById('profile-dropdown')?.classList.add('hidden');
+    document.getElementById('notifications-dropdown')?.classList.add('hidden');
 });
 
 function toggleGlobalMobileMenu() {
@@ -231,5 +413,5 @@ function updateGlobalBookmarks() {
         const mobileBadge = document.getElementById('mobile-bookmark-badge');
         if (badge) badge.textContent = saved.length;
         if (mobileBadge) mobileBadge.textContent = saved.length;
-    } catch(e) {}
+    } catch (e) {}
 }

@@ -27,7 +27,8 @@ async function fetchFromSupabase(table, filterQuery) {
 }
 
 export default async function handler(req, res) {
-    const { page = 'index', book, testimony, event } = req.query;
+    const { page = 'index', id, book, testimony, event } = req.query;
+    const bookId = page === 'book' ? (id || book) : book;
 
     let title = page === 'forum'
         ? 'Testimonies & Church Events Forum — Accord'
@@ -36,16 +37,17 @@ export default async function handler(req, res) {
         ? 'Read and share testimonies of what God has done, and contribute to Accord’s upcoming testimony book compilations.'
         : 'Explore free and published historical Christian manuscripts, biographies, and chronicles.';
     let imageUrl = DEFAULT_IMAGE;
-    let canonicalUrl = page === 'forum' ? `${SITE_URL}/forum.html` : `${SITE_URL}/`;
+    let canonicalUrl = page === 'forum'
+        ? `${SITE_URL}/forum.html`
+        : (page === 'book' ? `${SITE_URL}/book.html` : `${SITE_URL}/`);
 
     try {
-        if (book) {
-            const item = await fetchFromSupabase('books', `id=eq.${encodeURIComponent(book)}&select=id,title,author,description,cover_url`);
+        if (bookId) {
+            const item = await fetchFromSupabase('books', `id=eq.${encodeURIComponent(bookId)}&select=id,title,author,description,cover_url`);
             if (item) {
                 title = `${item.title} — by ${item.author}`;
                 description = (item.description || description).slice(0, 180);
-                canonicalUrl = `${SITE_URL}/?book=${item.id}`;
-                // WhatsApp requires a real https:// image URL (not data:image base64)
+                canonicalUrl = `${SITE_URL}/book.html?id=${item.id}`;
                 if (item.cover_url && item.cover_url.startsWith('http')) {
                     imageUrl = item.cover_url;
                 }
@@ -72,7 +74,7 @@ export default async function handler(req, res) {
         // Fall back to default metadata on error
     }
 
-    const htmlFile = page === 'forum' ? 'forum.html' : 'index.html';
+    const htmlFile = page === 'forum' ? 'forum.html' : (page === 'book' ? 'book.html' : 'index.html');
     const filePath = path.join(process.cwd(), htmlFile);
     let html = fs.readFileSync(filePath, 'utf8');
 
@@ -90,7 +92,6 @@ export default async function handler(req, res) {
     <meta name="twitter:image" content="${escapeAttr(imageUrl)}" />
     `;
 
-    // Replace existing <title> and strip static og: tags so WhatsApp reads the dynamic ones cleanly
     html = html
         .replace(/<title>[\s\S]*?<\/title>/i, '')
         .replace(/<meta[^>]+property=["']og:[^"']+["'][^>]*>/gi, '')

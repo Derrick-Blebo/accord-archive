@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ministry Profile — Accord Archive</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Supabase JS v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; color: #0F172A; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+        .logo-rd-bar { position: relative; display: inline-block; }
+        .logo-rd-bar::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background-color: #F5A623;
+            border-radius: 9999px;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate min-h-screen flex flex-col">
+
+    <!-- Unified Header -->
+    <div id="accord-header"></div>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        <div>
+            <a href="feed.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-muted hover:text-accord-blue transition-colors">
+                <i class="fa-solid fa-arrow-left text-[11px]"></i>
+                <span>Back to Fellowship Feed</span>
+            </a>
+        </div>
+
+        <!-- Loading State -->
+        <div id="ministry-loading" class="bg-white border border-slate-200/90 rounded-3xl p-8 shadow-sm animate-pulse space-y-4">
+            <div class="flex items-center gap-4">
+                <div class="w-20 h-20 rounded-full bg-slate-200 shrink-0"></div>
+                <div class="space-y-2.5 flex-1">
+                    <div class="h-6 w-56 bg-slate-200 rounded-lg"></div>
+                    <div class="h-4 w-36 bg-slate-100 rounded-lg"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Not Found / Unverified State -->
+        <div id="ministry-not-found" class="hidden bg-white border border-slate-200/90 rounded-3xl p-10 text-center shadow-sm space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-slate-100 text-accord-muted flex items-center justify-center mx-auto">
+                <i class="fa-solid fa-church text-xl"></i>
+            </div>
+            <h1 class="serif-heading text-2xl font-bold text-accord-slate">Ministry Page Not Found</h1>
+            <p class="text-sm text-accord-muted max-w-md mx-auto">This profile does not exist or is not a verified Ministry / Minister account on Accord Archive.</p>
+            <a href="feed.html" class="inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl transition-all">
+                <span>Return to Feed</span>
+            </a>
+        </div>
+
+        <!-- Ministry Hero Card -->
+        <section id="ministry-header-card" class="hidden bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div class="flex items-center gap-4 sm:gap-5 min-w-0">
+                    <div class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accord-lightBlue text-accord-blue font-extrabold text-2xl sm:text-3xl flex items-center justify-center shrink-0 border-2 border-white shadow-sm">
+                        <span id="ministry-avatar-initial">M</span>
+                        <span title="Verified Ministry / Minister" class="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white">
+                            <i class="fa-solid fa-check text-[10px]"></i>
+                        </span>
+                    </div>
+
+                    <div class="min-w-0 space-y-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 id="ministry-name" class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate leading-tight truncate"></h1>
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-goldLight text-accord-gold border border-amber-200">
+                                <i class="fa-solid fa-circle-check text-[9px]"></i>
+                                Verified Ministry / Minister
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-4 text-xs text-accord-muted font-semibold">
+                            <span><strong id="ministry-followers-count" class="text-accord-slate">0</strong> Followers</span>
+                            <span><strong id="ministry-posts-count" class="text-accord-slate">0</strong> Posts</span>
+                            <span id="ministry-joined"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Follow & Share Actions -->
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <button id="follow-btn" type="button" onclick="toggleFollowMinistry()" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all inline-flex items-center space-x-2">
+                        <i id="follow-btn-icon" class="fa-solid fa-user-plus"></i>
+                        <span id="follow-btn-label">Follow</span>
+                    </button>
+                    <button type="button" onclick="shareMinistryProfile()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-accord-lightBlue hover:border-accord-blue hover:text-accord-blue text-accord-slate text-xs font-bold transition-all inline-flex items-center space-x-1.5">
+                        <i class="fa-solid fa-share-nodes"></i>
+                        <span>Share</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Content Tabs -->
+        <div id="ministry-tabs-bar" class="hidden flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <button id="mtab-all" type="button" onclick="setMinistryTab('all')" class="ministry-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All</button>
+            <button id="mtab-video" type="button" onclick="setMinistryTab('video')" class="ministry-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Videos</button>
+            <button id="mtab-audio" type="button" onclick="setMinistryTab('audio')" class="ministry-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Audio</button>
+            <button id="mtab-text" type="button" onclick="setMinistryTab('text')" class="ministry-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Text Posts</button>
+            <button id="mtab-testimony" type="button" onclick="setMinistryTab('testimony')" class="ministry-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Testimonies</button>
+        </div>
+
+        <!-- Posts Stream -->
+        <section id="ministry-posts-stream" class="hidden space-y-4"></section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-accord-slate text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-xl translate-y-24 opacity-0 transition-all duration-300 pointer-events-none flex items-center space-x-2">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-base"></i>
+        <span id="toast-message"></span>
+    </div>
+
+    <script src="admin-core.js?v=1"></script>
+    <script src="ministry.js?v=1"></script>
+    <script src="header.js?v=2"></script>
+</body>
+</html>
