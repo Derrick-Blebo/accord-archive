@@ -2,6 +2,10 @@
 // ACCORD SUPERADMIN COMMAND CENTER
 // ==========================================
 
+const SUPERADMIN_MASTER_EMAIL = (typeof MASTER_ADMIN_EMAIL !== 'undefined' && MASTER_ADMIN_EMAIL)
+    ? MASTER_ADMIN_EMAIL
+    : 'accordmedia1@gmail.com';
+
 let rolesRegistry = getDefaultRolesRegistry();
 let ministryUpgradeRequests = [];
 let revokeTargetEmail = null;
@@ -55,39 +59,6 @@ function showLoginError(msg) {
     }
 }
 
-// Safe fallback in case admin-core.js doesn't expose it
-const SUPERADMIN_MASTER_EMAIL = (typeof SUPERADMIN_MASTER_EMAIL !== 'undefined' && SUPERADMIN_MASTER_EMAIL) 
-    ? SUPERADMIN_MASTER_EMAIL 
-    : 'accordmedia1@gmail.com';
-
-let rolesRegistry = getDefaultRolesRegistry();
-let ministryUpgradeRequests = [];
-let revokeTargetEmail = null;
-
-function getDefaultRolesRegistry() {
-    return [
-        {
-            email: SUPERADMIN_MASTER_EMAIL,
-            name: 'Derrick Quaynortey Blebo',
-            title: 'Founder & Master Superadmin',
-            portals: ['superadmin', 'library', 'music', 'testimonies'],
-            status: 'active',
-            isMaster: true,
-            updatedAt: new Date().toISOString()
-        }
-    ];
-}
-
-function unlockSuperadminDashboard(user) {
-    document.getElementById('auth-gate').classList.add('hidden');
-    document.getElementById('dashboard-wrapper').classList.remove('hidden');
-    const emailEl = document.getElementById('superadmin-user-email');
-    if (emailEl && user?.email) emailEl.innerText = user.email;
-
-    fetchEcosystemMetrics();
-    loadMinistryUpgradeRequests();
-}
-
 async function handleSuperadminLogin(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -128,6 +99,16 @@ async function handleSuperadminLogin(e) {
         submitBtn.disabled = false;
         submitBtn.innerText = 'Unlock Superadmin Command Center';
     }
+}
+
+function unlockSuperadminDashboard(user) {
+    document.getElementById('auth-gate').classList.add('hidden');
+    document.getElementById('dashboard-wrapper').classList.remove('hidden');
+    const emailEl = document.getElementById('superadmin-user-email');
+    if (emailEl && user?.email) emailEl.innerText = user.email;
+
+    fetchEcosystemMetrics();
+    loadMinistryUpgradeRequests();
 }
 
 async function handleSuperadminLogout() {
@@ -577,9 +558,6 @@ function closeAdminRoleModal() {
 
 async function handleSaveAdminRole(e) {
     e.preventDefault();
-    function getMasterAdminEmail() {
-    return (typeof SUPERADMIN_MASTER_EMAIL !== 'undefined' && SUPERADMIN_MASTER_EMAIL) || 'accordmedia1@gmail.com';
-}
     const originalEmail = document.getElementById('edit-role-original-email').value.trim().toLowerCase();
     const name = document.getElementById('role-user-name').value.trim();
     const title = document.getElementById('role-user-title').value.trim() || 'Department Admin';
@@ -677,4 +655,3 @@ function exportRolesToExcel() {
     XLSX.writeFile(workbook, 'Accord_Admin_Access_Registry.xlsx');
     showToast('Exported Admin Access Registry to Excel!');
 }
-
