@@ -9,7 +9,7 @@ let revokeTargetEmail = null;
 function getDefaultRolesRegistry() {
     return [
         {
-            email: MASTER_ADMIN_EMAIL,
+            email: SUPERADMIN_MASTER_EMAIL,
             name: 'Derrick Quaynortey Blebo',
             title: 'Founder & Master Superadmin',
             portals: ['superadmin', 'library', 'music', 'testimonies'],
@@ -41,7 +41,7 @@ window.onload = async function () {
 function hasSuperadminPermission(email) {
     if (!email) return false;
     const clean = email.trim().toLowerCase();
-    if (clean === MASTER_ADMIN_EMAIL.toLowerCase()) return true;
+    if (clean === SUPERADMIN_MASTER_EMAIL.toLowerCase()) return true;
 
     const entry = rolesRegistry.find(r => (r.email || '').toLowerCase() === clean);
     return Boolean(entry && entry.status === 'active' && Array.isArray(entry.portals) && entry.portals.includes('superadmin'));
@@ -55,6 +55,39 @@ function showLoginError(msg) {
     }
 }
 
+// Safe fallback in case admin-core.js doesn't expose it
+const SUPERADMIN_MASTER_EMAIL = (typeof SUPERADMIN_MASTER_EMAIL !== 'undefined' && SUPERADMIN_MASTER_EMAIL) 
+    ? SUPERADMIN_MASTER_EMAIL 
+    : 'accordmedia1@gmail.com';
+
+let rolesRegistry = getDefaultRolesRegistry();
+let ministryUpgradeRequests = [];
+let revokeTargetEmail = null;
+
+function getDefaultRolesRegistry() {
+    return [
+        {
+            email: SUPERADMIN_MASTER_EMAIL,
+            name: 'Derrick Quaynortey Blebo',
+            title: 'Founder & Master Superadmin',
+            portals: ['superadmin', 'library', 'music', 'testimonies'],
+            status: 'active',
+            isMaster: true,
+            updatedAt: new Date().toISOString()
+        }
+    ];
+}
+
+function unlockSuperadminDashboard(user) {
+    document.getElementById('auth-gate').classList.add('hidden');
+    document.getElementById('dashboard-wrapper').classList.remove('hidden');
+    const emailEl = document.getElementById('superadmin-user-email');
+    if (emailEl && user?.email) emailEl.innerText = user.email;
+
+    fetchEcosystemMetrics();
+    loadMinistryUpgradeRequests();
+}
+
 async function handleSuperadminLogin(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -66,36 +99,35 @@ async function handleSuperadminLogin(e) {
     submitBtn.disabled = true;
     submitBtn.innerText = 'Verifying Master Credentials...';
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    try {
+        if (typeof supabaseClient === 'undefined') {
+            throw new Error('Database client failed to initialize. Check admin-core.js.');
+        }
 
-    submitBtn.disabled = false;
-    submitBtn.innerText = 'Unlock Superadmin Command Center';
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
-    if (error) {
-        showLoginError(error.message || 'Invalid email or password.');
-        return;
+        if (error) {
+            showLoginError(error.message || 'Invalid email or password.');
+            return;
+        }
+
+        await loadRolesRegistryFromSupabase();
+
+        if (!hasSuperadminPermission(data?.user?.email)) {
+            await supabaseClient.auth.signOut();
+            showLoginError('Access denied. Your account is not authorized for Superadmin access.');
+            return;
+        }
+
+        unlockSuperadminDashboard(data.user);
+        showToast('Welcome to Accord Superadmin Command Center!');
+    } catch (err) {
+        console.error('Superadmin login error:', err);
+        showLoginError(err.message || 'An unexpected error occurred during sign in.');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Unlock Superadmin Command Center';
     }
-
-    await loadRolesRegistryFromSupabase();
-
-    if (!hasSuperadminPermission(data?.user?.email)) {
-        await supabaseClient.auth.signOut();
-        showLoginError('Access denied. Your account is not authorized for Superadmin access.');
-        return;
-    }
-
-    unlockSuperadminDashboard(data.user);
-    showToast('Welcome to Accord Superadmin Command Center!');
-}
-
-function unlockSuperadminDashboard(user) {
-    document.getElementById('auth-gate').classList.add('hidden');
-    document.getElementById('dashboard-wrapper').classList.remove('hidden');
-    const emailEl = document.getElementById('superadmin-user-email');
-    if (emailEl && user?.email) emailEl.innerText = user.email;
-
-    fetchEcosystemMetrics();
-    loadMinistryUpgradeRequests();
 }
 
 async function handleSuperadminLogout() {
@@ -266,9 +298,9 @@ async function loadRolesRegistryFromSupabase() {
 }
 
 function ensureMasterAccountIncluded(list) {
-    const masterIdx = list.findIndex(r => (r.email || '').toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
+    const masterIdx = list.findIndex(r => (r.email || '').toLowerCase() === SUPERADMIN_MASTER_EMAIL.toLowerCase());
     const masterRecord = {
-        email: MASTER_ADMIN_EMAIL,
+        email: SUPERADMIN_MASTER_EMAIL,
         name: masterIdx > -1 ? (list[masterIdx].name || 'Derrick Quaynortey Blebo') : 'Derrick Quaynortey Blebo',
         title: masterIdx > -1 ? (list[masterIdx].title || 'Founder & Master Superadmin') : 'Founder & Master Superadmin',
         portals: ['superadmin', 'library', 'music', 'testimonies'],
@@ -407,7 +439,7 @@ function renderAdminRolesTable() {
     }
 
     filtered.forEach(item => {
-        const isMaster = item.isMaster || item.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+        const isMaster = item.isMaster || item.email.toLowerCase() === SUPERADMIN_MASTER_EMAIL.toLowerCase();
         const isActive = item.status === 'active';
         const safeEmail = item.email.replace(/'/g, "\\'");
 
@@ -476,7 +508,7 @@ function renderAdminRolesTable() {
 
 async function quickTogglePortal(email, portalKey) {
     const clean = email.trim().toLowerCase();
-    if (clean === MASTER_ADMIN_EMAIL.toLowerCase()) return;
+    if (clean === SUPERADMIN_MASTER_EMAIL.toLowerCase()) return;
 
     const record = rolesRegistry.find(r => r.email.toLowerCase() === clean);
     if (!record) return;
@@ -495,7 +527,7 @@ async function quickTogglePortal(email, portalKey) {
 
 async function toggleAccountStatus(email) {
     const clean = email.trim().toLowerCase();
-    if (clean === MASTER_ADMIN_EMAIL.toLowerCase()) return;
+    if (clean === SUPERADMIN_MASTER_EMAIL.toLowerCase()) return;
 
     const record = rolesRegistry.find(r => r.email.toLowerCase() === clean);
     if (!record) return;
@@ -546,7 +578,7 @@ function closeAdminRoleModal() {
 async function handleSaveAdminRole(e) {
     e.preventDefault();
     function getMasterAdminEmail() {
-    return (typeof MASTER_ADMIN_EMAIL !== 'undefined' && MASTER_ADMIN_EMAIL) || 'accordmedia1@gmail.com';
+    return (typeof SUPERADMIN_MASTER_EMAIL !== 'undefined' && SUPERADMIN_MASTER_EMAIL) || 'accordmedia1@gmail.com';
 }
     const originalEmail = document.getElementById('edit-role-original-email').value.trim().toLowerCase();
     const name = document.getElementById('role-user-name').value.trim();
@@ -575,7 +607,7 @@ async function handleSaveAdminRole(e) {
         title,
         portals,
         status: 'active',
-        isMaster: email === MASTER_ADMIN_EMAIL.toLowerCase(),
+        isMaster: email === SUPERADMIN_MASTER_EMAIL.toLowerCase(),
         updatedAt: new Date().toISOString()
     };
 
@@ -602,7 +634,7 @@ async function handleSaveAdminRole(e) {
 }
 
 function promptRevokeRole(email) {
-    if (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) return;
+    if (email.toLowerCase() === SUPERADMIN_MASTER_EMAIL.toLowerCase()) return;
     revokeTargetEmail = email;
     document.getElementById('confirm-title').innerText = `Revoke Access for ${email}?`;
     document.getElementById('confirm-text').innerText = 'This account will immediately lose access to all Accord admin portals.';
