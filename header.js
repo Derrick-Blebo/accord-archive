@@ -5,8 +5,12 @@
 
 (function () {
     // Ensure Supabase client is available globally inside header.js
-    const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co'; // Your Supabase URL from your project
-    const SUPABASE_ANON_KEY = 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP';
+    const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
+
+    if (!window.supabaseClient && window.supabase) {
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
 
     if (!window.supabaseClient && window.supabase) {
         window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -97,8 +101,8 @@ function setActive(id) {
 
 async function initGlobalHeaderAuth() {
     try {
-        const client = window.supabaseClient || window.supabase.createClient('https://mzsblgajftvvyosyrawcx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...');
-        const { data: { session } } = await client.auth.getSession();
+        const client = window.supabaseClient;
+        if (!client) return;        const { data: { session } } = await client.auth.getSession();
         const user = session?.user || null;
         
         const authArea = document.getElementById('auth-area');
@@ -160,10 +164,10 @@ async function initGlobalHeaderAuth() {
                                 <span>Edit Profile</span>
                             </a>
                             </a>
-                            <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
-                                <span>My Author Page</span>
-                            </a>
+                        <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                            <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
+                            <span>My Author Page</span>
+                        </a>
                             <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                                 <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
                                 <span>Saved Collections</span>

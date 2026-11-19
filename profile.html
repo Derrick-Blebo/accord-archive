@@ -141,7 +141,7 @@
     </main>
 
     <script src="admin-core.js"></script>
-    <script src="accord-footer.js"></script>
+    <script src="footer.js"></script>
     <script src="profile.js"></script>
     <script>
         function syncUpgradeCardUI(profile) {
@@ -204,24 +204,25 @@
             btn.disabled = true;
             btn.innerText = 'Submitting Request...';
 
-            const { data: { user } } = await supabaseClient.auth.getUser();
-            if (!user) {
+            const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+            if (authError || !user) {
                 btn.disabled = false;
                 btn.innerText = 'Request Ministry / Minister Account';
                 showToast('Please sign in first.');
                 return;
             }
 
+            const payload = {
+                id: user.id,
+                email: user.email,
+                upgrade_status: 'pending',
+                upgrade_pitch: pitch,
+                upgrade_requested_at: new Date().toISOString()
+            };
+
             const { data, error } = await supabaseClient
                 .from('profiles')
-                .upsert({
-                    id: user.id,
-                    email: user.email,
-                    account_type: 'normal_user',
-                    upgrade_status: 'pending',
-                    upgrade_pitch: pitch,
-                    upgrade_requested_at: new Date().toISOString()
-                }, { onConflict: 'id' })
+                .upsert(payload, { onConflict: 'id' })
                 .select()
                 .single();
 
@@ -229,13 +230,15 @@
             btn.innerText = 'Request Ministry / Minister Account';
 
             if (error) {
-                showToast('Could not submit request. Please try again.');
+                console.error('Upgrade request failed:', error);
+                showToast(error.message || 'Could not submit request. Please try again.');
                 return;
             }
 
             syncUpgradeCardUI(data);
             showToast('Ministry / Minister upgrade request sent.');
         }
+
 
         document.addEventListener('DOMContentLoaded', async () => {
             if (typeof supabaseClient === 'undefined') return;
