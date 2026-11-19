@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post — Accord Fellowship Feed</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed.</span>
+    </div>
+
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js"></script>
+
+    <!-- Report / Flag Modal -->
+    <div id="report-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-accord-slate text-base">Flag / Report Post</h3>
+                <button type="button" onclick="closeReportModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form onsubmit="handleReportSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Reason</label>
+                    <select id="report-category-reason" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs">
+                        <option value="Spam or Promotional">Spam or Promotional</option>
+                        <option value="Off-Topic or Misleading">Off-Topic or Misleading</option>
+                        <option value="Inappropriate Content">Inappropriate Content</option>
+                        <option value="Harassment or Harm">Harassment or Harm</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Details</label>
+                    <textarea id="report-reason" rows="3" required placeholder="Describe why this post should be flagged..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeReportModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-xs font-bold">Cancel</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold">Flag Post</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main class="flex-grow max-w-4xl mx-auto px-4 sm:px-6 py-10 w-full space-y-8">
+        <div>
+            <a href="feed.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-muted hover:text-accord-blue">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Fellowship Feed</span>
+            </a>
+        </div>
+
+        <!-- Post Article Container -->
+        <article id="single-post-container" class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+            <div class="text-center py-8 text-xs text-accord-muted">Loading post...</div>
+        </article>
+
+        <!-- Comments Section -->
+        <section id="comments-section" class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                <h2 class="serif-heading text-xl font-bold text-accord-slate">Comments (<span id="comments-total-count">0</span>)</h2>
+            </div>
+
+            <form id="comment-form" onsubmit="handleCommentSubmit(event)" class="space-y-3">
+                <textarea id="comment-input" rows="3" required placeholder="Add a comment to this post..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                <div class="flex justify-end">
+                    <button type="submit" id="comment-submit-btn" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm">
+                        Post Comment
+                    </button>
+                </div>
+            </form>
+
+            <div id="comments-list" class="space-y-3 pt-2"></div>
+        </section>
+    </main>
+
+    <script src="admin-core.js"></script>
+    <script src="feed-shared.js"></script>
+    <script src="accord-footer.js"></script>
+    <script>
+        let currentPost = null;
+        let currentUser = null;
+        let currentProfile = null;
+        let isLiked = false;
+
+        function getVoterKey() {
+            if (currentUser?.id) return `user_${currentUser.id}`;
+            let guestKey = localStorage.getItem('accord_guest_voter_key');
+            if (!guestKey) {
+                guestKey = 'guest_' + (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+                localStorage.setItem('accord_guest_voter_key', guestKey);
+            }
+            return guestKey;
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+            if (!toast) return;
+            msgEl.textContent = message;
+            iconEl.className = isError
+                ? 'fa-solid fa-circle-exclamation text-red-500 text-lg'
+                : 'fa-solid fa-circle-check text-accord-gold text-lg';
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-24', 'opacity-0'), 3500);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getYouTubeEmbedUrl(url) {
+            let videoId = '';
+            if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1]?.split('?')[0];
+            else if (url.includes('watch?v=')) videoId = url.split('watch?v=')[1]?.split('&')[0];
+            else if (url.includes('embed/')) videoId = url.split('embed/')[1]?.split('?')[0];
+            return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const postId = params.get('id');
+            if (!postId) {
+                document.getElementById('single-post-container').innerHTML = `<p class="text-xs text-accord-muted text-center py-8">No post ID specified.</p>`;
+                return;
+            }
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            currentUser = session?.user || null;
+            if (currentUser) {
+                const { data: prof } = await supabaseClient
+                    .from('profiles')
+                    .select('id, full_name, email, account_type')
+                    .eq('id', currentUser.id)
+                    .maybeSingle();
+                currentProfile = prof || {
+                    id: currentUser.id,
+                    full_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+                    account_type: 'normal_user'
+                };
+            }
+
+            await loadPostAndComments(postId);
+        });
+
+        async function loadPostAndComments(postId) {
+            const [postRes, likeRes, commentsRes] = await Promise.all([
+                supabaseClient.from('feed_posts').select('*').eq('id', postId).maybeSingle(),
+                supabaseClient.from('post_likes').select('id').eq('post_id', postId).eq('voter_key', getVoterKey()).maybeSingle(),
+                supabaseClient.from('post_comments').select('*').eq('post_id', postId).order('created_at', { ascending: true })
+            ]);
+
+            if (postRes.error || !postRes.data) {
+                document.getElementById('single-post-container').innerHTML = `<p class="text-xs text-red-600 text-center py-8">Post not found.</p>`;
+                return;
+            }
+
+            currentPost = postRes.data;
+            isLiked = Boolean(likeRes.data);
+            document.title = `${currentPost.title} — Accord Fellowship Feed`;
+
+            renderSinglePost();
+            renderCommentsList(commentsRes.data || []);
+        }
+
+        function renderSinglePost() {
+            const container = document.getElementById('single-post-container');
+            const displayAuthor = currentPost.is_anonymous ? 'Anonymous' : (currentPost.author_name || 'Anonymous');
+            const dateFormatted = currentPost.created_at
+                ? new Date(currentPost.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : '';
+
+            let mediaHtml = '';
+            if (currentPost.post_type === 'video' && currentPost.media_url) {
+                mediaHtml = `
+                    <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-900">
+                        <iframe src="${escapeHtml(getYouTubeEmbedUrl(currentPost.media_url))}" class="w-full h-full border-0" allowfullscreen></iframe>
+                    </div>
+                `;
+            } else if (currentPost.post_type === 'audio' && currentPost.media_url) {
+                const isDirect = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(currentPost.media_url);
+                mediaHtml = isDirect
+                    ? `<audio controls src="${escapeHtml(currentPost.media_url)}" class="w-full"></audio>`
+                    : `<a href="${escapeHtml(currentPost.media_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold text-accord-blue hover:underline">
+                           <i class="fa-solid fa-podcast text-accord-gold"></i>
+                           <span>Listen to Audio Stream →</span>
+                       </a>`;
+            }
+
+            const shareLabel = isMobileShareContext() ? 'Share' : 'Copy Link';
+            const shareIcon = isMobileShareContext() ? 'fa-share-nodes' : 'fa-link';
+
+            container.innerHTML = `
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full">${escapeHtml(currentPost.post_type)}</span>
+                        <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate mt-2">${escapeHtml(currentPost.title)}</h1>
+                        <p class="text-xs text-accord-muted mt-1">By <strong class="text-accord-slate">${escapeHtml(displayAuthor)}</strong> • ${dateFormatted}</p>
+                    </div>
+                </div>
+
+                ${mediaHtml}
+
+                <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap pt-2">
+                    ${escapeHtml(currentPost.body)}
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="toggleSingleLike()" id="single-like-btn" class="px-4 py-2 rounded-xl font-bold flex items-center space-x-1.5 ${isLiked ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}">
+                            <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
+                            <span id="single-like-count">${Number(currentPost.likes_count) || 0}</span>
+                        </button>
+                        <button type="button" onclick="shareOrCopyPost(currentPost)" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold flex items-center space-x-1.5">
+                            <i class="fa-solid ${shareIcon}"></i>
+                            <span>${shareLabel}</span>
+                        </button>
+                    </div>
+                    <button type="button" onclick="openReportModal()" class="px-3 py-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 font-semibold flex items-center space-x-1.5">
+                        <i class="fa-regular fa-flag"></i>
+                        <span>Flag</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        async function toggleSingleLike() {
+            if (!currentPost) return;
+            const voterKey = getVoterKey();
+            let nextCount = Number(currentPost.likes_count) || 0;
+
+            if (isLiked) {
+                await supabaseClient.from('post_likes').delete().eq('post_id', currentPost.id).eq('voter_key', voterKey);
+                isLiked = false;
+                nextCount = Math.max(0, nextCount - 1);
+            } else {
+                const { error } = await supabaseClient.from('post_likes').insert([{ post_id: currentPost.id, voter_key: voterKey }]);
+                if (error) return;
+                isLiked = true;
+                nextCount += 1;
+            }
+
+            currentPost.likes_count = nextCount;
+            await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', currentPost.id);
+            renderSinglePost();
+        }
+
+        function renderCommentsList(comments) {
+            const listEl = document.getElementById('comments-list');
+            const countEl = document.getElementById('comments-total-count');
+            if (countEl) countEl.textContent = comments.length;
+            if (!listEl) return;
+
+            if (comments.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-accord-muted italic py-2">No comments yet. Start the conversation below.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = comments.map(c => {
+                const d = c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                return `
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-1">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="font-bold text-accord-slate">${escapeHtml(c.author_name || 'Member')}</span>
+                            <span class="text-accord-muted">${d}</span>
+                        </div>
+                        <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(c.comment_text)}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleCommentSubmit(e) {
+            e.preventDefault();
+            if (!currentUser) {
+                showToast('Please sign in to comment on posts.', true);
+                return;
+            }
+            if (!currentPost) return;
+
+            const inputEl = document.getElementById('comment-input');
+            const btnEl = document.getElementById('comment-submit-btn');
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            btnEl.disabled = true;
+            btnEl.textContent = 'Posting...';
+
+            const authorName = currentProfile?.full_name || currentUser.email.split('@')[0];
+            const { error } = await supabaseClient.from('post_comments').insert([{
+                post_id: currentPost.id,
+                author_id: currentUser.id,
+                author_name: authorName,
+                comment_text: text
+            }]);
+
+            btnEl.disabled = false;
+            btnEl.textContent = 'Post Comment';
+
+            if (error) {
+                showToast('Could not post comment.', true);
+                return;
+            }
+
+            inputEl.value = '';
+            showToast('Comment posted.');
+            await loadPostAndComments(currentPost.id);
+        }
+
+        function openReportModal() {
+            const modal = document.getElementById('report-modal');
+            modal?.classList.remove('hidden');
+            modal?.classList.add('flex');
+        }
+
+        function closeReportModal() {
+            const modal = document.getElementById('report-modal');
+            modal?.classList.remove('flex');
+            modal?.classList.add('hidden');
+        }
+
+        async function handleReportSubmit(e) {
+            e.preventDefault();
+            if (!currentPost) return;
+            const reason = document.getElementById('report-category-reason').value;
+            const details = document.getElementById('report-reason').value.trim();
+
+            const { error } = await supabaseClient.from('post_reports').insert([{
+                post_id: currentPost.id,
+                reporter_id: currentUser ? currentUser.id : null,
+                reason,
+                details
+            }]);
+
+            if (error) {
+                showToast('Could not submit flag.', true);
+                return;
+            }
+
+            closeReportModal();
+            showToast('Post flagged for review.');
+        }
+    </script>
+</body>
+</html>

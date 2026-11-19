@@ -159,6 +159,11 @@ async function initGlobalHeaderAuth() {
                                 <i class="fa-regular fa-user text-accord-blue w-4"></i>
                                 <span>Edit Profile</span>
                             </a>
+                            </a>
+                            <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                                <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
+                                <span>My Author Page</span>
+                            </a>
                             <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                                 <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
                                 <span>Saved Collections</span>

@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accord Fellowship Feed — Sermons, Testimonies & Q&A</title>
-    
-    <!-- Tailwind CSS -->
+    <title>Accord Fellowship Feed — Videos, Testimonies, Audio & Text Posts</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -29,34 +28,19 @@
                 }
             }
         }
-   
-   </script>
-   
-   <!-- Google Fonts Inter & Playfair Display -->
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-
-    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Playfair Display', serif; }
-        .logo-rd-bar { position: relative; }
-        .logo-rd-bar::after {
-            content: '';
-            position: absolute;
-            top: -4px;
-            right: 0px;
-            width: 14px;
-            height: 3px;
-            background-color: #F5A623;
-            border-radius: 2px;
-        }
+        .no-scrollbar::-webkit-scrollbar { height: 5px; }
+        .no-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
     </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
@@ -71,36 +55,45 @@
     <div id="accord-header"></div>
     <script src="header.js"></script>
 
-    <!-- Report Spam Modal -->
+    <!-- Report / Flag Down Modal -->
     <div id="report-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="font-bold text-accord-slate text-base">Report Post as Spam / Inappropriate</h3>
-                <button type="button" onclick="closeReportModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                <h3 class="font-bold text-accord-slate text-base">Flag / Report Post</h3>
+                <button type="button" onclick="closeReportModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             <form id="report-form" onsubmit="handleReportSubmit(event)" class="space-y-4">
                 <input type="hidden" id="report-post-id">
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Reason for reporting</label>
-                    <textarea id="report-reason" rows="3" required placeholder="Please describe why this post violates community guidelines..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Reason</label>
+                    <select id="report-category-reason" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        <option value="Spam or Promotional">Spam or Promotional</option>
+                        <option value="Off-Topic or Misleading">Off-Topic or Misleading</option>
+                        <option value="Inappropriate Content">Inappropriate Content</option>
+                        <option value="Harassment or Harm">Harassment or Harm</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Additional Details</label>
+                    <textarea id="report-reason" rows="3" required placeholder="Explain why this post should be flagged for review..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
                 </div>
                 <div class="flex items-center justify-end space-x-3 pt-2">
                     <button type="button" onclick="closeReportModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
-                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold shadow-md">Submit Report</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md">Flag Post</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Create Post / Testimony Modal -->
+    <!-- Create Post Modal (Testimonies open to all/anonymous; Video/Audio/Text for Ministries & Ministers) -->
     <div id="create-post-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
                 <div>
-                    <h3 class="font-bold text-accord-slate text-base">Share on Fellowship Feed</h3>
-                    <p class="text-xs text-accord-muted">Post a testimony, text sermon, Bible question, or submit media links</p>
+                    <h3 class="font-bold text-accord-slate text-base">Create a Feed Post</h3>
+                    <p id="create-post-permission-note" class="text-xs text-accord-muted">Testimonies can be shared anonymously; Videos, Audio & Text Posts are for Ministries/Ministers.</p>
                 </div>
                 <button type="button" onclick="closeCreatePostModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
@@ -109,39 +102,46 @@
 
             <form id="create-post-form" onsubmit="handleCreatePostSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
                 <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title / Subject *</label>
-                    <input type="text" id="post-title" required placeholder="e.g., A Testimony of God's Grace / Question about Prayer" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Post Type *</label>
+                    <select id="post-type" required onchange="togglePostTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                        <option value="testimony">Testimony (Open to All & Anonymous)</option>
+                        <option value="video">Video (Ministry / Minister)</option>
+                        <option value="audio">Audio (Ministry / Minister)</option>
+                        <option value="text">Text Post (Ministry / Minister)</option>
+                    </select>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Post Type *</label>
-                        <select id="post-type" required onchange="togglePostTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                            <option value="text">Text Post / Q&A / Testimony</option>
-                            <option value="video">Video Link (YouTube)</option>
-                            <option value="audio">Audio Link (Spotify / Audiomack)</option>
-                        </select>
+                <!-- Author / Anonymous Controls for Testimonies -->
+                <div id="testimony-identity-box" class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                    <label class="inline-flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="post-anonymous" onchange="toggleAnonymousAuthorInput()" class="rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                        <span class="text-xs font-bold text-accord-slate">Post anonymously</span>
+                    </label>
+                    <div id="guest-author-name-wrapper">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Display Name (Optional for Testimonies)</label>
+                        <input type="text" id="post-author-name" placeholder="e.g., Grace Mensah or leave blank for Anonymous" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category *</label>
-                        <input type="text" id="post-category" required placeholder="e.g., Faith & Prayer" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
-                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title *</label>
+                    <input type="text" id="post-title" required placeholder="Give your post a clear title..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                 </div>
 
                 <div id="post-url-group" class="hidden">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Media URL (YouTube / Spotify Embed Link) *</label>
-                    <input type="url" id="post-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    <label id="post-url-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Media URL *</label>
+                    <input type="url" id="post-url" placeholder="https://www.youtube.com/watch?v=... or audio stream link" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
                 </div>
 
                 <div id="post-content-group">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Content / Testimony / Question *</label>
-                    <textarea id="post-content" rows="5" placeholder="Share your message, chronicle, or Bible question..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                    <label id="post-content-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Message / Story *</label>
+                    <textarea id="post-content" rows="5" required placeholder="Write your testimony, reflection, or text post..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs focus:outline-none focus:border-accord-blue"></textarea>
                 </div>
 
                 <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
                     <button type="button" onclick="closeCreatePostModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
-                    <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md">
-                        Publish Post
+                    <button type="submit" id="create-post-submit-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md">
+                        Publish to Feed
                     </button>
                 </div>
             </form>
@@ -154,45 +154,39 @@
         <!-- Header Banner & Quick Post Action -->
         <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
             <div class="space-y-2 text-center md:text-left">
-                <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Community & Sermons</span>
+                <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Accord Community Feed</span>
                 <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Fellowship Feed</h1>
-                <p class="text-xs sm:text-sm text-accord-muted">Explore video sermons, audio playlists, text devotionals, and reader testimonies in one unified stream.</p>
+                <p class="text-xs sm:text-sm text-accord-muted">Browse videos, testimonies, audio recordings, and text posts across the community.</p>
             </div>
-            <button type="button" onclick="openCreatePostModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2 shrink-0">
-                <i class="fa-solid fa-pen-to-square"></i>
-                <span>Share Post or Question</span>
-            </button>
+            <div class="flex flex-wrap items-center justify-center gap-2.5 shrink-0">
+                <button type="button" onclick="openCreatePostModal('testimony')" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-4 py-3.5 rounded-xl transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-heart text-rose-500"></i>
+                    <span>Share Testimony</span>
+                </button>
+                <button type="button" onclick="openCreatePostModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>Create Post</span>
+                </button>
+            </div>
         </div>
 
-        <!-- Feed Sub-Tabs -->
+        <!-- 4 Post Type Filter Tabs (Video, Testimony, Audio, Text Posts) -->
         <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-2">
-            <button type="button" onclick="setFeedTab('all')" id="tab-all" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Feeds</button>
-            <button type="button" onclick="setFeedTab('sermons')" id="tab-sermons" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Sermons</button>
-            <button type="button" onclick="setFeedTab('testimonies')" id="tab-testimonies" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-heart mr-1.5 text-rose-500"></i>Testimonies</button>
-            <button type="button" onclick="setFeedTab('video')" id="tab-video" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-video mr-1.5 text-accord-blue"></i>Videos</button>
-            <button type="button" onclick="setFeedTab('audio')" id="tab-audio" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-podcast mr-1.5 text-accord-gold"></i>Audio</button>
-            <button type="button" onclick="setFeedTab('text')" id="tab-text" class="feed-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-align-left mr-1.5 text-emerald-600"></i>Text Posts & Q&A</button>
+            <button type="button" onclick="setFeedTab('all')" id="tab-all" class="feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Posts</button>
+            <button type="button" onclick="setFeedTab('video')" id="tab-video" class="feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-video mr-1.5 text-accord-blue"></i>Videos</button>
+            <button type="button" onclick="setFeedTab('testimony')" id="tab-testimony" class="feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-heart mr-1.5 text-rose-500"></i>Testimonies</button>
+            <button type="button" onclick="setFeedTab('audio')" id="tab-audio" class="feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-podcast mr-1.5 text-accord-gold"></i>Audio</button>
+            <button type="button" onclick="setFeedTab('text')" id="tab-text" class="feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-align-left mr-1.5 text-emerald-600"></i>Text Posts</button>
         </div>
 
         <!-- Feed Stream Container -->
-        <div id="feed-stream" class="space-y-6">
-            <!-- Populated dynamically by feed.js -->
-        </div>
+        <div id="feed-stream" class="space-y-6"></div>
 
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-slate-200 py-10 mt-16">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
-            <div class="flex items-center space-x-2">
-                <span class="font-bold text-accord-slate">Accord Fellowship Feed</span>
-                <span>• Community & Media Hub</span>
-            </div>
-            <p>© 2026 Accord Media House. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <!-- Script -->
-    <script src="feed.js?v=2"></script>
+    <script src="admin-core.js"></script>
+    <script src="feed-shared.js"></script>
+    <script src="accord-footer.js"></script>
+    <script src="feed.js?v=3"></script>
 </body>
 </html>

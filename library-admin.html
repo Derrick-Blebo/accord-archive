@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,10 +12,11 @@
                 extend: {
                     colors: {
                         accord: {
-                            blue: '#0077FE',
+                            blue: '#0077FF',
                             darkBlue: '#005BC4',
                             lightBlue: '#E6F0FF',
                             gold: '#F5A623',
+                            goldLight: '#FEF9E7',
                             slate: '#0F172A',
                             muted: '#64748B',
                             bg: '#F8FAFC'
@@ -26,15 +27,21 @@
             }
         }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- PDF.js for auto page count extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <!-- SheetJS for Excel imports -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>body { font-family: 'Inter', sans-serif; }</style>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
 
@@ -45,7 +52,7 @@
     </div>
 
     <!-- Auth Gate (Login Screen) -->
-    <div id="auth-gate" class="flex-grow flex items-center justify-center px-4 py-12">
+    <div id="auth-gate" class="fixed inset-0 z-40 bg-accord-bg flex items-center justify-center p-4">
         <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
             <div class="text-center space-y-2">
                 <div class="w-12 h-12 bg-accord-blue rounded-2xl flex items-center justify-center text-white mx-auto shadow-md">
@@ -76,9 +83,203 @@
         </div>
     </div>
 
-    <!-- Main Dashboard Wrapper (Hidden until authenticated) -->
+    <!-- Main Dashboard Wrapper -->
     <div id="dashboard-wrapper" class="hidden flex-grow flex flex-col justify-between">
-        
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 id="confirm-title" class="font-bold text-lg text-accord-slate">Are you sure?</h3>
+                <p id="confirm-text" class="text-xs text-accord-muted">This action cannot be undone.</p>
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeConfirmModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold py-3 rounded-xl">Cancel</button>
+                    <button type="button" id="confirm-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-3 rounded-xl">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shelf Modal -->
+        <div id="shelf-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <h3 id="shelf-modal-heading" class="font-bold text-accord-slate text-base">Create Home Shelf Section</h3>
+                    <button type="button" onclick="closeShelfModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="shelf-form" onsubmit="handleShelfSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                    <input type="hidden" id="edit-shelf-id">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Section Title *</label>
+                            <input type="text" id="shelf-title" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Subtitle</label>
+                            <input type="text" id="shelf-subtitle" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Mode</label>
+                            <select id="shelf-mode" onchange="toggleShelfModeUI()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs">
+                                <option value="manual">Hand-Picked Books</option>
+                                <option value="popular">Auto: Most Popular</option>
+                                <option value="newest">Auto: Newest</option>
+                                <option value="recommended">Auto: Recommended</option>
+                                <option value="category">Auto: Category</option>
+                            </select>
+                        </div>
+                        <div id="shelf-category-wrapper" class="hidden">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category</label>
+                            <select id="shelf-category-select" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Limit</label>
+                            <input type="number" id="shelf-limit" value="10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs">
+                        </div>
+                    </div>
+                    <div id="shelf-manual-picker" class="space-y-2 pt-2 border-t border-slate-100">
+                        <div class="flex justify-between items-center">
+                            <label class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Select Books (<span id="shelf-selected-count">0</span>)</label>
+                            <input type="text" id="shelf-book-search" oninput="renderShelfBookPicker()" placeholder="Filter..." class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
+                        </div>
+                        <div id="shelf-books-checklist" class="border border-slate-200 rounded-2xl max-h-60 overflow-y-auto divide-y divide-slate-100 bg-slate-50/50"></div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-200 flex justify-end space-x-3">
+                        <button type="button" onclick="closeShelfModal()" class="px-5 py-3 rounded-xl bg-slate-100 text-xs font-bold">Cancel</button>
+                        <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue text-white text-xs font-bold">Save Shelf</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Banner Slide Modal -->
+        <div id="banner-slide-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <h3 id="banner-slide-modal-heading" class="font-bold text-accord-slate text-base">Add Banner Slide</h3>
+                    <button type="button" onclick="closeBannerSlideModal()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="banner-slide-form" onsubmit="handleBannerSlideSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                    <input type="hidden" id="edit-banner-slide-id">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Desktop Image (1920x640)</label>
+                            <input type="file" id="banner-desktop-file" accept="image/*" class="w-full text-xs">
+                            <input type="url" id="banner-desktop-url-input" placeholder="Or paste URL..." class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Mobile Image (1080x1080)</label>
+                            <input type="file" id="banner-mobile-file" accept="image/*" class="w-full text-xs">
+                            <input type="url" id="banner-mobile-url-input" placeholder="Or paste URL..." class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Banner Title / Alt</label>
+                        <input type="text" id="banner-slide-alt" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Action Type</label>
+                            <select id="banner-slide-action" onchange="toggleBannerSlideLinkField()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                                <option value="link">Open Custom URL</option>
+                                <option value="contribute">Open Manuscript Modal</option>
+                                <option value="forum">Go to Forum</option>
+                                <option value="none">None (Image Only)</option>
+                            </select>
+                        </div>
+                        <div id="banner-slide-link-wrapper">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Link URL</label>
+                            <input type="text" id="banner-slide-link" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-200 flex justify-end space-x-3">
+                        <button type="button" onclick="closeBannerSlideModal()" class="px-5 py-3 rounded-xl bg-slate-100 text-xs font-bold">Cancel</button>
+                        <button type="submit" id="save-banner-slide-btn" class="px-6 py-3 rounded-xl bg-accord-blue text-white text-xs font-bold">Save Banner</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add / Edit Archive Modal -->
+        <div id="archive-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[95vh]" id="archive-modal-box">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                    <h3 id="modal-heading" class="font-bold text-accord-slate text-base">Add New Archive Item</h3>
+                    <button type="button" onclick="closeArchiveModal()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <form id="archive-form" onsubmit="handleArchiveSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                    <input type="hidden" id="edit-book-id">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Upload PDF</label>
+                        <div class="relative group">
+                            <input type="file" id="form-file" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div id="upload-ui" class="flex flex-col items-center justify-center w-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-5 text-center">
+                                <p class="text-xs font-bold text-accord-slate">Click or drag PDF to upload</p>
+                                <p id="file-name-display" class="text-[10px] text-accord-muted mt-1">Max size: 50MB</p>
+                            </div>
+                        </div>
+                        <input type="url" id="form-external-url" placeholder="Or External PDF URL..." class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        <input type="hidden" id="form-pages" value="TBD">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Upload Cover Image</label>
+                        <div class="relative group">
+                            <input type="file" id="form-cover" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div class="flex items-center space-x-3 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                                <div id="cover-preview-box" class="w-8 h-10 rounded bg-slate-200 flex items-center justify-center overflow-hidden shrink-0 text-xs">
+                                    <i class="fa-regular fa-image"></i>
+                                </div>
+                                <p id="cover-name-display" class="text-xs text-accord-muted truncate">JPG, PNG, WebP (Auto-optimized)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Title *</label>
+                        <input type="text" id="form-title" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Author *</label>
+                            <input type="text" id="form-author" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Category *</label>
+                            <select id="form-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs"></select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Year</label>
+                            <input type="text" id="form-year" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Access</label>
+                            <select id="form-is-for-sale" onchange="togglePriceField()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                                <option value="false">Free Archive</option>
+                                <option value="true">For Sale</option>
+                            </select>
+                        </div>
+                        <div id="price-field-wrapper" class="hidden">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Price (USD)</label>
+                            <input type="number" id="form-price" step="0.01" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Description</label>
+                        <textarea id="form-description" rows="3" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs"></textarea>
+                    </div>
+                    <div class="pt-3 border-t border-slate-200 flex justify-end space-x-3">
+                        <button type="button" onclick="closeArchiveModal()" class="px-5 py-3 rounded-xl bg-slate-100 text-xs font-bold">Cancel</button>
+                        <button type="button" onclick="saveAsDraft()" class="px-5 py-3 rounded-xl bg-amber-100 text-amber-800 text-xs font-bold">Save Draft</button>
+                        <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue text-white text-xs font-bold">Publish Archive</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Header -->
         <header class="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -96,11 +297,11 @@
 
         <!-- Content Area -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
-            
+
             <!-- Quick Stats Row -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
                 <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                    <div class="w-12 h-12 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-books"></i></div>
+                    <div class="w-12 h-12 bg-blue-50 text-accord-blue rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-book"></i></div>
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Publications</p>
                         <h3 id="stat-total" class="text-2xl font-black text-accord-slate">0</h3>
@@ -116,22 +317,27 @@
                 <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
                     <div class="w-12 h-12 bg-amber-50 text-accord-gold rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <div>
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Submissions</p>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Reviews</p>
                         <h3 id="stat-pending" class="text-2xl font-black text-accord-slate">0</h3>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-lg"><i class="fa-solid fa-layer-group"></i></div>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Active Shelves</p>
+                        <h3 id="stat-shelves-count" class="text-2xl font-black text-accord-slate">4</h3>
                     </div>
                 </div>
             </div>
 
             <!-- Action Toolbar & Tabs -->
             <div class="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
-                <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-2xl">
-                    <button type="button" id="nav-tab-catalog" onclick="switchTab('catalog')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">Catalog Directory</button>
-                    <button type="button" id="nav-tab-submissions" onclick="switchTab('submissions')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        Manuscript Reviews (<span id="submitted-subtab-badge">0</span>)
-                    </button>
-                    <button type="button" id="nav-tab-trash" onclick="switchTab('trash')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">
-                        Recycle Bin (<span id="trash-badge">0</span>)
-                    </button>
+                <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-2xl overflow-x-auto">
+                    <button type="button" id="nav-tab-catalog" onclick="switchTab('catalog')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-accord-blue shadow-sm">Catalog</button>
+                    <button type="button" id="nav-tab-shelves" onclick="switchTab('shelves')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Home Shelves & Banners</button>
+                    <button type="button" id="nav-tab-categories" onclick="switchTab('categories')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Categories</button>
+                    <button type="button" id="nav-tab-submissions" onclick="switchTab('submissions')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Pending Reviews</button>
+                    <button type="button" id="nav-tab-trash" onclick="switchTab('trash')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Bin</button>
                 </div>
 
                 <div class="flex items-center space-x-3">
@@ -171,39 +377,160 @@
                                 <th class="py-3 px-6 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="admin-book-table-body">
-                            <!-- Populated dynamically by admin.js -->
-                        </tbody>
+                        <tbody id="admin-book-table-body"></tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- SECTION 2: Manuscript Submissions -->
-            <div id="section-submissions" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
-                <h3 class="font-bold text-accord-slate text-sm">Submitted Reader Manuscripts</h3>
+            <!-- SECTION 1B: Home Shelves & Banners Manager -->
+            <div id="section-shelves" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                        <h3 class="font-bold text-accord-slate text-base">Home Page Shelves & Banner Manager</h3>
+                        <p class="text-xs text-accord-muted">Configure horizontal book shelves and rotating promotional banners.</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="openBannerSlideModal('add')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl">
+                            <i class="fa-solid fa-image mr-1"></i> Add Banner Slide
+                        </button>
+                        <button type="button" onclick="openShelfModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2 rounded-xl">
+                            <i class="fa-solid fa-plus mr-1"></i> New Shelf Section
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <h4 class="text-xs font-bold uppercase text-accord-muted mb-2">Active Shelves</h4>
+                    <table class="w-full text-left border-collapse text-xs mb-6">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Order</th>
+                                <th class="py-3 px-6">Shelf Title</th>
+                                <th class="py-3 px-6">Mode</th>
+                                <th class="py-3 px-6 text-center">Status</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shelves-table-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="overflow-x-auto pt-4 border-t border-slate-100">
+                    <h4 class="text-xs font-bold uppercase text-accord-muted mb-2">Active Banner Slides</h4>
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                <th class="py-3 px-6">Order</th>
+                                <th class="py-3 px-6">Desktop Preview</th>
+                                <th class="py-3 px-6">Title & Action</th>
+                                <th class="py-3 px-6 text-center">Status</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="banner-slides-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Categories Management -->
+            <div id="section-categories" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <h3 class="font-bold text-accord-slate text-base">Manage Categories</h3>
+                    <form onsubmit="handleAddCategory(event)" class="flex gap-2">
+                        <input type="text" id="new-category-name" required placeholder="New category..." class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <button type="submit" class="bg-accord-blue text-white text-xs font-bold px-4 py-2 rounded-xl">Add</button>
+                    </form>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
-                                <th class="py-3 px-6">Author & Email</th>
-                                <th class="py-3 px-6">Title</th>
-                                <th class="py-3 px-6">Category</th>
-                                <th class="py-3 px-6">Summary / PDF</th>
-                                <th class="py-3 px-6 text-right">Review Actions</th>
+                                <th class="py-3 px-6">Category Name</th>
+                                <th class="py-3 px-6 text-center">Books Count</th>
+                                <th class="py-3 px-6 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="submissions-table-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
+                        <tbody id="categories-table-body"></tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- SECTION 3: Recycle Bin -->
+            <!-- SECTION 3: Pending Reviews (Manuscripts, User Books & Author Takedown Requests) -->
+            <div id="section-submissions" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-8">
+                <!-- 3A. Public Manuscript Contributions -->
+                <div class="space-y-3">
+                    <h3 class="font-bold text-accord-slate text-sm">Submitted Reader Manuscripts</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <th class="py-3 px-6">Author & Email</th>
+                                    <th class="py-3 px-6">Title</th>
+                                    <th class="py-3 px-6">Category</th>
+                                    <th class="py-3 px-6">Summary / PDF</th>
+                                    <th class="py-3 px-6 text-right">Review Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="submissions-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3B. User Book Submissions -->
+                <div class="pt-6 border-t border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-accord-slate text-sm">User Book Submissions (Free & For Sale)</h3>
+                        <span class="text-xs font-bold text-accord-blue">Pending: <span id="user-books-subtab-badge">0</span></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <th class="py-3 px-6">Submitted By</th>
+                                    <th class="py-3 px-6">Book & Author</th>
+                                    <th class="py-3 px-6">Category</th>
+                                    <th class="py-3 px-6">Access / Price</th>
+                                    <th class="py-3 px-6">File</th>
+                                    <th class="py-3 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-books-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3C. Author Book Takedown Requests -->
+                <div id="takedown-requests-section" class="pt-6 border-t border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-bold text-accord-slate text-sm">Author Book Takedown Requests</h3>
+                            <p class="text-[11px] text-accord-muted">Approve to move the book to the Recycle Bin, or reject to keep it in the catalog.</p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-600 border border-red-200">
+                            Pending: <span id="takedown-requests-badge">0</span>
+                        </span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <th class="py-3 px-6">Book & Author</th>
+                                    <th class="py-3 px-6">Takedown Reason</th>
+                                    <th class="py-3 px-6 text-center">Requested</th>
+                                    <th class="py-3 px-6 text-right">Decision</th>
+                                </tr>
+                            </thead>
+                            <tbody id="takedown-requests-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: Recycle Bin -->
             <div id="section-trash" class="hidden bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="font-bold text-accord-slate text-sm">Recycle Bin</h3>
-                    <button onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3.5 py-2 rounded-xl transition-all">Empty Bin</button>
+                    <button type="button" onclick="promptEmptyTrash()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3.5 py-2 rounded-xl transition-all">Empty Bin</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs">
@@ -216,22 +543,18 @@
                                 <th class="py-3 px-6 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="trash-table-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
+                        <tbody id="trash-table-body"></tbody>
                     </table>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modals (Add/Edit Book & Excel Upload) are shared via admin.js -->
-
-    <!-- Core & Library Admin Scripts -->
+    <!-- Core, Unified Footer & Library Admin Scripts -->
     <script src="admin-core.js"></script>
+    <script src="accord-footer.js"></script>
     <script src="admin.js"></script>
     <script>
-        // Override login handling for Library Admin
         async function handleAdminLogin(e) {
             e.preventDefault();
             const email = document.getElementById('login-email').value.trim();

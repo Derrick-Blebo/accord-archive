@@ -3,6 +3,7 @@
 // ==========================================
 
 let rolesRegistry = getDefaultRolesRegistry();
+let ministryUpgradeRequests = [];
 let revokeTargetEmail = null;
 
 function getDefaultRolesRegistry() {
@@ -94,6 +95,7 @@ function unlockSuperadminDashboard(user) {
     if (emailEl && user?.email) emailEl.innerText = user.email;
 
     fetchEcosystemMetrics();
+    loadMinistryUpgradeRequests();
 }
 
 async function handleSuperadminLogout() {
@@ -102,6 +104,129 @@ async function handleSuperadminLogout() {
     document.getElementById('auth-gate').classList.remove('hidden');
     document.getElementById('superadmin-login-form').reset();
     showToast('Signed out of Superadmin.');
+}
+
+// ==========================================
+// MINISTRY / MINISTER UPGRADE REQUESTS
+// ==========================================
+
+async function loadMinistryUpgradeRequests() {
+    const tbody = document.getElementById('ministry-upgrades-tbody');
+    if (!tbody) return;
+
+    const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('id, full_name, email, account_type, upgrade_status, upgrade_pitch, upgrade_requested_at')
+        .neq('upgrade_status', 'none')
+        .order('upgrade_requested_at', { ascending: false });
+
+    if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-red-600">Could not load upgrade requests: ${escapeSuperHtml(error.message)}</td></tr>`;
+        return;
+    }
+
+    ministryUpgradeRequests = data || [];
+    renderMinistryUpgradeRequests();
+}
+
+function renderMinistryUpgradeRequests() {
+    const tbody = document.getElementById('ministry-upgrades-tbody');
+    const badge = document.getElementById('pending-upgrades-badge');
+    if (!tbody) return;
+
+    const pendingCount = ministryUpgradeRequests.filter(r => r.upgrade_status === 'pending').length;
+    if (badge) {
+        badge.textContent = `${pendingCount} Pending`;
+    }
+
+    if (ministryUpgradeRequests.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No Ministry / Minister upgrade requests yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    ministryUpgradeRequests.forEach(req => {
+        const status = req.upgrade_status || 'none';
+        const reqDate = req.upgrade_requested_at
+            ? new Date(req.upgrade_requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '—';
+
+        let statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-accord-muted">${escapeSuperHtml(status)}</span>`;
+        if (status === 'pending') {
+            statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending</span>`;
+        } else if (status === 'approved') {
+            statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Approved</span>`;
+        } else if (status === 'rejected') {
+            statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`;
+        }
+
+        const actionsHtml = status === 'pending'
+            ? `<button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
+               <button type="button" onclick="rejectMinistryUpgrade('${req.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>`
+            : `<span class="text-[11px] text-accord-muted">${req.account_type === 'ministry_minister' ? 'Ministry / Minister' : 'Normal User'}</span>`;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0';
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeSuperHtml(req.full_name || 'Member')}</p>
+                <p class="text-[11px] text-accord-muted">${escapeSuperHtml(req.email || '')}</p>
+            </td>
+            <td class="py-4 px-6 max-w-md">
+                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(req.upgrade_pitch || '')}</p>
+            </td>
+            <td class="py-4 px-6 text-center text-accord-muted whitespace-nowrap">${reqDate}</td>
+            <td class="py-4 px-6 text-center">${statusPill}</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">${actionsHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function approveMinistryUpgrade(userId) {
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({
+            account_type: 'ministry_minister',
+            upgrade_status: 'approved'
+        })
+        .eq('id', userId);
+
+    if (error) {
+        showToast(`Could not approve upgrade: ${error.message}`);
+        return;
+    }
+
+    await loadMinistryUpgradeRequests();
+    showToast('Account upgraded to Ministry / Minister.');
+}
+
+async function rejectMinistryUpgrade(userId) {
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({
+            account_type: 'normal_user',
+            upgrade_status: 'rejected'
+        })
+        .eq('id', userId);
+
+    if (error) {
+        showToast(`Could not reject upgrade: ${error.message}`);
+        return;
+    }
+
+    await loadMinistryUpgradeRequests();
+    showToast('Upgrade request marked as rejected.');
+}
+
+function escapeSuperHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 // ==========================================
@@ -327,18 +452,18 @@ function renderAdminRolesTable() {
             <td class="py-4 px-6">
                 <div class="flex items-center space-x-3">
                     <div class="w-9 h-9 rounded-xl ${isMaster ? 'bg-accord-slate text-accord-gold' : 'bg-accord-lightBlue text-accord-blue'} font-bold flex items-center justify-center text-xs shrink-0">
-                        ${escapeHTML((item.name || item.email || 'A').substring(0, 2).toUpperCase())}
+                        ${escapeSuperHtml((item.name || item.email || 'A').substring(0, 2).toUpperCase())}
                     </div>
                     <div>
                         <p class="font-bold text-accord-slate flex items-center gap-1.5">
-                            <span>${escapeHTML(item.name || 'Team Member')}</span>
+                            <span>${escapeSuperHtml(item.name || 'Team Member')}</span>
                             ${hasSuper ? `<span class="bg-amber-100 text-amber-800 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">Superadmin</span>` : ''}
                         </p>
-                        <p class="text-[11px] text-accord-muted">${escapeHTML(item.email)}</p>
+                        <p class="text-[11px] text-accord-muted">${escapeSuperHtml(item.email)}</p>
                     </div>
                 </div>
             </td>
-            <td class="py-4 px-6 text-accord-muted font-semibold">${escapeHTML(item.title || 'Admin')}</td>
+            <td class="py-4 px-6 text-accord-muted font-semibold">${escapeSuperHtml(item.title || 'Admin')}</td>
             <td class="py-4 px-6 text-center">${renderTogglePill('library', hasLibrary, 'bg-blue-50 text-accord-blue border border-blue-200')}</td>
             <td class="py-4 px-6 text-center">${renderTogglePill('music', hasMusic, 'bg-emerald-50 text-emerald-700 border border-emerald-200')}</td>
             <td class="py-4 px-6 text-center">${renderTogglePill('testimonies', hasTestimonies, 'bg-amber-50 text-amber-700 border border-amber-200')}</td>

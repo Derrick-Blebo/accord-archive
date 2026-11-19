@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Author Page — Accord Archive & Library</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed.</span>
+    </div>
+
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js"></script>
+
+    <!-- Takedown Request Modal (Requires Reason; Library Admin Approves) -->
+    <div id="takedown-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Request Book Takedown</h3>
+                    <p class="text-[11px] text-accord-muted">Authors cannot delete directly; a Library Admin reviews takedown requests.</p>
+                </div>
+                <button type="button" onclick="closeTakedownModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <form id="takedown-form" onsubmit="handleTakedownSubmit(event)" class="space-y-4">
+                <input type="hidden" id="takedown-book-id">
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs">
+                    <span class="text-accord-muted">Publication:</span>
+                    <span id="takedown-book-title" class="font-bold text-accord-slate ml-1"></span>
+                </div>
+
+                <div>
+                    <label for="takedown-reason" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">
+                        Reason for Takedown Request *
+                    </label>
+                    <textarea id="takedown-reason" rows="4" required minlength="15" placeholder="Explain why this book should be taken down (e.g., updated edition coming, rights transfer, editorial correction)..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    <p class="text-[10px] text-accord-muted mt-1">Minimum 15 characters. In the meantime, you can also hide the book from the public library.</p>
+                </div>
+
+                <div class="flex items-center justify-end space-x-2.5 pt-2">
+                    <button type="button" onclick="closeTakedownModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="takedown-submit-btn" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm">
+                        Submit Takedown Request
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Withdraw Funds Modal -->
+    <div id="withdraw-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Withdraw Author Earnings</h3>
+                    <p class="text-[11px] text-accord-muted">Available balance: <strong id="modal-available-balance" class="text-emerald-700">USD 0.00</strong></p>
+                </div>
+                <button type="button" onclick="closeWithdrawModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <form id="withdraw-form" onsubmit="handleWithdrawSubmit(event)" class="space-y-4">
+                <div>
+                    <label for="withdraw-amount" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Amount (USD) *</label>
+                    <input type="number" id="withdraw-amount" step="0.01" min="1" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label for="withdraw-method" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Payout Method *</label>
+                    <select id="withdraw-method" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <option value="Mobile Money">Mobile Money</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="withdraw-details" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Account / Wallet Details *</label>
+                    <input type="text" id="withdraw-details" required placeholder="Account number, network/bank name, and account holder name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div class="flex items-center justify-end space-x-2.5 pt-2">
+                    <button type="button" onclick="closeWithdrawModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="withdraw-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">
+                        Request Withdrawal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
+
+        <!-- Page Banner + Withdraw Funds CTA -->
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div class="space-y-1.5">
+                <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">
+                    Author Studio
+                </span>
+                <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">My Author Page</h1>
+                <p id="author-subtitle" class="text-xs sm:text-sm text-accord-muted">
+                    Track your uploaded publications, downloads, sales, earnings, and visibility status.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 shrink-0">
+                <button type="button" onclick="openWithdrawModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
+                    <i class="fa-solid fa-wallet"></i>
+                    <span>Withdraw Funds</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Metrics Row: Uploaded Books, Downloads, Sales Count, Total Earned -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-1">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Uploaded Books</p>
+                <p id="metric-uploaded-count" class="text-2xl font-extrabold text-accord-slate">0</p>
+            </div>
+            <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-1">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Downloads</p>
+                <p id="metric-downloads-count" class="text-2xl font-extrabold text-accord-blue">0</p>
+            </div>
+            <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-1">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Sales</p>
+                <p id="metric-sales-count" class="text-2xl font-extrabold text-accord-slate">0</p>
+            </div>
+            <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-1">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Earned (Available)</p>
+                <p id="metric-earned-amount" class="text-2xl font-extrabold text-emerald-700">USD 0.00</p>
+                <p id="metric-withdrawn-note" class="text-[11px] text-accord-muted">Withdrawn / Pending: USD 0.00</p>
+            </div>
+        </div>
+
+        <!-- Uploaded Books Table (Hide toggle + Takedown Request with Reason) -->
+        <section class="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="serif-heading text-xl font-bold text-accord-slate">Your Uploaded Books</h2>
+                    <p class="text-xs text-accord-muted mt-0.5">You can hide a book from the public library anytime. Permanent removal requires a takedown request approved by a Library Admin.</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-accord-muted">
+                            <th class="py-3.5 px-6">Publication</th>
+                            <th class="py-3.5 px-6 text-center">Downloads</th>
+                            <th class="py-3.5 px-6 text-center">Sales</th>
+                            <th class="py-3.5 px-6 text-right">Earned</th>
+                            <th class="py-3.5 px-6 text-center">Library Visibility</th>
+                            <th class="py-3.5 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="author-books-tbody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-10 text-center text-accord-muted">Loading your books...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Withdrawal History -->
+        <section class="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100">
+                <h3 class="font-bold text-sm text-accord-slate">Withdrawal Requests</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-accord-muted">
+                            <th class="py-3 px-6">Date</th>
+                            <th class="py-3 px-6">Method & Details</th>
+                            <th class="py-3 px-6 text-right">Amount</th>
+                            <th class="py-3 px-6 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="author-withdrawals-tbody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-accord-muted">No withdrawal requests yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="admin-core.js"></script>
+    <script src="accord-footer.js"></script>
+    <script src="author.js?v=1"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 // =========================================================
-// ACCORD ADMIN.JS — PART 1 OF 2
-// Core Auth, Fast Parallel Fetching, Shelves & Multi-Banner Slider
+// ACCORD ADMIN.JS
+// Core Auth, Fast Parallel Fetching, Shelves, Multi-Banner Slider,
+// Bulk Excel, Categories, Catalog CRUD, User Books, Trash & Forum Mod
 // =========================================================
 
 const ADMIN_EMAIL = 'accordmedia1@gmail.com';
@@ -8,6 +9,7 @@ const ADMIN_EMAIL = 'accordmedia1@gmail.com';
 let catalogData = [];
 let trashData = [];
 let submissionsData = [];
+let userBookSubmissionsData = [];
 let categoriesData = [];
 let purchasesData = [];
 let testimoniesModData = [];
@@ -163,15 +165,16 @@ async function handleAdminLogout() {
     showToast("Signed out successfully.");
 }
 
-// FAST PARALLEL DATA FETCHING (Fixes slow refresh!)
+// FAST PARALLEL DATA FETCHING
 async function fetchAllData(isSilentRefresh = false) {
-    const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes] = await Promise.all([
+    const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes, userBooksRes] = await Promise.all([
         supabaseClient.from('books').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('user_purchases').select('book_id, amount_paid'),
         supabaseClient.from('categories').select('*').order('name', { ascending: true }),
         supabaseClient.from('submissions').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('testimonies').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('testimony_comments').select('*').order('created_at', { ascending: false })
+        supabaseClient.from('testimony_comments').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('user_book_submissions').select('*').eq('approval_status', 'pending').order('created_at', { ascending: false })
     ]);
 
     if (!purchasesRes.error && purchasesRes.data) {
@@ -206,7 +209,8 @@ async function fetchAllData(isSilentRefresh = false) {
             }
         }
 
-        const realBooks = books.filter(b => b.title !== LAYOUT_CONFIG_CATEGORY_NAME);
+        const systemTitles = [LAYOUT_CONFIG_CATEGORY_NAME, '__ACCORD_MUSIC_CONFIG__', '__ACCORD_ROLES_CONFIG__'];
+        const realBooks = books.filter(b => !systemTitles.includes(b.title));
         catalogData = realBooks.filter(b => !b.deleted_at);
         trashData = realBooks.filter(b => b.deleted_at);
     }
@@ -220,6 +224,10 @@ async function fetchAllData(isSilentRefresh = false) {
         submissionsData = subsRes.data;
     }
 
+    if (!userBooksRes.error && userBooksRes.data) {
+        userBookSubmissionsData = userBooksRes.data;
+    }
+
     if (!testModRes.error && testModRes.data) {
         testimoniesModData = testModRes.data;
     }
@@ -228,11 +236,8 @@ async function fetchAllData(isSilentRefresh = false) {
         commentsModData = commModRes.data;
     }
 
-    // Always update lightweight badges & stats immediately
     updateStats();
     updateAllTabBadges();
-
-    // Render the currently active tab immediately so the UI is snappy
     renderActiveTabOnly(isSilentRefresh);
 }
 
@@ -252,6 +257,9 @@ function updateAllTabBadges() {
 
     const subBadge = document.getElementById('submitted-subtab-badge');
     if (subBadge) subBadge.innerText = submissionsData.length;
+
+    const userBooksBadge = document.getElementById('user-books-subtab-badge');
+    if (userBooksBadge) userBooksBadge.innerText = userBookSubmissionsData.length;
 
     const shelves = homeLayoutConfig?.shelves || [];
     const activeShelves = shelves.filter(s => s.enabled !== false).length;
@@ -273,6 +281,7 @@ function renderActiveTabOnly(isSilentRefresh = false) {
     } else if (activeAdminTab === 'submissions') {
         renderDraftsTable();
         renderSubmissionsTable();
+        renderUserBookSubmissionsTable();
     } else if (activeAdminTab === 'trash') {
         renderTrashTable();
     } else if (activeAdminTab === 'downloads') {
@@ -679,8 +688,10 @@ function openBannerSlideModal(mode, slideId = null) {
     if (mobPreview) {
         mobPreview.innerHTML = `<i class="fa-solid fa-mobile-screen text-xl mb-1 text-accord-gold"></i><span class="text-[10px] font-semibold">Click to upload Mobile Banner</span>`;
     }
-    document.getElementById('banner-desktop-filename').innerText = 'JPG, PNG, or WebP (3:1 wide)';
-    document.getElementById('banner-mobile-filename').innerText = 'Optional (Falls back to Desktop if empty)';
+    const deskFilename = document.getElementById('banner-desktop-filename');
+    const mobFilename = document.getElementById('banner-mobile-filename');
+    if (deskFilename) deskFilename.innerText = 'JPG, PNG, or WebP (3:1 wide)';
+    if (mobFilename) mobFilename.innerText = 'Optional (Falls back to Desktop if empty)';
 
     if (!homeLayoutConfig.banner) homeLayoutConfig.banner = getDefaultHomeLayoutConfig().banner;
     if (!Array.isArray(homeLayoutConfig.banner.slides)) homeLayoutConfig.banner.slides = [];
@@ -832,11 +843,6 @@ async function deleteBannerSlide(slideId) {
     await persistHomeLayoutConfig();
     showToast("Banner slide removed.");
 }
-
-// =========================================================
-// ACCORD ADMIN.JS — PART 2 OF 2
-// Bulk Excel, Categories, Catalog CRUD, Trash, Analytics, Forum & Upload Listeners
-// =========================================================
 
 // ==========================================
 // BULK EXCEL / CSV UPLOAD (STRICT NO-DUPLICATES)
@@ -1210,7 +1216,6 @@ function switchTab(tabName) {
         }
     });
 
-    // Lazy-render only the selected tab's tables when switched
     renderActiveTabOnly(false);
 }
 
@@ -1448,9 +1453,15 @@ function openArchiveModal(mode, id = null) {
     document.getElementById('form-is-for-sale').value = 'false';
     togglePriceField();
 
-    document.getElementById('file-name-display').textContent = "Max size: 50MB";
-    document.getElementById('file-name-display').classList.remove('text-accord-blue', 'font-bold');
-    document.getElementById('upload-ui').classList.remove('border-accord-blue', 'bg-accord-lightBlue');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const uploadUi = document.getElementById('upload-ui');
+    if (fileNameDisplay) {
+        fileNameDisplay.textContent = "Max size: 50MB";
+        fileNameDisplay.classList.remove('text-accord-blue', 'font-bold');
+    }
+    if (uploadUi) {
+        uploadUi.classList.remove('border-accord-blue', 'bg-accord-lightBlue');
+    }
 
     const coverPreview = document.getElementById('cover-preview-box');
     const coverName = document.getElementById('cover-name-display');
@@ -1501,15 +1512,15 @@ function openArchiveModal(mode, id = null) {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     setTimeout(() => {
-        document.getElementById('archive-modal-box').classList.remove('scale-95');
-        document.getElementById('archive-modal-box').classList.add('scale-100');
+        document.getElementById('archive-modal-box')?.classList.remove('scale-95');
+        document.getElementById('archive-modal-box')?.classList.add('scale-100');
     }, 10);
 }
 
 function closeArchiveModal() {
     const modal = document.getElementById('archive-modal');
-    document.getElementById('archive-modal-box').classList.remove('scale-100');
-    document.getElementById('archive-modal-box').classList.add('scale-95');
+    document.getElementById('archive-modal-box')?.classList.remove('scale-100');
+    document.getElementById('archive-modal-box')?.classList.add('scale-95');
     setTimeout(() => {
         modal.classList.remove('flex');
         modal.classList.add('hidden');
@@ -1676,7 +1687,7 @@ async function processArchiveSave(isDraft) {
 }
 
 // ==========================================
-// RECYCLE BIN, SUBMISSIONS, STATS & FORUM MOD
+// RECYCLE BIN, SUBMISSIONS, USER BOOKS, STATS & FORUM MOD
 // ==========================================
 
 async function promptDelete(id) {
@@ -1896,6 +1907,95 @@ async function rejectSubmission(id) {
     showToast("Submission rejected and removed.");
 }
 
+function renderUserBookSubmissionsTable() {
+    const tbody = document.getElementById('user-books-table-body');
+    const badge = document.getElementById('user-books-subtab-badge');
+    if (badge) badge.innerText = userBookSubmissionsData.length;
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (userBookSubmissionsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-accord-muted">No user book submissions awaiting approval.</td></tr>`;
+        return;
+    }
+
+    userBookSubmissionsData.forEach(item => {
+        const priceBadge = item.is_for_sale
+            ? `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">For Sale • USD ${Number(item.price || 0).toFixed(2)}</span>`
+            : `<span class="bg-blue-50 text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded">Free Book</span>`;
+
+        const pdfLink = item.download_url
+            ? `<a href="${escapeHTML(item.download_url)}" target="_blank" rel="noopener noreferrer" class="text-accord-blue hover:underline text-[11px] font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>Preview File</a>`
+            : `<span class="text-[10px] text-slate-400">No file</span>`;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(item.submitter_name)}</p>
+                <p class="text-[10px] text-accord-muted">${escapeHTML(item.submitter_email)}</p>
+            </td>
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(item.title)}</p>
+                <p class="text-[10px] text-accord-muted">By ${escapeHTML(item.author)}</p>
+            </td>
+            <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md">${escapeHTML(item.category)}</span></td>
+            <td class="py-4 px-6">${priceBadge}</td>
+            <td class="py-4 px-6">${pdfLink}</td>
+            <td class="py-4 px-6 text-right space-x-2 whitespace-nowrap">
+                <button onclick="approveUserBookSubmission('${item.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
+                <button onclick="rejectUserBookSubmission('${item.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function approveUserBookSubmission(id) {
+    const submission = userBookSubmissionsData.find(s => String(s.id) === String(id));
+    if (!submission) return;
+
+    const { error: insertErr } = await supabaseClient.from('books').insert([{
+        title: submission.title,
+        author: submission.author,
+        category: submission.category,
+        year: submission.year || new Date().getFullYear().toString(),
+        pages: submission.pages || 'TBD',
+        description: submission.description,
+        download_url: submission.download_url || '',
+        cover_url: submission.cover_url || '',
+        is_for_sale: Boolean(submission.is_for_sale),
+        price: submission.is_for_sale ? (Number(submission.price) || 0) : 0,
+        gradient: 'from-blue-900 via-indigo-900 to-slate-900',
+        is_visible: true,
+        status: 'published'
+    }]);
+
+    if (insertErr) {
+        showToast(`Could not publish book: ${insertErr.message}`);
+        return;
+    }
+
+    await supabaseClient
+        .from('user_book_submissions')
+        .update({ approval_status: 'approved' })
+        .eq('id', id);
+
+    await fetchAllData();
+    showToast(`"${submission.title}" approved and published to the library.`);
+}
+
+async function rejectUserBookSubmission(id) {
+    await supabaseClient
+        .from('user_book_submissions')
+        .update({ approval_status: 'rejected' })
+        .eq('id', id);
+
+    await fetchAllData();
+    showToast("User book submission rejected.");
+}
+
 function updateStats() {
     document.getElementById('stat-total').innerText = catalogData.length;
 
@@ -1915,7 +2015,7 @@ function updateStats() {
     }
 
     const draftCount = catalogData.filter(b => b.status === 'draft' || b.is_visible === false).length;
-    const totalPending = draftCount + submissionsData.length;
+    const totalPending = draftCount + submissionsData.length + userBookSubmissionsData.length;
 
     const statPendingEl = document.getElementById('stat-pending');
     if (statPendingEl) statPendingEl.innerText = totalPending;
@@ -2150,15 +2250,19 @@ document.getElementById('form-file')?.addEventListener('change', function(e) {
     const pageInput = document.getElementById('form-pages');
 
     if (file) {
-        fileNameDisplay.textContent = file.name;
-        fileNameDisplay.classList.add('text-accord-blue', 'font-bold');
-        uploadUi.classList.add('border-accord-blue', 'bg-accord-lightBlue');
+        if (fileNameDisplay) {
+            fileNameDisplay.textContent = file.name;
+            fileNameDisplay.classList.add('text-accord-blue', 'font-bold');
+        }
+        if (uploadUi) {
+            uploadUi.classList.add('border-accord-blue', 'bg-accord-lightBlue');
+        }
 
-        if (!titleInput.value) {
+        if (titleInput && !titleInput.value) {
             titleInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
         }
 
-        if (file.type === 'application/pdf') {
+        if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined' && pageInput) {
             const fileReader = new FileReader();
             fileReader.onload = async function() {
                 try {
@@ -2179,8 +2283,10 @@ document.getElementById('form-cover')?.addEventListener('change', function(e) {
     const coverName = document.getElementById('cover-name-display');
 
     if (file) {
-        coverName.textContent = file.name;
-        coverName.classList.add('text-accord-blue', 'font-bold');
+        if (coverName) {
+            coverName.textContent = file.name;
+            coverName.classList.add('text-accord-blue', 'font-bold');
+        }
 
         const reader = new FileReader();
         reader.onload = function(event) {
@@ -2269,3 +2375,37 @@ document.getElementById('banner-mobile-file')?.addEventListener('change', functi
     };
     reader.readAsDataURL(file);
 });
+
+async function approveBookTakedown(bookId) {
+    const { error } = await supabaseClient
+        .from('books')
+        .update({
+            takedown_status: 'approved',
+            is_visible: false,
+            deleted_at: new Date().toISOString()
+        })
+        .eq('id', bookId);
+
+    if (error) {
+        showToast(`Could not approve takedown: ${error.message}`);
+        return;
+    }
+
+    await fetchAllData();
+    showToast('Takedown approved and book moved to Recycle Bin.');
+}
+
+async function rejectBookTakedown(bookId) {
+    const { error } = await supabaseClient
+        .from('books')
+        .update({ takedown_status: 'rejected' })
+        .eq('id', bookId);
+
+    if (error) {
+        showToast(`Could not reject takedown: ${error.message}`);
+        return;
+    }
+
+    await fetchAllData();
+    showToast('Takedown request rejected.');
+}

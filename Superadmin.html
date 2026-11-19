@@ -443,6 +443,40 @@
                 </div>
             </section>
 
+            <!-- Section 2B: Ministry / Minister Account Upgrade Requests -->
+            <section id="ministry-upgrades-section" class="space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Ministry / Minister Upgrade Requests</h2>
+                        <p class="text-xs text-accord-muted mt-1">Review community members requesting direct feed publishing privileges for Videos, Audio, and Text Posts.</p>
+                    </div>
+                    <span id="pending-upgrades-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200 self-start sm:self-auto">
+                        0 Pending
+                    </span>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Member</th>
+                                    <th class="py-4 px-6">Who They Are & Community Plan</th>
+                                    <th class="py-4 px-6 text-center">Requested</th>
+                                    <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-right">Decision</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ministry-upgrades-tbody" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-accord-muted">Loading upgrade requests...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Section 3: How Role-Based Access Works (Quick Reference) -->
             <section class="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-sm">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -485,15 +519,7 @@
         </main>
 
         <!-- Footer -->
-        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
-                <div class="flex items-center space-x-2">
-                    <span class="font-bold text-accord-slate">Accord Superadmin Command Center</span>
-                    <span>• Role-Based Access v1.0</span>
-                </div>
-                <p>© 2026 Accord Media House. All rights reserved.</p>
-            </div>
-        </footer>
+        <script src="accord-footer.js"></script>
 
     </div>
 

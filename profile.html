@@ -9,15 +9,32 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: { accord: { blue: '#0077FF', darkBlue: '#005BC4', lightBlue: '#E6F0FF', gold: '#F5A623', slate: '#0F172A', muted: '#64748B', bg: '#F8FAFC' } },
+                    colors: {
+                        accord: {
+                            blue: '#0077FF',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
                     fontFamily: { sans: ['Inter', 'sans-serif'] }
                 }
             }
         }
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
     <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
@@ -30,16 +47,22 @@
     <script src="header.js"></script>
 
     <main class="max-w-2xl mx-auto px-4 sm:px-6 py-12 flex-grow w-full space-y-8">
+        <!-- Personal Details Card -->
         <div class="bg-white border border-slate-200/90 rounded-3xl p-8 shadow-sm space-y-6">
-            <div>
-                <h1 class="serif-heading text-2xl font-bold text-accord-slate">Profile Settings</h1>
-                <p class="text-xs text-accord-muted mt-1">Manage your account credentials and personal details.</p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 class="serif-heading text-2xl font-bold text-accord-slate">Profile Settings</h1>
+                    <p class="text-xs text-accord-muted mt-1">Manage your account credentials and personal details.</p>
+                </div>
+                <span id="account-type-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-accord-lightBlue text-accord-blue">
+                    <i class="fa-solid fa-user mr-1.5"></i> Normal User
+                </span>
             </div>
 
             <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
-                    <input type="text" id="profile-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
+                    <input type="text" id="profile-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address (Read-only)</label>
@@ -51,16 +74,182 @@
             </form>
 
             <div class="pt-4 border-t border-slate-100">
-                <button onclick="handleSignOut()" class="w-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs transition-all">
+                <button type="button" onclick="handleSignOut()" class="w-full border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs transition-all">
                     Sign Out of Account
                 </button>
             </div>
         </div>
+
+        <!-- Account Type & Ministry / Minister Upgrade Request Card -->
+        <div id="account-upgrade-card" class="bg-white border border-slate-200/90 rounded-3xl p-8 shadow-sm space-y-5">
+            <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                    <span class="bg-amber-50 text-accord-gold text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">Account Permissions</span>
+                    <h2 class="serif-heading text-xl font-bold text-accord-slate mt-1.5">Ministry / Minister Account Upgrade</h2>
+                    <p class="text-xs text-accord-muted mt-1 leading-relaxed">
+                        All registered users can submit books (free or for sale) for Library Admin review and comment on posts. Upgraded <strong>Ministries / Ministers</strong> can also post videos, audio, and text entries directly to the feed without prior approval.
+                    </p>
+                </div>
+                <span id="upgrade-status-pill" class="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-muted shrink-0">
+                    Status: Not Requested
+                </span>
+            </div>
+
+            <!-- Shown when user is already a Ministry / Minister -->
+            <div id="ministry-active-notice" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-800 space-y-1">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    <span>Ministry / Minister Permissions Active</span>
+                </p>
+                <p class="text-emerald-700 leading-relaxed">
+                    Your account is authorized to post video, audio, and text entries directly to the community feed. Book submissions continue to go through Library Admin review before publishing.
+                </p>
+            </div>
+
+            <!-- Shown when request is pending review -->
+            <div id="upgrade-pending-notice" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1.5">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-hourglass-half text-accord-gold"></i>
+                    <span>Upgrade Request Under Review</span>
+                </p>
+                <p id="upgrade-pending-pitch-display" class="text-amber-800 italic leading-relaxed"></p>
+            </div>
+
+            <!-- Upgrade Request Form -->
+            <form id="role-upgrade-form" onsubmit="submitRoleUpgradeRequest(event)" class="space-y-4">
+                <div>
+                    <label for="upgrade-pitch" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">
+                        Who You Are & How You Plan to Interact With the Community
+                    </label>
+                    <textarea
+                        id="upgrade-pitch"
+                        rows="4"
+                        required
+                        minlength="30"
+                        maxlength="700"
+                        placeholder="Share a short paragraph about your ministry, calling, or background, and explain how you intend to engage with and serve the Accord community..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"
+                    ></textarea>
+                    <p class="text-[11px] text-accord-muted mt-1">Minimum 30 characters. Include your ministry/role details and how you plan to contribute.</p>
+                </div>
+
+                <button type="submit" id="upgrade-submit-btn" class="w-full bg-accord-slate hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-all">
+                    Request Ministry / Minister Account
+                </button>
+            </form>
+        </div>
     </main>
 
-    <footer class="bg-white border-t border-slate-200 py-8 text-center text-xs text-accord-muted">
-        © 2026 Accord Media House. All rights reserved.
-    </footer>
+    <script src="admin-core.js"></script>
+    <script src="accord-footer.js"></script>
     <script src="profile.js"></script>
+    <script>
+        function syncUpgradeCardUI(profile) {
+            const type = profile?.account_type || 'normal_user';
+            const status = profile?.upgrade_status || 'none';
+
+            const badge = document.getElementById('account-type-badge');
+            const statusPill = document.getElementById('upgrade-status-pill');
+            const activeNotice = document.getElementById('ministry-active-notice');
+            const pendingNotice = document.getElementById('upgrade-pending-notice');
+            const pendingPitch = document.getElementById('upgrade-pending-pitch-display');
+            const form = document.getElementById('role-upgrade-form');
+            const pitchInput = document.getElementById('upgrade-pitch');
+
+            if (type === 'ministry_minister') {
+                badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200';
+                badge.innerHTML = '<i class="fa-solid fa-church mr-1.5"></i> Ministry / Minister';
+                statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700';
+                statusPill.innerText = 'Status: Approved';
+                activeNotice.classList.remove('hidden');
+                pendingNotice.classList.add('hidden');
+                form.classList.add('hidden');
+                return;
+            }
+
+            badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-accord-lightBlue text-accord-blue';
+            badge.innerHTML = '<i class="fa-solid fa-user mr-1.5"></i> Normal User';
+            activeNotice.classList.add('hidden');
+
+            if (status === 'pending') {
+                statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700';
+                statusPill.innerText = 'Status: Pending Review';
+                pendingNotice.classList.remove('hidden');
+                pendingPitch.innerText = `"${profile.upgrade_pitch || ''}"`;
+                if (pitchInput && profile.upgrade_pitch) pitchInput.value = profile.upgrade_pitch;
+            } else if (status === 'rejected') {
+                statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-600';
+                statusPill.innerText = 'Status: Declined (Resubmit)';
+                pendingNotice.classList.add('hidden');
+                if (pitchInput && profile.upgrade_pitch) pitchInput.value = profile.upgrade_pitch;
+            } else {
+                statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-muted';
+                statusPill.innerText = 'Status: Not Requested';
+                pendingNotice.classList.add('hidden');
+            }
+            form.classList.remove('hidden');
+        }
+
+        async function submitRoleUpgradeRequest(e) {
+            e.preventDefault();
+            const pitchEl = document.getElementById('upgrade-pitch');
+            const btn = document.getElementById('upgrade-submit-btn');
+            const pitch = pitchEl.value.trim();
+
+            if (pitch.length < 30) {
+                showToast('Please enter at least 30 characters explaining who you are and how you plan to interact.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Submitting Request...';
+
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) {
+                btn.disabled = false;
+                btn.innerText = 'Request Ministry / Minister Account';
+                showToast('Please sign in first.');
+                return;
+            }
+
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .upsert({
+                    id: user.id,
+                    email: user.email,
+                    account_type: 'normal_user',
+                    upgrade_status: 'pending',
+                    upgrade_pitch: pitch,
+                    upgrade_requested_at: new Date().toISOString()
+                }, { onConflict: 'id' })
+                .select()
+                .single();
+
+            btn.disabled = false;
+            btn.innerText = 'Request Ministry / Minister Account';
+
+            if (error) {
+                showToast('Could not submit request. Please try again.');
+                return;
+            }
+
+            syncUpgradeCardUI(data);
+            showToast('Ministry / Minister upgrade request sent.');
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (typeof supabaseClient === 'undefined') return;
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) return;
+
+            const { data: profile } = await supabaseClient
+                .from('profiles')
+                .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            syncUpgradeCardUI(profile || { account_type: 'normal_user', upgrade_status: 'none' });
+        });
+    </script>
 </body>
 </html>

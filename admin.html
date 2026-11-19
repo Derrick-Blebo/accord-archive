@@ -735,6 +735,27 @@
                     </div>
                 </div>
 
+                <div class="pt-6 border-t border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-accord-slate text-sm">User Book Submissions (Free & For Sale)</h3>
+                        <span class="text-xs font-bold text-accord-blue">Pending: <span id="user-books-subtab-badge">0</span></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 text-accord-muted font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <th class="py-3 px-6">Submitted By</th>
+                                    <th class="py-3 px-6">Book & Author</th>
+                                    <th class="py-3 px-6">Category</th>
+                                    <th class="py-3 px-6">Access / Price</th>
+                                    <th class="py-3 px-6">File</th>
+                                    <th class="py-3 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-books-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
                 <!-- Sub-View 1: Draft Books -->
                 <div id="pending-panel-drafts" class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
@@ -907,16 +928,6 @@
 
         </main>
 
-        <!-- Footer -->
-        <footer class="bg-white border-t border-slate-200 py-8 mt-12">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
-                <div class="flex items-center space-x-2">
-                    <span class="font-bold text-accord-slate">Accord Admin Center</span>
-                    <span>• Secure CMS v3.2</span>
-                </div>
-                <p>© 2026 Accord Media House. All rights reserved.</p>
-            </div>
-        </footer>
 
         <!-- Add / Edit Archive Modal Form -->
         <div id="archive-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
@@ -1034,6 +1045,9 @@
         </div>
 
     </div><!-- End #dashboard-wrapper -->
+
+    <!-- Global Footer Script -->
+    <script src="accord-footer.js"></script>
 
     <!-- Shared Core Script -->
     <script src="admin-core.js"></script>

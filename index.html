@@ -224,26 +224,6 @@
 
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-slate-200 py-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 bg-accord-blue rounded-xl flex items-center justify-center text-white font-bold">Ac</div>
-                <div>
-                    <span class="font-extrabold text-accord-slate tracking-tight">Accord</span>
-                    <p class="text-xs text-accord-muted">© 2026 Accord Media House. All rights reserved.</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-6 text-sm text-accord-muted font-medium">
-                <a href="#library" class="hover:text-accord-blue transition-colors">Library</a>
-                <a href="forum.html" class="hover:text-accord-blue transition-colors">Testimonies</a>
-                <a href="saved.html" class="hover:text-accord-blue transition-colors">Saved</a>
-                <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy Policy</a>
-                <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms of Service</a>
-            </div>
-        </div>
-    </footer>
-
     <!-- Modal 1: Book Detail Modal -->
     <div id="book-detail-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
@@ -392,6 +372,9 @@
         </div>
     </div>
 
+    <footer>
+        
+    </footer>>
     <script>
         document.getElementById('sub-file')?.addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -402,6 +385,10 @@
             }
         });
     </script>
+
+    <!-- Global Footer Script -->
+    <script src="accord-footer.js"></script>
+
     <script src="index.js?v=8"></script>
 </body>
 </html>
