@@ -545,6 +545,9 @@ function closeAdminRoleModal() {
 
 async function handleSaveAdminRole(e) {
     e.preventDefault();
+    function getMasterAdminEmail() {
+    return (typeof MASTER_ADMIN_EMAIL !== 'undefined' && MASTER_ADMIN_EMAIL) || 'accordmedia1@gmail.com';
+}
     const originalEmail = document.getElementById('edit-role-original-email').value.trim().toLowerCase();
     const name = document.getElementById('role-user-name').value.trim();
     const title = document.getElementById('role-user-title').value.trim() || 'Department Admin';
@@ -642,3 +645,4 @@ function exportRolesToExcel() {
     XLSX.writeFile(workbook, 'Accord_Admin_Access_Registry.xlsx');
     showToast('Exported Admin Access Registry to Excel!');
 }
+

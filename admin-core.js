@@ -8,12 +8,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const supabaseClient = window.supabaseClient;
+var supabaseClient = window.supabaseClient;
 
 const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
-const ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__'; 
-const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
-const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
+var ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__'; 
+var LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
+var MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
 
 function escapeHTML(str) {
     return String(str || '')
