@@ -34,6 +34,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
@@ -52,6 +58,104 @@
     <!-- Global Header Container -->
     <div id="accord-header"></div>
     <script src="header.js"></script>
+
+    <!-- Upload Book Modal (Styled to match Library Admin Upload UI) -->
+    <div id="upload-book-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[95vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Upload a Book</h3>
+                    <p class="text-[11px] text-accord-muted">Submit your publication for Library Admin review and catalog listing.</p>
+                </div>
+                <button type="button" onclick="closeUploadBookModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <form id="upload-book-form" onsubmit="handleAuthorBookUpload(event)" class="p-6 space-y-4 overflow-y-auto text-xs">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload PDF *</label>
+                    <div class="relative group">
+                        <input type="file" id="upload-book-pdf" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="flex flex-col items-center justify-center w-full bg-slate-50 group-hover:bg-blue-50/40 border-2 border-dashed border-slate-200 group-hover:border-accord-blue rounded-xl px-4 py-5 text-center transition-all">
+                            <p class="text-xs font-bold text-accord-slate">Click or drag PDF to upload</p>
+                            <p id="upload-pdf-meta" class="text-[10px] text-accord-muted mt-1">Max size: 50MB</p>
+                        </div>
+                    </div>
+                    <input type="url" id="upload-book-url" placeholder="Or External PDF URL..." class="mt-2 w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Upload Cover Image</label>
+                    <div class="relative group">
+                        <input type="file" id="upload-book-cover" accept="image/*" onchange="handleAuthorCoverPreview(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div class="flex items-center space-x-3 w-full bg-slate-50 group-hover:bg-blue-50/40 border border-slate-200 group-hover:border-accord-blue rounded-xl px-4 py-2.5 transition-all">
+                            <div id="upload-cover-preview-box" class="w-8 h-10 rounded bg-slate-200 flex items-center justify-center overflow-hidden shrink-0 text-xs text-slate-600">
+                                <i class="fa-regular fa-image"></i>
+                            </div>
+                            <p id="upload-cover-meta" class="text-xs text-accord-muted truncate">JPG, PNG, WebP (Auto-optimized)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="upload-book-title" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title *</label>
+                    <input type="text" id="upload-book-title" required placeholder="Enter book title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="upload-book-author" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Author *</label>
+                        <input type="text" id="upload-book-author" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="upload-book-category" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category *</label>
+                        <select id="upload-book-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                            <option value="General">General</option>
+                            <option value="Biographies">Biographies</option>
+                            <option value="Theology & Ministry">Theology & Ministry</option>
+                            <option value="Christian Living">Christian Living</option>
+                            <option value="History & Biography">History & Biography</option>
+                            <option value="Fiction & Literature">Fiction & Literature</option>
+                            <option value="Education & Leadership">Education & Leadership</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label for="upload-book-year" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Year</label>
+                        <input type="text" id="upload-book-year" value="2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="upload-book-access" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Access</label>
+                        <select id="upload-book-access" onchange="toggleUploadPriceField()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                            <option value="false">Free Archive</option>
+                            <option value="true">For Sale</option>
+                        </select>
+                    </div>
+                    <div id="upload-price-wrapper" class="hidden">
+                        <label for="upload-book-price" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Price (USD)</label>
+                        <input type="number" id="upload-book-price" step="0.01" min="0.50" placeholder="9.99" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+
+                <input type="hidden" id="upload-book-pages" value="TBD">
+
+                <div>
+                    <label for="upload-book-description" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description</label>
+                    <textarea id="upload-book-description" rows="3" required placeholder="Write a brief description of your book..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2.5">
+                    <button type="button" onclick="closeUploadBookModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="upload-book-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">
+                        Submit Book
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Takedown Request Modal (Requires Reason; Library Admin Approves) -->
     <div id="takedown-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
@@ -136,7 +240,7 @@
     <!-- Main Content -->
     <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
 
-        <!-- Page Banner + Withdraw Funds CTA -->
+        <!-- Page Banner + Upload Book & Withdraw Funds CTAs -->
         <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div class="space-y-1.5">
                 <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">
@@ -144,12 +248,16 @@
                 </span>
                 <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">My Author Page</h1>
                 <p id="author-subtitle" class="text-xs sm:text-sm text-accord-muted">
-                    Track your uploaded publications, downloads, sales, earnings, and visibility status.
+                    Upload books, track downloads, sales, earnings, and visibility status.
                 </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-3 shrink-0">
-                <button type="button" onclick="openWithdrawModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
+                <button type="button" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Upload Book</span>
+                </button>
+                <button type="button" onclick="openWithdrawModal()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-5 py-3.5 rounded-xl transition-all inline-flex items-center space-x-2">
                     <i class="fa-solid fa-wallet"></i>
                     <span>Withdraw Funds</span>
                 </button>
@@ -179,11 +287,15 @@
 
         <!-- Uploaded Books Table (Hide toggle + Takedown Request with Reason) -->
         <section class="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h2 class="serif-heading text-xl font-bold text-accord-slate">Your Uploaded Books</h2>
-                    <p class="text-xs text-accord-muted mt-0.5">You can hide a book from the public library anytime. Permanent removal requires a takedown request approved by a Library Admin.</p>
+                    <p class="text-xs text-accord-muted mt-0.5">Upload new titles anytime, hide books from the public library, or request a takedown for Library Admin review.</p>
                 </div>
+                <button type="button" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all inline-flex items-center space-x-1.5 self-start sm:self-auto">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Book</span>
+                </button>
             </div>
 
             <div class="overflow-x-auto">
@@ -235,6 +347,6 @@
 
     <script src="admin-core.js"></script>
     <script src="footer.js"></script>
-    <script src="author.js?v=1"></script>
+    <script src="author.js?v=3"></script>
 </body>
 </html>
