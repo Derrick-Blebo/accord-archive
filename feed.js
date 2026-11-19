@@ -1,6 +1,6 @@
 let currentTab = 'all';
 let currentUser = null;
-let currentProfile = null; // { account_type: 'normal_user' | 'ministry_minister', full_name }
+let currentProfile = null; // { account_type: 'normal_user' | 'ministry_minister', upgrade_status, full_name }
 let allFeedPosts = [];
 let likedPostIds = new Set();
 let commentCountsByPost = {};
@@ -20,6 +20,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadFeedPosts();
 });
 
+function isMinistryOrMinister(profile = currentProfile) {
+    if (!profile) return false;
+    return profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved';
+}
+
+function syncFeedAccountUI() {
+    const verified = isMinistryOrMinister(currentProfile);
+    const badge = document.getElementById('feed-profile-verified-badge') || document.getElementById('profile-verified-badge');
+    const profileIcon = document.getElementById('feed-profile-icon') || document.getElementById('user-profile-icon');
+
+    if (badge) {
+        badge.classList.toggle('hidden', !verified);
+    }
+
+    if (currentUser && profileIcon && !profileIcon.querySelector('i, img')) {
+        const displayName = currentProfile?.full_name || currentUser.email || 'U';
+        profileIcon.textContent = displayName.charAt(0).toUpperCase();
+    }
+}
+
 async function initFeedSession() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     currentUser = session?.user || null;
@@ -33,7 +53,7 @@ async function initFeedSession() {
 
         const { data: profile } = await supabaseClient
             .from('profiles')
-            .select('id, full_name, email, account_type')
+            .select('id, full_name, email, account_type, upgrade_status')
             .eq('id', currentUser.id)
             .maybeSingle();
 
@@ -41,17 +61,16 @@ async function initFeedSession() {
             id: currentUser.id,
             full_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
             email: currentUser.email,
-            account_type: 'normal_user'
+            account_type: 'normal_user',
+            upgrade_status: 'none'
         };
     } else {
         currentProfile = null;
         if (authLabel) authLabel.textContent = 'Sign In';
         if (mobileAuthLabel) mobileAuthLabel.textContent = 'Sign In / Create Account';
     }
-}
 
-function isMinistryOrMinister() {
-    return currentProfile?.account_type === 'ministry_minister';
+    syncFeedAccountUI();
 }
 
 function handleAuthNavClick() {
@@ -73,9 +92,11 @@ function showToast(message, isError = false) {
     if (!toast) return;
 
     msgEl.textContent = message;
-    iconEl.className = isError
-        ? 'fa-solid fa-circle-exclamation text-red-500 text-lg'
-        : 'fa-solid fa-circle-check text-accord-gold text-lg';
+    if (iconEl) {
+        iconEl.className = isError
+            ? 'fa-solid fa-circle-exclamation text-red-500 text-lg'
+            : 'fa-solid fa-circle-check text-accord-gold text-lg';
+    }
 
     toast.classList.remove('translate-y-24', 'opacity-0');
     setTimeout(() => {
@@ -188,8 +209,9 @@ function renderFeedCard(post) {
         : '';
 
     const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
-    const roleBadge = post.author_role === 'ministry_minister' && !post.is_anonymous
-        ? `<span class="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-accord-gold border border-amber-200">Ministry / Minister</span>`
+    const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
+    const roleBadge = isVerifiedAuthor
+        ? `<span class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-accord-gold border border-amber-200"><i class="fa-solid fa-circle-check text-[9px]"></i>Ministry / Minister</span>`
         : '';
 
     const typeMeta = getPostTypeMeta(post.post_type);
@@ -225,8 +247,9 @@ function renderFeedCard(post) {
     card.innerHTML = `
         <div class="flex items-center justify-between gap-3">
             <div class="flex items-center space-x-3 min-w-0">
-                <div class="w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-xs shrink-0">
-                    ${escapeHtml(displayAuthor.charAt(0).toUpperCase())}
+                <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-xs shrink-0">
+                    <span>${escapeHtml(displayAuthor.charAt(0).toUpperCase())}</span>
+                    ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
                 </div>
                 <div class="min-w-0">
                     <div class="flex items-center flex-wrap">
@@ -368,7 +391,7 @@ function togglePostTypeFields() {
     } else if (!isMinistryOrMinister()) {
         if (noteEl) noteEl.textContent = 'Your account is a Normal User. Request a Ministry / Minister upgrade in Profile to publish Videos, Audio, or Text Posts.';
     } else {
-        if (noteEl) noteEl.textContent = 'Ministry / Minister account active: your post publishes directly to the feed.';
+        if (noteEl) noteEl.textContent = 'Verified Ministry / Minister account active: your post publishes directly to the feed.';
     }
 }
 
@@ -419,6 +442,10 @@ async function handleCreatePostSubmit(e) {
         }
     }
 
+    const resolvedRole = currentUser
+        ? (isMinistryOrMinister(currentProfile) ? 'ministry_minister' : (currentProfile?.account_type || 'normal_user'))
+        : 'guest';
+
     const payload = {
         post_type: postType,
         title,
@@ -426,7 +453,7 @@ async function handleCreatePostSubmit(e) {
         media_url: (postType === 'video' || postType === 'audio') ? mediaUrl : null,
         author_id: currentUser ? currentUser.id : null,
         author_name: authorName,
-        author_role: currentUser ? (currentProfile?.account_type || 'normal_user') : 'guest',
+        author_role: resolvedRole,
         is_anonymous: isAnonymous,
         is_approved: true
     };

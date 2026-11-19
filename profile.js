@@ -4,6 +4,7 @@
 // =========================================================
 
 let currentProfileUser = null;
+let currentUserProfile = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof supabaseClient === 'undefined') return;
@@ -18,6 +19,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadUserProfileData();
 });
 
+function isVerifiedMinistryAccount(profile) {
+    if (!profile) return false;
+    return profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved';
+}
+
+function applyMinistryVerificationUI(profile) {
+    const verified = isVerifiedMinistryAccount(profile);
+    const isPending = !verified && profile?.upgrade_status === 'pending';
+
+    // Hide upgrade request container once approved (and optionally while pending)
+    const upgradeBox = document.getElementById('ministry-upgrade-box');
+    if (upgradeBox) {
+        upgradeBox.classList.toggle('hidden', verified);
+    }
+
+    const upgradeForm = document.getElementById('ministry-upgrade-form') || document.getElementById('upgrade-request-form');
+    if (upgradeForm) {
+        upgradeForm.classList.toggle('hidden', verified);
+    }
+
+    // Show verified status banner when approved
+    const verifiedBanner = document.getElementById('ministry-verified-banner');
+    if (verifiedBanner) {
+        verifiedBanner.classList.toggle('hidden', !verified);
+    }
+
+    const pendingNotice = document.getElementById('ministry-pending-notice');
+    if (pendingNotice) {
+        pendingNotice.classList.toggle('hidden', !isPending);
+    }
+
+    // Toggle verified mark attached to profile icon / avatar
+    const badge = document.getElementById('profile-verified-badge');
+    if (badge) {
+        badge.classList.toggle('hidden', !verified);
+    }
+
+    // If an inline HTML hook is defined on the page, call it too
+    if (typeof window.onMinistryProfileLoaded === 'function') {
+        window.onMinistryProfileLoaded(profile, verified);
+    }
+}
+
 async function loadUserProfileData() {
     if (!currentProfileUser) return;
 
@@ -25,10 +69,11 @@ async function loadUserProfileData() {
     const nameInput = document.getElementById('profile-name');
     const authNavLabel = document.getElementById('auth-nav-label');
     const mobileAuthLabel = document.getElementById('mobile-auth-label');
+    const profileIcon = document.getElementById('user-profile-icon');
 
     if (emailInput) emailInput.value = currentProfileUser.email || '';
 
-    const { data: profile } = await supabaseClient
+    let { data: profile } = await supabaseClient
         .from('profiles')
         .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch')
         .eq('id', currentProfileUser.id)
@@ -40,6 +85,9 @@ async function loadUserProfileData() {
     if (nameInput) nameInput.value = resolvedName;
     if (authNavLabel) authNavLabel.textContent = resolvedName;
     if (mobileAuthLabel) mobileAuthLabel.textContent = `Account (${resolvedName})`;
+    if (profileIcon && !profileIcon.querySelector('i, img')) {
+        profileIcon.textContent = resolvedName.charAt(0).toUpperCase() || 'U';
+    }
 
     // Ensure a row exists in `profiles` for this user
     if (!profile) {
@@ -51,12 +99,15 @@ async function loadUserProfileData() {
             upgrade_status: 'none'
         };
         await supabaseClient.from('profiles').upsert(defaultProfile, { onConflict: 'id' });
-        if (typeof syncUpgradeCardUI === 'function') {
-            syncUpgradeCardUI(defaultProfile);
-        }
-    } else if (typeof syncUpgradeCardUI === 'function') {
+        profile = defaultProfile;
+    }
+
+    currentUserProfile = profile;
+
+    if (typeof syncUpgradeCardUI === 'function') {
         syncUpgradeCardUI(profile);
     }
+    applyMinistryVerificationUI(profile);
 }
 
 async function handleProfileUpdate(e) {
@@ -98,6 +149,10 @@ async function handleProfileUpdate(e) {
     if (authRes.error || profileRes.error) {
         showToast(authRes.error?.message || profileRes.error?.message || 'Could not update profile.');
         return;
+    }
+
+    if (currentUserProfile) {
+        currentUserProfile.full_name = fullName;
     }
 
     const authNavLabel = document.getElementById('auth-nav-label');
