@@ -138,24 +138,34 @@ function toggleUploadPriceField() {
     }
 }
 
-async function uploadAuthorFile(file, folder) {
-    const safeName = `${authorUser.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const candidateBuckets = ['books', 'archives', 'covers', 'pdfs', 'public'];
+async function uploadAuthorFile(file, folder = '') {
+    const originalName = file.name || 'document.pdf';
+    const lastDotIndex = originalName.lastIndexOf('.');
+    const nameWithoutExt = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
+    const fileExtension = lastDotIndex !== -1 ? originalName.substring(lastDotIndex) : '.pdf';
+    const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${cleanName}_acc${Date.now()}${fileExtension}`;
+    const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    for (const bucket of candidateBuckets) {
-        const { error } = await supabaseClient.storage
-            .from(bucket)
-            .upload(`${folder}/${safeName}`, file, { upsert: false });
+    const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('archive-files')
+        .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+        });
 
-        if (!error) {
-            const { data } = supabaseClient.storage
-                .from(bucket)
-                .getPublicUrl(`${folder}/${safeName}`);
-            if (data?.publicUrl) return data.publicUrl;
-        }
+    if (uploadError) {
+        console.error('Supabase Storage Upload Error:', uploadError);
+        throw new Error(uploadError.message || 'Storage upload failed.');
     }
 
-    throw new Error('Could not upload file to storage bucket. Please check storage bucket policies or paste an external URL.');
+    const { data: publicUrlData } = supabaseClient.storage
+        .from('archive-files')
+        .getPublicUrl(uploadData.path);
+
+    return folder === 'covers'
+        ? publicUrlData.publicUrl
+        : `${publicUrlData.publicUrl}?download=${encodeURIComponent(fileName)}`;
 }
 
 async function handleAuthorBookUpload(e) {
@@ -196,11 +206,11 @@ async function handleAuthorBookUpload(e) {
     }
 
     try {
-        let fileUrl = externalUrl || null;
-        let coverUrl = null;
+        let downloadUrl = externalUrl || '';
+        let coverUrl = '';
 
         if (pdfFile) {
-            fileUrl = await uploadAuthorFile(pdfFile, 'pdfs');
+            downloadUrl = await uploadAuthorFile(pdfFile);
         }
         if (coverFile) {
             coverUrl = await uploadAuthorFile(coverFile, 'covers');
@@ -214,10 +224,11 @@ async function handleAuthorBookUpload(e) {
             year,
             pages,
             description,
-            file_url: fileUrl,
+            download_url: downloadUrl,
             cover_url: coverUrl,
             is_for_sale: isForSale,
             price,
+            gradient: 'from-blue-900 via-indigo-900 to-slate-900',
             is_visible: false,
             status: 'draft',
             takedown_status: 'none'
@@ -233,17 +244,23 @@ async function handleAuthorBookUpload(e) {
             throw new Error(bookError.message);
         }
 
-        // Also record in submissions so Library Admin sees it under Pending Reviews
+        // Log in user_book_submissions so it appears under Library Admin > Pending Reviews
         await supabaseClient
-            .from('submissions')
+            .from('user_book_submissions')
             .insert([{
-                author_name: authorName,
-                author_email: authorUser.email,
+                submitter_name: getAuthorDisplayName(),
+                submitter_email: authorUser.email,
                 title,
+                author: authorName,
                 category,
+                year,
+                pages,
                 description,
-                file_url: fileUrl,
-                status: 'pending'
+                download_url: downloadUrl,
+                cover_url: coverUrl,
+                is_for_sale: isForSale,
+                price,
+                approval_status: 'pending'
             }]);
 
         closeUploadBookModal();
