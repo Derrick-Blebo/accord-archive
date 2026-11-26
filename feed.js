@@ -253,11 +253,10 @@ async function loadFeedPosts() {
 function matchesFeedSearch(post) {
     const q = feedSearchQuery.trim().toLowerCase();
     if (!q) return true;
-    const title = (post.title || '').toLowerCase();
     const body = (post.body || '').toLowerCase();
     const author = post.is_anonymous ? 'anonymous' : (post.author_name || '').toLowerCase();
     const type = (post.post_type || '').toLowerCase();
-    return title.includes(q) || body.includes(q) || author.includes(q) || type.includes(q);
+    return body.includes(q) || author.includes(q) || type.includes(q);
 }
 
 function buildRankedFeedItems() {
@@ -639,7 +638,7 @@ function getPostTypeMeta(type) {
         case 'video':
             return { label: 'Video', badgeClass: 'bg-blue-50 text-accord-blue border border-blue-200', icon: 'fa-video' };
         case 'audio':
-            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-podcast' };
+            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-circle-play' };
         case 'text':
             return { label: 'Text Post', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200', icon: 'fa-align-left' };
         case 'testimony':
@@ -799,7 +798,7 @@ function handleSendPostToChat(postId) {
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
         id: post.id,
-        title: post.title,
+        title: (post.body || '').slice(0, 70) || 'Fellowship Post',
         subtitle: (post.body || '').slice(0, 110),
         url: getFeedPostDetailUrl(post),
         image_url: videoThumb,
@@ -854,7 +853,11 @@ async function handleRepostClick(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     document.getElementById('repost-post-id').value = postId;
     const previewEl = document.getElementById('repost-post-preview');
-    if (previewEl && post) previewEl.textContent = `${post.title} — ${post.author_name || 'Member'}`;
+    if (previewEl && post) {
+        const snippet = (post.body || '').trim();
+        const shortSnippet = snippet.length > 80 ? `${snippet.slice(0, 80)}...` : snippet;
+        previewEl.textContent = `${shortSnippet || 'Post'} — ${post.author_name || 'Member'}`;
+    }
     const modal = document.getElementById('repost-modal');
     modal?.classList.remove('hidden');
     modal?.classList.add('flex');
@@ -1032,7 +1035,6 @@ async function handleCreatePostSubmit(e) {
     clearCreatePostError();
 
     const postType = document.getElementById('post-type').value;
-    const title = document.getElementById('post-title').value.trim();
     const body = document.getElementById('post-content').value.trim();
     const mediaUrl = document.getElementById('post-url')?.value.trim() || null;
     const selectedPage = getSelectedPostingPage();
@@ -1086,7 +1088,7 @@ async function handleCreatePostSubmit(e) {
 
     const payload = {
         post_type: postType,
-        title,
+        title: '',
         body,
         media_url: (postType === 'video' || postType === 'audio') ? mediaUrl : null,
         author_id: selectedPage ? selectedPage.id : (currentUser ? currentUser.id : null),

@@ -14,7 +14,7 @@ async function shareOrCopyPost(post) {
     if (isMobileShareContext()) {
         try {
             await navigator.share({
-                title: post.title,
+                title: post.is_anonymous ? 'Accord Fellowship Post' : `${post.author_name || 'Accord'} on Accord`,
                 text: `Check out this ${post.post_type} on Accord Archive:`,
                 url
             });
@@ -264,7 +264,7 @@ function getSharedPostTypeMeta(type) {
         case 'video':
             return { label: 'Video', badgeClass: 'bg-blue-50 text-accord-blue border border-blue-200', icon: 'fa-video', textColor: 'text-accord-blue' };
         case 'audio':
-            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-podcast', textColor: 'text-accord-gold' };
+            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-circle-play', textColor: 'text-accord-gold' };
         case 'text':
             return { label: 'Text Post', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200', icon: 'fa-align-left', textColor: 'text-emerald-600' };
         case 'testimony':
@@ -420,7 +420,7 @@ function getSharedAudioEmbedHtml(url, wrapperClass = 'mx-4 mb-3') {
     return `
         <div class="${wrapperClass} bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5">
             <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                <i class="fa-solid fa-podcast text-lg"></i>
+                <i class="fa-solid fa-circle-play text-lg"></i>
             </div>
             <div class="flex-grow min-w-0">
                 <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
@@ -668,9 +668,6 @@ function createSharedFeedCardElement(post, options = {}) {
 
         <!-- Post Content -->
         <div class="px-4 pb-3 space-y-1.5">
-            ${post.title ? (showOpenFullPostLink
-                ? `<a href="${escapeShareHtml(postUrl)}" class="block text-[15px] font-bold text-slate-900 hover:text-accord-blue leading-snug">${escapeShareHtml(post.title)}</a>`
-                : `<h1 class="text-lg sm:text-xl font-bold text-slate-900 leading-snug">${escapeShareHtml(post.title)}</h1>`) : ''}
             <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeShareHtml(shownBody)}</p>
             ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
         </div>
@@ -785,10 +782,6 @@ function ensureEditPostModalDom() {
                 </button>
             </div>
             <form id="accord-edit-post-form" onsubmit="submitSharedEditPost(event)" class="space-y-3.5">
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Title</label>
-                    <input type="text" id="accord-edit-post-title" required maxlength="180" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
-                </div>
                 <div id="accord-edit-post-media-wrap" class="hidden">
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Media URL</label>
                     <input type="url" id="accord-edit-post-media" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
@@ -814,7 +807,6 @@ function openSharedEditPostModal(post, onSaved) {
     _editPostTarget = post;
     _editPostCallback = typeof onSaved === 'function' ? onSaved : null;
 
-    document.getElementById('accord-edit-post-title').value = post.title || '';
     document.getElementById('accord-edit-post-body').value = post.body || '';
     const mediaWrap = document.getElementById('accord-edit-post-media-wrap');
     const mediaInput = document.getElementById('accord-edit-post-media');
@@ -843,7 +835,6 @@ async function submitSharedEditPost(e) {
     const client = window.supabaseClient;
     if (!client || !_editPostTarget) return;
 
-    const title = document.getElementById('accord-edit-post-title').value.trim();
     const body = document.getElementById('accord-edit-post-body').value.trim();
     const needsMedia = _editPostTarget.post_type === 'video' || _editPostTarget.post_type === 'audio';
     const media_url = needsMedia ? (document.getElementById('accord-edit-post-media').value.trim() || null) : _editPostTarget.media_url;
@@ -857,7 +848,7 @@ async function submitSharedEditPost(e) {
     const edited_at = new Date().toISOString();
     const { data, error } = await client
         .from('feed_posts')
-        .update({ title, body, media_url, edited_at })
+        .update({ title: '', body, media_url, edited_at })
         .eq('id', _editPostTarget.id)
         .select()
         .single();

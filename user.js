@@ -487,7 +487,7 @@ function renderProfileStream() {
             all: ['fa-regular fa-newspaper', 'No posts yet', 'Posts and reposts shared by this account will appear here.'],
             testimony: ['fa-regular fa-heart', 'No testimonies yet', 'Testimonies shared by this account will appear here.'],
             video: ['fa-solid fa-video', 'No video posts yet', 'Video posts shared by this account will appear here.'],
-            audio: ['fa-solid fa-podcast', 'No audio posts yet', 'Audio posts shared by this account will appear here.'],
+            audio: ['fa-solid fa-circle-play', 'No audio posts yet', 'Audio posts shared by this account will appear here.'],
             text: ['fa-solid fa-align-left', 'No text posts yet', 'Text posts shared by this account will appear here.']
         };
         const [icon, title, subtitle] = emptyMessages[currentProfileTab] || emptyMessages.all;
@@ -681,7 +681,11 @@ async function handleRepostClick(postId) {
     const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
     document.getElementById('repost-post-id').value = postId;
     const previewEl = document.getElementById('repost-post-preview');
-    if (previewEl && post) previewEl.textContent = `${post.title} — ${post.author_name || 'Member'}`;
+    if (previewEl && post) {
+        const snippet = (post.body || '').trim();
+        const shortSnippet = snippet.length > 80 ? `${snippet.slice(0, 80)}...` : snippet;
+        previewEl.textContent = `${shortSnippet || 'Post'} — ${post.author_name || 'Member'}`;
+    }
     const modal = document.getElementById('repost-modal');
     modal?.classList.remove('hidden');
     modal?.classList.add('flex');
@@ -732,7 +736,7 @@ function handleSendPostToChat(postId) {
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
         id: post.id,
-        title: post.title,
+        title: (post.body || '').slice(0, 70) || 'Fellowship Post',
         subtitle: (post.body || '').slice(0, 110),
         url: getPostShareUrl(post.id),
         image_url: videoThumb,

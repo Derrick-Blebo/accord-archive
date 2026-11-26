@@ -379,7 +379,7 @@
             const isResolved = report.status === 'resolved_taken_down';
             const card = document.createElement('div');
             card.className = `bg-white border ${isResolved ? 'border-slate-200 opacity-75' : 'border-red-200'} rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm`;
-            const postTitle = post?.title || 'Post Already Removed';
+            const postTitle = post?.body ? post.body.slice(0, 80) : 'Post Already Removed';
             const postAuthor = post?.author_name || 'Unknown / Anonymous';
             const postExcerpt = post?.body ? post.body.slice(0, 140) : '';
 
@@ -408,7 +408,7 @@
         function openTakedownWarnModal(postId, reportId, postTitle, postAuthor) {
             document.getElementById('td-post-id').value = postId;
             document.getElementById('td-report-id').value = reportId || '';
-            document.getElementById('td-post-title').textContent = postTitle || 'Untitled Post';
+            document.getElementById('td-post-title').textContent = postTitle || 'Post';
             document.getElementById('td-post-author').textContent = `Author: ${postAuthor || 'Member'}`;
             document.getElementById('td-note').value = '';
             const modal = document.getElementById('takedown-warn-modal');

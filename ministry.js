@@ -281,7 +281,7 @@ function getPostTypeMeta(type) {
         case 'video':
             return { label: 'Video', badgeClass: 'bg-blue-50 text-accord-blue border border-blue-200', icon: 'fa-video' };
         case 'audio':
-            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-podcast' };
+            return { label: 'Audio', badgeClass: 'bg-amber-50 text-accord-gold border border-amber-200', icon: 'fa-circle-play' };
         case 'text':
             return { label: 'Text Post', badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200', icon: 'fa-align-left' };
         case 'testimony':
@@ -342,7 +342,7 @@ function renderMinistryPosts() {
                        </div>`
                     : `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center space-x-4">
                            <div class="w-12 h-12 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                               <i class="fa-solid fa-podcast text-xl"></i>
+                               <i class="fa-solid fa-circle-play text-xl"></i>
                            </div>
                            <div class="flex-grow min-w-0">
                                <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
@@ -361,11 +361,6 @@ function renderMinistryPosts() {
             </div>
 
             <div class="space-y-2">
-                <a href="${escapeHtml(postUrl)}" class="block group">
-                    <h3 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate group-hover:text-accord-blue transition-colors">
-                        ${escapeHtml(post.title)}
-                    </h3>
-                </a>
                 <p class="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap line-clamp-4">
                     ${escapeHtml(post.body)}
                 </p>

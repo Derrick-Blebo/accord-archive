@@ -271,7 +271,10 @@
                 authorAvatarUrl = ap?.avatar_url || '';
             }
 
-            document.title = `${currentPost.title} — Accord Fellowship Feed`;
+            const docSnippet = (currentPost.body || '').trim();
+            document.title = docSnippet
+                ? `${docSnippet.slice(0, 60)}${docSnippet.length > 60 ? '...' : ''} — Accord Fellowship Feed`
+                : 'Post — Accord Fellowship Feed';
 
             if (currentUser?.id) {
                 supabaseClient
@@ -368,7 +371,7 @@
             openShareToChatModal({
                 type: currentPost.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
                 id: currentPost.id,
-                title: currentPost.title,
+                title: (currentPost.body || '').slice(0, 70) || 'Fellowship Post',
                 subtitle: (currentPost.body || '').slice(0, 110),
                 url: getPostShareUrl(currentPost.id),
                 image_url: videoThumb,
@@ -451,7 +454,11 @@
             }
             document.getElementById('repost-post-id').value = postId;
             const previewEl = document.getElementById('repost-post-preview');
-            if (previewEl && currentPost) previewEl.textContent = `${currentPost.title} — ${currentPost.author_name || 'Member'}`;
+            if (previewEl && currentPost) {
+                const snippet = (currentPost.body || '').trim();
+                const shortSnippet = snippet.length > 80 ? `${snippet.slice(0, 80)}...` : snippet;
+                previewEl.textContent = `${shortSnippet || 'Post'} — ${currentPost.author_name || 'Member'}`;
+            }
             const modal = document.getElementById('repost-modal');
             modal?.classList.remove('hidden');
             modal?.classList.add('flex');

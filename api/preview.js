@@ -119,7 +119,10 @@ export default async function handler(req, res) {
             const item = await fetchFromSupabase('feed_posts', `id=eq.${encodeURIComponent(id)}&is_approved=eq.true&select=id,title,body,post_type,media_url,author_name,is_anonymous`);
             if (item) {
                 const author = item.is_anonymous ? 'Anonymous' : (item.author_name || 'Accord Fellowship');
-                title = `${item.title} — ${author}`;
+                const snippet = (item.body || '').trim();
+                title = snippet
+                    ? `${snippet.slice(0, 60)}${snippet.length > 60 ? '...' : ''} — ${author}`
+                    : `${author} — Accord Fellowship Feed`;
                 description = cleanDescription(item.body, defaults.description);
                 canonicalUrl = `${SITE_URL}/post.html?id=${item.id}`;
                 ogType = 'article';

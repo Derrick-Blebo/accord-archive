@@ -698,14 +698,14 @@ function renderAttachItems() {
             `).join('');
     } else {
         const items = attachPostsCache.filter(p =>
-            (p.title || '').toLowerCase().includes(q) || (p.author_name || '').toLowerCase().includes(q)
+            (p.body || '').toLowerCase().includes(q) || (p.author_name || '').toLowerCase().includes(q)
         );
         listEl.innerHTML = items.length === 0
             ? '<p class="py-6 text-center text-xs text-accord-muted">No matching posts.</p>'
             : items.map(p => `
                 <button type="button" onclick="sendAttachedPost('${p.id}')" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left">
                     <div class="min-w-0 pr-3">
-                        <p class="text-xs font-bold text-accord-slate truncate">${escapeChatHtml(p.title)}</p>
+                        <p class="text-xs font-bold text-accord-slate truncate">${escapeChatHtml((p.body || '').slice(0, 80) || 'Fellowship Post')}</p>
                         <p class="text-[10px] text-accord-muted truncate">${escapeChatHtml(p.post_type)} · ${escapeChatHtml(p.author_name || 'Member')}</p>
                     </div>
                     <span class="px-3 py-1 rounded-lg bg-accord-blue text-white text-[11px] font-bold shrink-0">Share</span>
@@ -743,7 +743,7 @@ async function sendAttachedPost(postId) {
         message_type: p.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
         attachment_meta: {
             id: p.id,
-            title: p.title,
+            title: (p.body || '').slice(0, 70) || 'Fellowship Post',
             subtitle: (p.body || '').slice(0, 110),
             author_name: p.author_name || 'Member',
             post_type: p.post_type,

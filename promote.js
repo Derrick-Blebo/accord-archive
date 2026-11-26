@@ -128,7 +128,8 @@ async function loadPromoteChoices() {
               myPostsCache.map(p => {
                   const pageProf = promotablePagesById[String(p.author_id)];
                   const prefix = pageProf ? `[${pageProf.full_name || 'Verified Page'}] ` : '';
-                  return `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(prefix + (p.title || 'Untitled Post'))}</option>`;
+                  const snippet = (p.body || '').trim().slice(0, 60) || 'Fellowship Post';
+                  return `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(prefix + snippet)}</option>`;
               }).join('');
     }
 
@@ -156,7 +157,7 @@ function prefillFromSelectedPost() {
     const id = document.getElementById('promo-post-id')?.value;
     const post = myPostsCache.find(p => String(p.id) === String(id));
     if (!post) return;
-    document.getElementById('promo-title').value = post.title || '';
+    document.getElementById('promo-title').value = (post.body || '').trim().slice(0, 70);
     document.getElementById('promo-body').value = (post.body || '').slice(0, 260);
     document.getElementById('promo-cta-url').value = `post.html?id=${encodeURIComponent(post.id)}`;
 }
