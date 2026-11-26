@@ -76,7 +76,7 @@ async function loadUserProfileData() {
 
     let { data: profile } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, handle, bio, account_type, upgrade_status, upgrade_pitch')
+        .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch')
         .eq('id', currentProfileUser.id)
         .maybeSingle();
 
@@ -110,12 +110,140 @@ async function loadUserProfileData() {
     }
 
     currentUserProfile = profile;
+    syncProfileMediaPreview(profile, resolvedName);
 
     if (typeof syncUpgradeCardUI === 'function') {
         syncUpgradeCardUI(profile);
     }
     applyMinistryVerificationUI(profile);
     await loadPageAdminsManagement(profile);
+}
+
+function formatCompactBytes(bytes) {
+    if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function syncProfileMediaPreview(profile, fallbackName = '') {
+    const avatarImg = document.getElementById('profile-avatar-img');
+    const avatarInitial = document.getElementById('profile-avatar-initial-preview');
+    const avatarRemoveBtn = document.getElementById('profile-avatar-remove-btn');
+    const bannerImg = document.getElementById('profile-banner-img');
+    const bannerRemoveBtn = document.getElementById('profile-banner-remove-btn');
+
+    const initial = (profile?.full_name || fallbackName || currentProfileUser?.email || 'U').charAt(0).toUpperCase();
+    if (avatarInitial) avatarInitial.textContent = initial;
+
+    if (profile?.avatar_url) {
+        if (avatarImg) {
+            avatarImg.src = profile.avatar_url;
+            avatarImg.classList.remove('hidden');
+        }
+        avatarInitial?.classList.add('hidden');
+        avatarRemoveBtn?.classList.remove('hidden');
+    } else {
+        avatarImg?.classList.add('hidden');
+        avatarInitial?.classList.remove('hidden');
+        avatarRemoveBtn?.classList.add('hidden');
+    }
+
+    if (profile?.banner_url) {
+        if (bannerImg) {
+            bannerImg.src = profile.banner_url;
+            bannerImg.classList.remove('hidden');
+        }
+        bannerRemoveBtn?.classList.remove('hidden');
+    } else {
+        bannerImg?.classList.add('hidden');
+        bannerRemoveBtn?.classList.add('hidden');
+    }
+}
+
+async function handleProfileAvatarUpload(inputEl) {
+    const file = inputEl?.files?.[0];
+    if (!file || !currentProfileUser || typeof window.uploadCompressedProfileMedia !== 'function') return;
+    const statusEl = document.getElementById('profile-media-status');
+    if (statusEl) statusEl.textContent = 'Compressing and uploading profile picture...';
+
+    try {
+        const res = await window.uploadCompressedProfileMedia(supabaseClient, file, 'avatar', currentProfileUser.id);
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ avatar_url: res.url })
+            .eq('id', currentProfileUser.id);
+        if (error) throw error;
+
+        await supabaseClient.auth.updateUser({ data: { avatar_url: res.url } });
+        if (currentUserProfile) currentUserProfile.avatar_url = res.url;
+        syncProfileMediaPreview(currentUserProfile);
+        if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
+        if (statusEl) statusEl.textContent = `Picture saved (${formatCompactBytes(res.originalSize)} → ${formatCompactBytes(res.compressedSize)}).`;
+        showToast('Profile picture updated.');
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Images are automatically compressed to save space.';
+        showToast(`Could not upload picture: ${err.message || 'Upload failed'}`);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+async function removeProfileAvatar() {
+    if (!currentProfileUser) return;
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', currentProfileUser.id);
+    if (error) {
+        showToast(`Could not remove picture: ${error.message}`);
+        return;
+    }
+    await supabaseClient.auth.updateUser({ data: { avatar_url: null } });
+    if (currentUserProfile) currentUserProfile.avatar_url = null;
+    syncProfileMediaPreview(currentUserProfile);
+    if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
+    showToast('Profile picture removed.');
+}
+
+async function handleProfileBannerUpload(inputEl) {
+    const file = inputEl?.files?.[0];
+    if (!file || !currentProfileUser || typeof window.uploadCompressedProfileMedia !== 'function') return;
+    const statusEl = document.getElementById('profile-media-status');
+    if (statusEl) statusEl.textContent = 'Compressing and uploading page banner...';
+
+    try {
+        const res = await window.uploadCompressedProfileMedia(supabaseClient, file, 'banner', currentProfileUser.id);
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ banner_url: res.url })
+            .eq('id', currentProfileUser.id);
+        if (error) throw error;
+
+        if (currentUserProfile) currentUserProfile.banner_url = res.url;
+        syncProfileMediaPreview(currentUserProfile);
+        if (statusEl) statusEl.textContent = `Banner saved (${formatCompactBytes(res.originalSize)} → ${formatCompactBytes(res.compressedSize)}).`;
+        showToast('Page banner updated.');
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Images are automatically compressed to save space.';
+        showToast(`Could not upload banner: ${err.message || 'Upload failed'}`);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+async function removeProfileBanner() {
+    if (!currentProfileUser) return;
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ banner_url: null })
+        .eq('id', currentProfileUser.id);
+    if (error) {
+        showToast(`Could not remove banner: ${error.message}`);
+        return;
+    }
+    if (currentUserProfile) currentUserProfile.banner_url = null;
+    syncProfileMediaPreview(currentUserProfile);
+    showToast('Page banner removed.');
 }
 
 let profileHandleCheckTimer = null;
@@ -274,6 +402,7 @@ const PAGE_ADMIN_PERMS_META = [
     { key: 'can_edit_delete_posts', label: 'Edit & Delete Posts', badge: 'Edit/Delete', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
     { key: 'can_post_books', label: 'Post & Manage Books', badge: 'Books', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { key: 'can_promote', label: 'Promote Books & Posts', badge: 'Promote', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { key: 'can_edit_profile', label: 'Edit Page Profile & Media', badge: 'Edit Profile', color: 'bg-sky-50 text-sky-700 border-sky-200' },
     { key: 'can_withdraw_funds', label: 'Withdraw Book Sales Funds', badge: 'Withdraw Funds', color: 'bg-amber-50 text-amber-800 border-amber-200' }
 ];
 
@@ -284,6 +413,7 @@ function normalizePageAdminPermissions(rawPerms, role = 'admin') {
         can_edit_delete_posts: p.can_edit_delete_posts !== undefined ? Boolean(p.can_edit_delete_posts) : (role === 'admin'),
         can_post_books: Boolean(p.can_post_books),
         can_promote: Boolean(p.can_promote),
+        can_edit_profile: Boolean(p.can_edit_profile),
         can_withdraw_funds: Boolean(p.can_withdraw_funds)
     };
 }
@@ -298,9 +428,9 @@ function renderPermissionBadgesHtml(perms) {
 
 function applyAdminPowerPreset(preset) {
     const presets = {
-        editor: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_withdraw_funds: false },
-        manager: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_withdraw_funds: false },
-        full: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_withdraw_funds: true }
+        editor: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_edit_profile: false, can_withdraw_funds: false },
+        manager: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: false, can_withdraw_funds: false },
+        full: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: true, can_withdraw_funds: true }
     };
     const vals = presets[preset];
     if (!vals) return;
@@ -334,7 +464,7 @@ async function savePageAdminPermissions(rowId) {
     PAGE_ADMIN_PERMS_META.forEach(m => {
         perms[m.key] = Boolean(document.getElementById(`perm-edit-${rowId}-${m.key}`)?.checked);
     });
-    const role = (perms.can_edit_delete_posts || perms.can_post_books || perms.can_promote || perms.can_withdraw_funds) ? 'admin' : 'editor';
+    const role = (perms.can_edit_delete_posts || perms.can_post_books || perms.can_promote || perms.can_edit_profile || perms.can_withdraw_funds) ? 'admin' : 'editor';
 
     const { error } = await supabaseClient
         .from('page_admins')
@@ -437,7 +567,8 @@ async function loadPageAdminsManagement(profile) {
                     const actionLinks = [
                         perms.can_post ? `<a href="feed.html" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-accord-blue text-[10px] font-bold">Feed</a>` : '',
                         (perms.can_post_books || perms.can_withdraw_funds) ? `<a href="author.html?page=${encodeURIComponent(p.id)}" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold">Books &amp; Earnings</a>` : '',
-                        perms.can_promote ? `<a href="promote.html" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold">Promote</a>` : ''
+                        perms.can_promote ? `<a href="promote.html" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold">Promote</a>` : '',
+                        perms.can_edit_profile ? `<a href="user.html?id=${encodeURIComponent(p.id)}&edit=1" class="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold">Edit Profile</a>` : ''
                     ].filter(Boolean).join('');
                     return `
                         <div class="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 space-y-2">
@@ -507,7 +638,7 @@ async function handleAddPageAdmin(e) {
     }
 
     const permissions = readAddAdminPermissions();
-    const role = (permissions.can_edit_delete_posts || permissions.can_post_books || permissions.can_promote || permissions.can_withdraw_funds) ? 'admin' : 'editor';
+    const role = (permissions.can_edit_delete_posts || permissions.can_post_books || permissions.can_promote || permissions.can_edit_profile || permissions.can_withdraw_funds) ? 'admin' : 'editor';
 
     const { error } = await supabaseClient.from('page_admins').insert([{
         page_id: currentProfileUser.id,

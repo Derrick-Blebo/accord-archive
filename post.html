@@ -259,14 +259,16 @@
             isReposted = Boolean(repostRes?.data);
             commentsList = commentsRes.data || [];
             authorHandle = '';
+            authorAvatarUrl = '';
 
             if (currentPost.author_id && !currentPost.is_anonymous) {
                 const { data: ap } = await supabaseClient
                     .from('profiles')
-                    .select('handle')
+                    .select('handle, avatar_url')
                     .eq('id', currentPost.author_id)
                     .maybeSingle();
                 authorHandle = ap?.handle || '';
+                authorAvatarUrl = ap?.avatar_url || '';
             }
 
             document.title = `${currentPost.title} — Accord Fellowship Feed`;
@@ -314,6 +316,7 @@
                 commentsCount: commentsList.length,
                 myAvatarInitial,
                 authorHandle,
+                authorAvatarUrl,
                 currentUserId: currentUser?.id || null,
                 expandFullBody: true,
                 openCommentsByDefault: true,

@@ -385,6 +385,7 @@ function createSharedFeedCardElement(post, options = {}) {
         commentsCount = 0,
         myAvatarInitial = 'U',
         authorHandle = '',
+        authorAvatarUrl = '',
         reposterHandle = '',
         currentUserId = null,
         canManagePost = false,
@@ -436,9 +437,13 @@ function createSharedFeedCardElement(post, options = {}) {
         `;
     }
 
+    const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
+        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
+
     const avatarInner = `
         <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
-            <span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>
+            ${avatarVisual}
             ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
         </div>
     `;
@@ -540,7 +545,7 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
                         <span>Copy Link / Share</span>
                     </button>
-                    ${isOwner ? `
+                    ${canManage ? `
                     <button type="button" onclick="closeAllFeedPostMenus(); handleDeletePostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
                         <i class="fa-regular fa-trash-can w-3.5 text-center"></i>
                         <span>Delete Post</span>

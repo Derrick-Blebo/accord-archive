@@ -11,6 +11,7 @@ let revokedAuthorIds = new Set();
 let viewedPostIds = new Set();
 let initialViewedPostIds = new Set(); // Snapshot at load/tab switch so feed doesn't jump mid-scroll
 let authorHandlesById = {};
+let authorAvatarsById = {};
 let feedViewObserver = null;
 let feedSearchQuery = '';
 let feedSearchScope = 'all'; // 'all' | 'people' | 'posts'
@@ -210,13 +211,15 @@ async function loadFeedPosts() {
 
     const authorIds = [...new Set(allFeedPosts.map(p => p.author_id).filter(Boolean))];
     authorHandlesById = {};
+    authorAvatarsById = {};
     if (authorIds.length > 0) {
         const { data: authorProfiles } = await supabaseClient
             .from('profiles')
-            .select('id, handle')
+            .select('id, handle, avatar_url')
             .in('id', authorIds);
         (authorProfiles || []).forEach(ap => {
             if (ap.handle) authorHandlesById[String(ap.id)] = ap.handle;
+            if (ap.avatar_url) authorAvatarsById[String(ap.id)] = ap.avatar_url;
         });
     }
 
@@ -505,7 +508,7 @@ async function searchFeedPeople(query) {
     const safePattern = `%${query.replace(/[%_]/g, '')}%`;
     const { data, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, handle, bio, account_type, upgrade_status, ministry_role')
+        .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, ministry_role')
         .or(`full_name.ilike.${safePattern},handle.ilike.${safePattern},bio.ilike.${safePattern},ministry_role.ilike.${safePattern}`)
         .neq('upgrade_status', 'revoked')
         .limit(12);
@@ -560,7 +563,7 @@ function renderPeopleSearchResults() {
             <div class="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/70 transition-all">
                 <a href="${profileHref}" class="flex items-center gap-3 min-w-0 flex-1">
                     <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-sm flex items-center justify-center shrink-0">
-                        <span>${escapeHtml(name.charAt(0).toUpperCase())}</span>
+                        ${person.avatar_url ? `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" class="w-full h-full object-cover rounded-full">` : `<span>${escapeHtml(name.charAt(0).toUpperCase())}</span>`}
                         ${verified ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
                     </div>
                     <div class="min-w-0">
@@ -665,6 +668,7 @@ function renderFeedCard(post, repost = null) {
         commentsCount: commentCountsByPost[String(post.id)] || 0,
         myAvatarInitial,
         authorHandle: post.author_id ? (authorHandlesById[String(post.author_id)] || '') : '',
+        authorAvatarUrl: post.author_id ? (authorAvatarsById[String(post.author_id)] || '') : '',
         reposterHandle: repost?.profiles?.handle || '',
         currentUserId: currentUser?.id || null
     });

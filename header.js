@@ -186,7 +186,7 @@ async function initGlobalHeaderAuth() {
             try {
                 const { data, error } = await client
                     .from('profiles')
-                    .select('id, full_name, handle, account_type, upgrade_status, terms_accepted_at, warning_count, country')
+                    .select('id, full_name, handle, avatar_url, account_type, upgrade_status, terms_accepted_at, warning_count, country')
                     .eq('id', user.id)
                     .maybeSingle();
                 if (!error) profile = data || null;
@@ -199,7 +199,7 @@ async function initGlobalHeaderAuth() {
             const isVerifiedMinistry = isVerifiedMinistryProfile(profile);
 
             const email = user.email || 'user@accord.com';
-            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+            const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
             const initial = email.charAt(0).toUpperCase();
 
             const avatarContent = avatarUrl
@@ -887,3 +887,84 @@ async function collectAudienceGeoSignal(user) {
         }
     } catch (_) {}
 }
+
+window.compressImageFile = function (file, options = {}) {
+    const maxWidth = options.maxWidth || 1200;
+    const maxHeight = options.maxHeight || 1200;
+    const quality = options.quality ?? 0.8;
+
+    return new Promise((resolve, reject) => {
+        if (!file || !file.type || !file.type.startsWith('image/')) {
+            reject(new Error('Please select a valid image file.'));
+            return;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                let width = img.naturalWidth || img.width;
+                let height = img.naturalHeight || img.height;
+                const scale = Math.min(1, maxWidth / width, maxHeight / height);
+                width = Math.max(1, Math.round(width * scale));
+                height = Math.max(1, Math.round(height * scale));
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        resolve({ blob, ext: 'webp', originalSize: file.size, compressedSize: blob.size });
+                        return;
+                    }
+                    canvas.toBlob((jpegBlob) => {
+                        if (jpegBlob) {
+                            resolve({ blob: jpegBlob, ext: 'jpg', originalSize: file.size, compressedSize: jpegBlob.size });
+                        } else {
+                            reject(new Error('Could not compress image.'));
+                        }
+                    }, 'image/jpeg', quality);
+                }, 'image/webp', quality);
+            } catch (err) {
+                reject(err);
+            } finally {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Could not read the selected image.'));
+        };
+        img.src = objectUrl;
+    });
+};
+
+window.uploadCompressedProfileMedia = async function (client, file, kind, targetId) {
+    if (!client) throw new Error('Supabase client not ready.');
+    const isBanner = kind === 'banner';
+    const compressed = await window.compressImageFile(file, isBanner
+        ? { maxWidth: 1400, maxHeight: 500, quality: 0.78 }
+        : { maxWidth: 400, maxHeight: 400, quality: 0.82 }
+    );
+    const folder = isBanner ? 'banners' : 'avatars';
+    const filePath = `${folder}/${targetId}_${Date.now()}.${compressed.ext}`;
+    const contentType = compressed.ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+    const { data, error } = await client.storage
+        .from('archive-files')
+        .upload(filePath, compressed.blob, {
+            cacheControl: '3600',
+            contentType,
+            upsert: false
+        });
+    if (error) throw new Error(error.message || 'Upload failed.');
+
+    const { data: pub } = client.storage.from('archive-files').getPublicUrl(data.path);
+    return {
+        url: pub.publicUrl,
+        originalSize: compressed.originalSize,
+        compressedSize: compressed.compressedSize
+    };
+};

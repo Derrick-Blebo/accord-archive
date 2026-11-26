@@ -20,6 +20,8 @@ let likedPostIds = new Set();
 let viewerRepostedPostIds = new Set();
 let commentCountsByPost = {};
 let authorHandlesById = {};
+let authorAvatarsById = {};
+let canEditTargetProfile = false;
 
 function getVoterKey() {
     if (viewerUser?.id) return `user_${viewerUser.id}`;
@@ -70,7 +72,7 @@ function showToast(message, isError = false) {
 async function loadUnifiedProfile() {
     const { data: profile, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, created_at')
+        .select('id, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, created_at')
         .eq('id', targetUserId)
         .maybeSingle();
 
@@ -84,21 +86,31 @@ async function loadUnifiedProfile() {
     document.title = `${displayName} — Accord Archive`;
 
     window.editableFeedPageIds = [];
+    canEditTargetProfile = Boolean(viewerUser && viewerUser.id === targetUserId);
     if (viewerUser?.id) {
         try {
             const { data: adminRows } = await supabaseClient
                 .from('page_admins')
                 .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, account_type, upgrade_status)')
                 .eq('admin_user_id', viewerUser.id);
-            window.editableFeedPageIds = (adminRows || [])
+            const activeVerifiedRows = (adminRows || []).filter(r => {
+                const prof = r.profiles;
+                return prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+            });
+            window.editableFeedPageIds = activeVerifiedRows
                 .filter(r => {
-                    const prof = r.profiles;
-                    const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
                     const p = r.permissions;
-                    const canEdit = p && typeof p === 'object' ? Boolean(p.can_edit_delete_posts) : (r.role === 'admin');
-                    return isVerified && canEdit;
+                    return p && typeof p === 'object' ? Boolean(p.can_edit_delete_posts) : (r.role === 'admin');
                 })
                 .map(r => String(r.page_id));
+
+            if (!canEditTargetProfile) {
+                canEditTargetProfile = activeVerifiedRows.some(r =>
+                    String(r.page_id) === String(targetUserId) &&
+                    r.permissions && typeof r.permissions === 'object' &&
+                    Boolean(r.permissions.can_edit_profile)
+                );
+            }
         } catch {
             window.editableFeedPageIds = [];
         }
@@ -178,12 +190,15 @@ async function loadUnifiedProfile() {
     allVisibleProfilePosts = Array.from(postMap.values());
 
     authorHandlesById = {};
+    authorAvatarsById = {};
     if (targetProfile.handle) authorHandlesById[String(targetProfile.id)] = targetProfile.handle;
+    if (targetProfile.avatar_url) authorAvatarsById[String(targetProfile.id)] = targetProfile.avatar_url;
     const otherAuthorIds = [...new Set(allVisibleProfilePosts.map(p => p.author_id).filter(id => id && String(id) !== String(targetUserId)))];
     if (otherAuthorIds.length > 0) {
-        const { data: apRows } = await supabaseClient.from('profiles').select('id, handle').in('id', otherAuthorIds);
+        const { data: apRows } = await supabaseClient.from('profiles').select('id, handle, avatar_url').in('id', otherAuthorIds);
         (apRows || []).forEach(ap => {
             if (ap.handle) authorHandlesById[String(ap.id)] = ap.handle;
+            if (ap.avatar_url) authorAvatarsById[String(ap.id)] = ap.avatar_url;
         });
     }
 
@@ -207,13 +222,37 @@ async function loadUnifiedProfile() {
     document.getElementById('profile-header-card')?.classList.remove('hidden');
     document.getElementById('profile-tabs-bar')?.classList.remove('hidden');
     document.getElementById('profile-stream')?.classList.remove('hidden');
+
+    const editParam = new URLSearchParams(window.location.search).get('edit');
+    if (editParam === '1' && canEditTargetProfile) {
+        openEditProfileModal();
+    }
 }
 
 function renderProfileHeader() {
     const displayName = targetProfile.full_name || 'Accord Member';
     const isVerified = isVerifiedMinistryProfile(targetProfile);
 
-    document.getElementById('profile-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
+    const avatarImg = document.getElementById('profile-avatar-img');
+    const avatarInitial = document.getElementById('profile-avatar-initial');
+    if (avatarInitial) avatarInitial.textContent = displayName.charAt(0).toUpperCase();
+    if (targetProfile.avatar_url && avatarImg) {
+        avatarImg.src = targetProfile.avatar_url;
+        avatarImg.classList.remove('hidden');
+        avatarInitial?.classList.add('hidden');
+    } else {
+        avatarImg?.classList.add('hidden');
+        avatarInitial?.classList.remove('hidden');
+    }
+
+    const bannerImg = document.getElementById('profile-banner-img');
+    if (targetProfile.banner_url && bannerImg) {
+        bannerImg.src = targetProfile.banner_url;
+        bannerImg.classList.remove('hidden');
+    } else {
+        bannerImg?.classList.add('hidden');
+    }
+
     document.getElementById('profile-display-name').textContent = displayName;
 
     const handleEl = document.getElementById('profile-handle');
@@ -260,7 +299,8 @@ function renderProfileHeader() {
     document.getElementById('stat-posts').textContent = userOriginalPosts.length + userReposts.length;
 
     const isSelf = viewerUser && viewerUser.id === targetUserId;
-    document.getElementById('user-edit-btn')?.classList.toggle('hidden', !isSelf);
+    document.getElementById('user-edit-btn')?.classList.toggle('hidden', !canEditTargetProfile);
+    document.getElementById('banner-edit-trigger')?.classList.toggle('hidden', !canEditTargetProfile);
     document.getElementById('user-message-btn')?.classList.toggle('hidden', Boolean(isSelf));
     renderFollowButton();
 }
@@ -466,6 +506,7 @@ function renderProfileStream() {
             commentsCount: commentCountsByPost[String(p.id)] || 0,
             myAvatarInitial,
             authorHandle: p.author_id ? (authorHandlesById[String(p.author_id)] || '') : '',
+            authorAvatarUrl: p.author_id ? (authorAvatarsById[String(p.author_id)] || '') : '',
             reposterHandle: item.repost?.reposter_handle || '',
             currentUserId: viewerUser?.id || null
         });
@@ -755,4 +796,268 @@ function escapeProfileHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function formatProfileMediaBytes(bytes) {
+    if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function syncEditProfileModalMedia() {
+    if (!targetProfile) return;
+    const avatarImg = document.getElementById('modal-avatar-img');
+    const avatarInitial = document.getElementById('modal-avatar-initial');
+    const avatarRemoveBtn = document.getElementById('modal-avatar-remove-btn');
+    const bannerImg = document.getElementById('modal-banner-img');
+    const bannerRemoveBtn = document.getElementById('modal-banner-remove-btn');
+
+    const initial = (targetProfile.full_name || 'U').charAt(0).toUpperCase();
+    if (avatarInitial) avatarInitial.textContent = initial;
+
+    if (targetProfile.avatar_url) {
+        if (avatarImg) {
+            avatarImg.src = targetProfile.avatar_url;
+            avatarImg.classList.remove('hidden');
+        }
+        avatarInitial?.classList.add('hidden');
+        avatarRemoveBtn?.classList.remove('hidden');
+    } else {
+        avatarImg?.classList.add('hidden');
+        avatarInitial?.classList.remove('hidden');
+        avatarRemoveBtn?.classList.add('hidden');
+    }
+
+    if (targetProfile.banner_url) {
+        if (bannerImg) {
+            bannerImg.src = targetProfile.banner_url;
+            bannerImg.classList.remove('hidden');
+        }
+        bannerRemoveBtn?.classList.remove('hidden');
+    } else {
+        bannerImg?.classList.add('hidden');
+        bannerRemoveBtn?.classList.add('hidden');
+    }
+}
+
+function openEditProfileModal() {
+    if (!canEditTargetProfile || !targetProfile) return;
+    document.getElementById('modal-profile-name').value = targetProfile.full_name || '';
+    document.getElementById('modal-profile-handle').value = (targetProfile.handle || '').replace(/^@+/, '');
+    document.getElementById('modal-profile-bio').value = targetProfile.bio || '';
+    const statusEl = document.getElementById('modal-profile-handle-status');
+    if (statusEl) {
+        statusEl.textContent = 'Letters, numbers, and underscores only (3–30 chars).';
+        statusEl.className = 'text-[11px] text-accord-muted mt-1';
+    }
+    const mediaStatus = document.getElementById('modal-media-status');
+    if (mediaStatus) mediaStatus.textContent = 'Auto-compressed to save space.';
+    syncEditProfileModalMedia();
+    const modal = document.getElementById('edit-profile-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeEditProfileModal() {
+    const modal = document.getElementById('edit-profile-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+let modalHandleCheckTimer = null;
+function handleModalProfileHandleInput(inputEl) {
+    const clean = inputEl.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+    if (inputEl.value !== clean) inputEl.value = clean;
+    const statusEl = document.getElementById('modal-profile-handle-status');
+    if (!statusEl) return;
+    const candidate = clean ? `@${clean}` : '';
+    clearTimeout(modalHandleCheckTimer);
+    if (!/^@[a-z0-9_]{3,30}$/.test(candidate)) {
+        statusEl.textContent = 'Use 3–30 letters, numbers, or underscores.';
+        statusEl.className = 'text-[11px] text-amber-600 mt-1';
+        return;
+    }
+    if (targetProfile?.handle && targetProfile.handle.toLowerCase() === candidate.toLowerCase()) {
+        statusEl.textContent = `${candidate} is the current handle.`;
+        statusEl.className = 'text-[11px] text-accord-muted mt-1';
+        return;
+    }
+    statusEl.textContent = `Checking ${candidate}...`;
+    statusEl.className = 'text-[11px] text-accord-muted mt-1';
+    modalHandleCheckTimer = setTimeout(async () => {
+        const { data: available } = await supabaseClient.rpc('is_handle_available', {
+            candidate,
+            exclude_user_id: targetUserId
+        });
+        if (available) {
+            statusEl.textContent = `${candidate} is available!`;
+            statusEl.className = 'text-[11px] text-emerald-600 font-semibold mt-1';
+        } else {
+            statusEl.textContent = `${candidate} is already taken. Try another.`;
+            statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1';
+        }
+    }, 250);
+}
+
+async function handleModalAvatarUpload(inputEl) {
+    const file = inputEl?.files?.[0];
+    if (!file || !canEditTargetProfile || typeof window.uploadCompressedProfileMedia !== 'function') return;
+    const statusEl = document.getElementById('modal-media-status');
+    if (statusEl) statusEl.textContent = 'Compressing & uploading picture...';
+    try {
+        const res = await window.uploadCompressedProfileMedia(supabaseClient, file, 'avatar', targetUserId);
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ avatar_url: res.url })
+            .eq('id', targetUserId);
+        if (error) throw error;
+
+        if (viewerUser && viewerUser.id === targetUserId) {
+            await supabaseClient.auth.updateUser({ data: { avatar_url: res.url } });
+            if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
+        }
+        targetProfile.avatar_url = res.url;
+        authorAvatarsById[String(targetUserId)] = res.url;
+        syncEditProfileModalMedia();
+        renderProfileHeader();
+        renderProfileStream();
+        if (statusEl) statusEl.textContent = `Saved (${formatProfileMediaBytes(res.originalSize)} → ${formatProfileMediaBytes(res.compressedSize)}).`;
+        showToast('Profile picture updated.');
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Auto-compressed to save space.';
+        showToast(`Could not upload picture: ${err.message || 'Upload failed'}`, true);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+async function removeModalAvatar() {
+    if (!canEditTargetProfile) return;
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', targetUserId);
+    if (error) {
+        showToast(`Could not remove picture: ${error.message}`, true);
+        return;
+    }
+    if (viewerUser && viewerUser.id === targetUserId) {
+        await supabaseClient.auth.updateUser({ data: { avatar_url: null } });
+        if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
+    }
+    targetProfile.avatar_url = null;
+    delete authorAvatarsById[String(targetUserId)];
+    syncEditProfileModalMedia();
+    renderProfileHeader();
+    renderProfileStream();
+    showToast('Profile picture removed.');
+}
+
+async function handleModalBannerUpload(inputEl) {
+    const file = inputEl?.files?.[0];
+    if (!file || !canEditTargetProfile || typeof window.uploadCompressedProfileMedia !== 'function') return;
+    const statusEl = document.getElementById('modal-media-status');
+    if (statusEl) statusEl.textContent = 'Compressing & uploading banner...';
+    try {
+        const res = await window.uploadCompressedProfileMedia(supabaseClient, file, 'banner', targetUserId);
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ banner_url: res.url })
+            .eq('id', targetUserId);
+        if (error) throw error;
+
+        targetProfile.banner_url = res.url;
+        syncEditProfileModalMedia();
+        renderProfileHeader();
+        if (statusEl) statusEl.textContent = `Banner saved (${formatProfileMediaBytes(res.originalSize)} → ${formatProfileMediaBytes(res.compressedSize)}).`;
+        showToast('Page banner updated.');
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Auto-compressed to save space.';
+        showToast(`Could not upload banner: ${err.message || 'Upload failed'}`, true);
+    } finally {
+        inputEl.value = '';
+    }
+}
+
+async function removeModalBanner() {
+    if (!canEditTargetProfile) return;
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ banner_url: null })
+        .eq('id', targetUserId);
+    if (error) {
+        showToast(`Could not remove banner: ${error.message}`, true);
+        return;
+    }
+    targetProfile.banner_url = null;
+    syncEditProfileModalMedia();
+    renderProfileHeader();
+    showToast('Page banner removed.');
+}
+
+async function submitEditProfileModal(e) {
+    e.preventDefault();
+    if (!canEditTargetProfile || !targetProfile) return;
+
+    const fullName = document.getElementById('modal-profile-name')?.value.trim() || '';
+    const rawHandle = (document.getElementById('modal-profile-handle')?.value || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+    const handle = rawHandle ? `@${rawHandle}` : '';
+    const bio = document.getElementById('modal-profile-bio')?.value.trim() || '';
+    const btn = document.getElementById('modal-profile-save-btn');
+
+    if (!fullName) {
+        showToast('Please enter a display name.', true);
+        return;
+    }
+    if (!/^@[a-z0-9_]{3,30}$/.test(handle)) {
+        showToast('Please enter a valid @handle (3–30 letters, numbers, or underscores).', true);
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    const { data: available, error: availErr } = await supabaseClient.rpc('is_handle_available', {
+        candidate: handle,
+        exclude_user_id: targetUserId
+    });
+    if (!availErr && available === false) {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+        }
+        showToast(`Handle ${handle} is already in use.`, true);
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ full_name: fullName, handle, bio })
+        .eq('id', targetUserId);
+
+    if (!error && viewerUser && viewerUser.id === targetUserId) {
+        await supabaseClient.auth.updateUser({ data: { full_name: fullName, handle } });
+    }
+
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+
+    if (error) {
+        showToast(/unique|duplicate/i.test(error.message) ? `Handle ${handle} is already taken.` : error.message, true);
+        return;
+    }
+
+    targetProfile.full_name = fullName;
+    targetProfile.handle = handle;
+    targetProfile.bio = bio;
+    authorHandlesById[String(targetUserId)] = handle;
+    closeEditProfileModal();
+    renderProfileHeader();
+    renderProfileStream();
+    if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
+    showToast('Profile updated.');
 }
