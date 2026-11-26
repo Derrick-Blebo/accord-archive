@@ -164,6 +164,37 @@
                     <textarea id="upload-book-description" rows="3" required placeholder="Write a brief description of your book..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
 
+                <!-- Publishing Rights & Ownership Verification -->
+                <div class="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-4 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-shield-halved text-accord-blue text-xs"></i>
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-accord-slate">Ownership & Publishing Rights Verification</span>
+                    </div>
+                    <div>
+                        <label for="upload-rights-basis" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Basis of Rights *</label>
+                        <select id="upload-rights-basis" required class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                            <option value="original_author">I am the Original Author / Copyright Holder</option>
+                            <option value="authorized_publisher">Authorized Publisher / Ministry Representative</option>
+                            <option value="licensed_permission">Licensed / Written Permission from Rights Holder</option>
+                            <option value="public_domain">Public Domain / Historical Archive Work</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="upload-rights-statement" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Proof / Ownership Statement *</label>
+                        <textarea id="upload-rights-statement" rows="2" required minlength="15" placeholder="State your ownership or authorization details (e.g., ISBN, publisher name, ministry authorization, or public domain source)..." class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                    </div>
+                    <div>
+                        <label for="upload-rights-proof-url" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Supporting Proof URL (Optional)</label>
+                        <input type="url" id="upload-rights-proof-url" placeholder="Link to publisher page, copyright registration, or authorization letter..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                    <label class="flex items-start gap-2.5 cursor-pointer pt-1">
+                        <input type="checkbox" id="upload-rights-attestation" required class="mt-0.5 rounded text-accord-blue focus:ring-accord-blue w-4 h-4 shrink-0">
+                        <span class="text-[11px] text-accord-slate leading-relaxed">
+                            I attest under penalty of account suspension that I am the true owner or hold valid legal rights to publish this book on Accord Archive.
+                        </span>
+                    </label>
+                </div>
+
                 <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2.5">
                     <button type="button" onclick="closeUploadBookModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
                     <button type="submit" id="upload-book-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">
@@ -336,6 +367,22 @@
             </div>
         </section>
 
+        <!-- Copyright Disputes & Counter-Notice Section (Hidden unless active disputes exist) -->
+        <section id="author-disputes-section" class="hidden bg-amber-50 border border-amber-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-scale-balanced"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-amber-950 text-sm">Copyright Disputes Requiring Your Response</h2>
+                        <p class="text-[11px] text-amber-800">A copyright claim was filed against one of your publications. Submit your counter-notice and proof of rights for Library Admin settlement.</p>
+                    </div>
+                </div>
+            </div>
+            <div id="author-disputes-list" class="space-y-3"></div>
+        </section>
+
         <!-- Withdrawal History -->
         <section class="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100">
@@ -361,6 +408,36 @@
         </section>
 
     </main>
+
+    <!-- Counter-Notice Modal -->
+    <div id="counter-notice-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Submit Copyright Counter-Notice</h3>
+                    <p id="counter-notice-book-title" class="text-[11px] text-accord-muted"></p>
+                </div>
+                <button type="button" onclick="closeCounterNoticeModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <form onsubmit="handleCounterNoticeSubmit(event)" class="space-y-4">
+                <input type="hidden" id="counter-report-id">
+                <div>
+                    <label for="counter-statement" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Counter-Notice Statement *</label>
+                    <textarea id="counter-statement" rows="4" required minlength="20" placeholder="Explain why you hold the legal rights or permission to publish this book..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+                <div>
+                    <label for="counter-proof-url" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Proof of Ownership URL (Optional)</label>
+                    <input type="url" id="counter-proof-url" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button type="button" onclick="closeCounterNoticeModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="counter-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Submit Counter-Notice</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="admin-core.js"></script>
     <script src="footer.js"></script>

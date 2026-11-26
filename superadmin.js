@@ -132,8 +132,8 @@ async function loadMinistryUpgradeRequests() {
 
     const { data, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, email, account_type, upgrade_status, upgrade_pitch, upgrade_requested_at')
-        .in('upgrade_status', ['pending', 'approved', 'rejected'])
+        .select('id, full_name, email, account_type, upgrade_status, upgrade_pitch, upgrade_requested_at, ministry_role, verification_samples, verification_socials, verification_revoked_reason')
+        .in('upgrade_status', ['pending', 'approved', 'rejected', 'revoked'])
         .order('upgrade_requested_at', { ascending: false });
 
     if (error) {
@@ -142,10 +142,10 @@ async function loadMinistryUpgradeRequests() {
         return;
     }
 
-    const statusPriority = { pending: 0, approved: 1, rejected: 2 };
+    const statusPriority = { pending: 0, approved: 1, rejected: 2, revoked: 3 };
     ministryUpgradeRequests = (data || []).slice().sort((a, b) => {
-        const pa = statusPriority[a.upgrade_status] ?? 3;
-        const pb = statusPriority[b.upgrade_status] ?? 3;
+        const pa = statusPriority[a.upgrade_status] ?? 4;
+        const pb = statusPriority[b.upgrade_status] ?? 4;
         if (pa !== pb) return pa - pb;
         const ta = a.upgrade_requested_at ? new Date(a.upgrade_requested_at).getTime() : 0;
         const tb = b.upgrade_requested_at ? new Date(b.upgrade_requested_at).getTime() : 0;
@@ -175,6 +175,7 @@ function renderMinistryUpgradeRequests() {
         const reqDate = req.upgrade_requested_at
             ? new Date(req.upgrade_requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : '—';
+        const samplesCount = Array.isArray(req.verification_samples) ? req.verification_samples.length : 0;
 
         let statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-accord-muted">${escapeSuperHtml(status)}</span>`;
         if (status === 'pending') {
@@ -183,12 +184,19 @@ function renderMinistryUpgradeRequests() {
             statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Approved</span>`;
         } else if (status === 'rejected') {
             statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`;
+        } else if (status === 'revoked') {
+            statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">Revoked</span>`;
         }
 
-        const actionsHtml = status === 'pending'
-            ? `<button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
-               <button type="button" onclick="rejectMinistryUpgrade('${req.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>`
-            : `<span class="text-[11px] text-accord-muted">${(req.account_type === 'ministry_minister' || status === 'approved') ? 'Ministry / Minister' : 'Normal User'}</span>`;
+        let actionsHtml = `<button type="button" onclick="openInspectVerificationModal('${req.id}')" class="bg-accord-lightBlue hover:bg-blue-100 text-accord-blue text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Inspect (${samplesCount}/5)</button>`;
+        if (status === 'pending') {
+            actionsHtml += `
+                <button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
+                <button type="button" onclick="rejectMinistryUpgrade('${req.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>`;
+        } else if (status === 'approved' || req.account_type === 'ministry_minister') {
+            actionsHtml += `
+                <button type="button" onclick="openRevokeVerificationModal('${req.id}')" class="bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Revoke</button>`;
+        }
 
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0';
@@ -196,9 +204,11 @@ function renderMinistryUpgradeRequests() {
             <td class="py-4 px-6">
                 <p class="font-bold text-accord-slate">${escapeSuperHtml(req.full_name || 'Member')}</p>
                 <p class="text-[11px] text-accord-muted">${escapeSuperHtml(req.email || '')}</p>
+                ${req.ministry_role ? `<span class="inline-block mt-1 px-2 py-0.5 rounded bg-slate-100 text-[10px] font-semibold text-accord-slate">${escapeSuperHtml(req.ministry_role)}</span>` : ''}
             </td>
             <td class="py-4 px-6 max-w-md">
-                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(req.upgrade_pitch || '')}</p>
+                <p class="text-xs text-slate-700 leading-relaxed line-clamp-3 whitespace-pre-wrap">${escapeSuperHtml(req.upgrade_pitch || '')}</p>
+                ${status === 'revoked' && req.verification_revoked_reason ? `<p class="text-[11px] text-red-700 font-semibold mt-1">Revoked: ${escapeSuperHtml(req.verification_revoked_reason)}</p>` : ''}
             </td>
             <td class="py-4 px-6 text-center text-accord-muted whitespace-nowrap">${reqDate}</td>
             <td class="py-4 px-6 text-center">${statusPill}</td>
@@ -206,6 +216,127 @@ function renderMinistryUpgradeRequests() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+function openInspectVerificationModal(userId) {
+    const req = ministryUpgradeRequests.find(r => String(r.id) === String(userId));
+    if (!req) return;
+
+    const subtitle = document.getElementById('inspect-applicant-subtitle');
+    const body = document.getElementById('inspect-verification-body');
+    const footer = document.getElementById('inspect-verification-footer');
+    if (subtitle) subtitle.textContent = `${req.full_name || 'Member'} • ${req.email || ''} ${req.ministry_role ? `• ${req.ministry_role}` : ''}`;
+
+    const samples = Array.isArray(req.verification_samples) ? req.verification_samples : [];
+    const socials = req.verification_socials && typeof req.verification_socials === 'object' ? req.verification_socials : {};
+    const socialEntries = Object.entries(socials).filter(([, val]) => val && String(val).trim().startsWith('http'));
+
+    const socialsHtml = socialEntries.length > 0
+        ? `<div class="flex flex-wrap gap-2">${socialEntries.map(([k, v]) => `<a href="${escapeSuperHtml(v)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue font-bold capitalize"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i><span>${escapeSuperHtml(k)}</span></a>`).join('')}</div>`
+        : `<p class="text-accord-muted italic">No external social links provided.</p>`;
+
+    const samplesHtml = samples.length > 0
+        ? samples.map((s, idx) => `
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-accord-blue">Sample #${idx + 1} • ${escapeSuperHtml(s.post_type || 'text')}</span>
+                    ${s.media_url ? `<a href="${escapeSuperHtml(s.media_url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-accord-blue hover:underline">Media Link</a>` : ''}
+                </div>
+                <p class="font-bold text-accord-slate text-xs">${escapeSuperHtml(s.title || 'Untitled')}</p>
+                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(s.body || '')}</p>
+            </div>
+        `).join('')
+        : `<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">No sample posts submitted yet (legacy request).</p>`;
+
+    if (body) {
+        body.innerHTML = `
+            <div class="space-y-1.5">
+                <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Statement of Faith & Gospel Plan</h4>
+                <p class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(req.upgrade_pitch || '—')}</p>
+            </div>
+            <div class="space-y-1.5">
+                <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Christian Social Activity Links</h4>
+                ${socialsHtml}
+            </div>
+            <div class="space-y-2">
+                <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">5 Initial Sample Posts (${samples.length} provided)</h4>
+                ${samplesHtml}
+            </div>
+        `;
+    }
+
+    if (footer) {
+        if (req.upgrade_status === 'pending') {
+            footer.innerHTML = `
+                <button type="button" onclick="closeInspectVerificationModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-accord-slate text-xs font-bold">Close</button>
+                <button type="button" onclick="closeInspectVerificationModal(); rejectMinistryUpgrade('${req.id}')" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold">Reject</button>
+                <button type="button" onclick="closeInspectVerificationModal(); approveMinistryUpgrade('${req.id}')" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Approve Verification</button>
+            `;
+        } else {
+            footer.innerHTML = `<button type="button" onclick="closeInspectVerificationModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-accord-slate text-xs font-bold">Close</button>`;
+        }
+    }
+
+    const modal = document.getElementById('inspect-verification-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeInspectVerificationModal() {
+    const modal = document.getElementById('inspect-verification-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+function openRevokeVerificationModal(userId) {
+    const req = ministryUpgradeRequests.find(r => String(r.id) === String(userId));
+    document.getElementById('revoke-target-user-id').value = userId;
+    document.getElementById('revoke-target-label').textContent = `Account: ${req?.full_name || 'Member'} (${req?.email || userId})`;
+    document.getElementById('revoke-reason-input').value = '';
+    const modal = document.getElementById('revoke-verification-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeRevokeVerificationModal() {
+    const modal = document.getElementById('revoke-verification-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+async function handleRevokeVerificationSubmit(e) {
+    e.preventDefault();
+    const userId = document.getElementById('revoke-target-user-id').value;
+    const reason = document.getElementById('revoke-reason-input').value.trim();
+    if (!userId || reason.length < 10) {
+        showToast('Please provide a clear reason (at least 10 characters).');
+        return;
+    }
+
+    const btn = document.getElementById('revoke-submit-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Revoking...';
+    }
+
+    const { error } = await supabaseClient.rpc('revoke_ministry_verification', {
+        target_user_id: userId,
+        reason
+    });
+
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Revoke & Hide All Posts';
+    }
+
+    if (error) {
+        showToast(`Could not revoke verification: ${error.message}`);
+        return;
+    }
+
+    closeRevokeVerificationModal();
+    await loadMinistryUpgradeRequests();
+    showToast('Verification revoked and all posts by this account have been hidden.');
 }
 
 async function approveMinistryUpgrade(userId) {

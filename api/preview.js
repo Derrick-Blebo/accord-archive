@@ -75,6 +75,22 @@ function extractYouTubeThumbnail(url) {
     return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
 }
 
+function normalizeImageUrl(rawUrl) {
+    const val = String(rawUrl || '').trim();
+    if (!val || val.startsWith('data:')) return null;
+    const driveMatch = val.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (driveMatch?.[1]) {
+        return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+    }
+    if (val.startsWith('http://') || val.startsWith('https://')) {
+        return val;
+    }
+    if (val.startsWith('/')) {
+        return `${SITE_URL}${val}`;
+    }
+    return `${SITE_URL}/${val}`;
+}
+
 async function fetchFromSupabase(table, filterQuery) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}&limit=1`, {
         headers: {
@@ -108,8 +124,9 @@ export default async function handler(req, res) {
                     ? `${SITE_URL}/book.html?id=${item.id}`
                     : `${SITE_URL}/?book=${item.id}`;
                 ogType = 'article';
-                if (item.cover_url && item.cover_url.startsWith('http')) {
-                    imageUrl = item.cover_url;
+                const normalizedCover = normalizeImageUrl(item.cover_url);
+                if (normalizedCover) {
+                    imageUrl = normalizedCover;
                 }
             }
         } else if (page === 'testimony' && id) {
@@ -177,12 +194,14 @@ export default async function handler(req, res) {
     <meta property="og:url" content="${escapeAttr(canonicalUrl)}" />
     <meta property="og:title" content="${escapeAttr(title)}" />
     <meta property="og:description" content="${escapeAttr(description)}" />
-    <meta property="og:image" content="${escapeAttr(imageUrl)}" />${imageDimensions}
+    <meta property="og:image" content="${escapeAttr(imageUrl)}" />
+    <meta property="og:image:secure_url" content="${escapeAttr(imageUrl)}" />${imageDimensions}
     <meta property="og:image:alt" content="${escapeAttr(title)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeAttr(title)}" />
     <meta name="twitter:description" content="${escapeAttr(description)}" />
-    <meta name="twitter:image" content="${escapeAttr(imageUrl)}" />`;
+    <meta name="twitter:image" content="${escapeAttr(imageUrl)}" />
+    <meta name="twitter:image:alt" content="${escapeAttr(title)}" />`;
 
     let html = '';
     try {

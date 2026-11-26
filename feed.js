@@ -7,6 +7,12 @@ let followingIds = new Set();
 let myRepostedPostIds = new Set();
 let likedPostIds = new Set();
 let commentCountsByPost = {};
+let revokedAuthorIds = new Set();
+let feedSearchQuery = '';
+let feedSearchScope = 'all'; // 'all' | 'people' | 'posts'
+let feedPeopleResults = [];
+let feedSearchTimer = null;
+let feedBookPreviewCache = new Map();
 
 function getVoterKey() {
     if (currentUser?.id) return `user_${currentUser.id}`;
@@ -25,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function isMinistryOrMinister(profile = currentProfile) {
     if (!profile) return false;
+    if (profile.upgrade_status === 'revoked') return false;
     return profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved';
 }
 
@@ -142,7 +149,8 @@ async function loadFeedPosts() {
             .order('created_at', { ascending: false })
             .limit(120),
         supabaseClient.from('testimonies').select('*').eq('is_approved', true).order('created_at', { ascending: false }),
-        supabaseClient.from('testimony_comments').select('testimony_id')
+        supabaseClient.from('testimony_comments').select('testimony_id'),
+        supabaseClient.from('profiles').select('id').eq('upgrade_status', 'revoked')
     ];
 
     if (currentUser?.id) {
@@ -151,7 +159,7 @@ async function loadFeedPosts() {
         );
     }
 
-    const [postsRes, likesRes, commentsRes, repostsRes, testimoniesRes, testimonyCommentsRes, followsRes] = await Promise.all(requests);
+    const [postsRes, likesRes, commentsRes, repostsRes, testimoniesRes, testimonyCommentsRes, revokedRes, followsRes] = await Promise.all(requests);
 
     if (postsRes.error) {
         streamContainer.innerHTML = `
@@ -163,7 +171,10 @@ async function loadFeedPosts() {
         return;
     }
 
-    const feedPostRows = (postsRes.data || []).map(p => ({ ...p, _source: 'feed_posts' }));
+    revokedAuthorIds = new Set((!revokedRes?.error && revokedRes?.data ? revokedRes.data : []).map(r => String(r.id)));
+    const feedPostRows = (postsRes.data || [])
+        .filter(p => !p.author_id || !revokedAuthorIds.has(String(p.author_id)))
+        .map(p => ({ ...p, _source: 'feed_posts' }));
     const testimonyRows = (!testimoniesRes?.error && testimoniesRes?.data ? testimoniesRes.data : []).map(t => ({
         id: `testimony_${t.id}`,
         _rawId: t.id,
@@ -209,13 +220,26 @@ async function loadFeedPosts() {
     renderFeedStream();
 }
 
+function matchesFeedSearch(post) {
+    const q = feedSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const title = (post.title || '').toLowerCase();
+    const body = (post.body || '').toLowerCase();
+    const author = post.is_anonymous ? 'anonymous' : (post.author_name || '').toLowerCase();
+    const type = (post.post_type || '').toLowerCase();
+    return title.includes(q) || body.includes(q) || author.includes(q) || type.includes(q);
+}
+
 function buildRankedFeedItems() {
+    if (feedSearchQuery.trim() && feedSearchScope === 'people') {
+        return [];
+    }
     const postById = new Map(allFeedPosts.map(p => [String(p.id), p]));
     const items = [];
 
     allFeedPosts.forEach(post => {
         const matchesTab = currentTab === 'all' || post.post_type === currentTab;
-        if (!matchesTab) return;
+        if (!matchesTab || !matchesFeedSearch(post)) return;
         items.push({
             kind: 'post',
             post,
@@ -228,7 +252,7 @@ function buildRankedFeedItems() {
         const post = postById.get(String(rep.post_id));
         if (!post) return;
         const matchesTab = currentTab === 'all' || post.post_type === currentTab;
-        if (!matchesTab) return;
+        if (!matchesTab || !matchesFeedSearch(post)) return;
         items.push({
             kind: 'repost',
             post,
@@ -258,14 +282,21 @@ function renderFeedStream() {
     const streamContainer = document.getElementById('feed-stream');
     if (!streamContainer) return;
 
+    const isSearching = Boolean(feedSearchQuery.trim());
     const visibleItems = buildRankedFeedItems();
+    updateFeedSearchSummary(visibleItems.length);
+
+    if (isSearching && feedSearchScope === 'people') {
+        streamContainer.innerHTML = '';
+        return;
+    }
 
     if (visibleItems.length === 0) {
         streamContainer.innerHTML = `
             <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
                 <i class="fa-regular fa-folder-open text-3xl text-slate-300"></i>
-                <h3 class="font-bold text-accord-slate text-sm">No posts in this category yet</h3>
-                <p class="text-xs text-accord-muted">Select another tab or share a new post above.</p>
+                <h3 class="font-bold text-accord-slate text-sm">${isSearching ? 'No matching posts found' : 'No posts in this category yet'}</h3>
+                <p class="text-xs text-accord-muted">${isSearching ? 'Try another keyword or clear your search.' : 'Select another tab or share a new post above.'}</p>
             </div>
         `;
         return;
@@ -275,6 +306,234 @@ function renderFeedStream() {
     visibleItems.forEach(item => {
         streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
     });
+    hydrateFeedBookLinkPreviews();
+}
+
+function extractBookIdFromText(text) {
+    if (!text) return null;
+    const m = String(text).match(/(?:book\.html\?(?:[^#\s]*&)?(?:id|book)=|[?&]book=)(\d+)/i);
+    return m ? m[1] : null;
+}
+
+async function hydrateFeedBookLinkPreviews() {
+    const slots = Array.from(document.querySelectorAll('.feed-book-link-preview[data-book-id]'));
+    if (slots.length === 0) return;
+
+    const missingIds = [...new Set(slots.map(s => s.getAttribute('data-book-id')).filter(id => id && !feedBookPreviewCache.has(id)))];
+    if (missingIds.length > 0) {
+        const { data } = await supabaseClient
+            .from('books')
+            .select('id, title, author, cover_url')
+            .in('id', missingIds)
+            .eq('is_visible', true);
+        (data || []).forEach(b => feedBookPreviewCache.set(String(b.id), b));
+    }
+
+    slots.forEach(slot => {
+        const book = feedBookPreviewCache.get(slot.getAttribute('data-book-id'));
+        if (!book) return;
+        slot.innerHTML = `
+            <a href="book.html?id=${encodeURIComponent(book.id)}" class="flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-accord-lightBlue/40 transition-colors">
+                ${book.cover_url
+                    ? `<img src="${escapeHtml(book.cover_url)}" alt="${escapeHtml(book.title)}" class="w-12 h-16 object-cover rounded-lg border border-slate-200 shrink-0">`
+                    : `<div class="w-12 h-16 rounded-lg bg-accord-blue text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-book"></i></div>`}
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-extrabold uppercase tracking-wider text-accord-blue">Accord Library Book</p>
+                    <p class="text-xs font-bold text-accord-slate truncate">${escapeHtml(book.title)}</p>
+                    <p class="text-[11px] text-accord-muted truncate">By ${escapeHtml(book.author || 'Unknown')}</p>
+                </div>
+                <i class="fa-solid fa-chevron-right text-slate-400 text-xs shrink-0"></i>
+            </a>
+        `;
+    });
+}
+
+function handleFeedSearchInput(val) {
+    feedSearchQuery = val || '';
+    const hasQuery = Boolean(feedSearchQuery.trim());
+    document.getElementById('feed-search-clear')?.classList.toggle('hidden', !hasQuery);
+    const scopeBar = document.getElementById('feed-search-scope-bar');
+    if (scopeBar) {
+        scopeBar.classList.toggle('hidden', !hasQuery);
+        scopeBar.classList.toggle('flex', hasQuery);
+    }
+
+    if (!hasQuery) {
+        feedPeopleResults = [];
+        renderPeopleSearchResults();
+        renderFeedStream();
+        return;
+    }
+
+    renderFeedStream();
+    clearTimeout(feedSearchTimer);
+    feedSearchTimer = setTimeout(() => {
+        searchFeedPeople(feedSearchQuery.trim());
+    }, 220);
+}
+
+function clearFeedSearch() {
+    const input = document.getElementById('feed-search-input');
+    if (input) input.value = '';
+    feedSearchQuery = '';
+    feedSearchScope = 'all';
+    setFeedSearchScope('all');
+    handleFeedSearchInput('');
+}
+
+function setFeedSearchScope(scope) {
+    feedSearchScope = scope;
+    ['all', 'people', 'posts'].forEach(s => {
+        const btn = document.getElementById(`search-scope-${s}`);
+        if (!btn) return;
+        btn.className = s === scope
+            ? 'feed-scope-btn px-3 py-1 rounded-full text-[11px] font-bold bg-accord-slate text-white'
+            : 'feed-scope-btn px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-slate hover:bg-slate-200';
+    });
+    renderPeopleSearchResults();
+    renderFeedStream();
+}
+
+function updateFeedSearchSummary(postsCount) {
+    const summaryEl = document.getElementById('feed-search-summary');
+    if (!summaryEl) return;
+    if (!feedSearchQuery.trim()) {
+        summaryEl.textContent = '';
+        return;
+    }
+    const pCount = feedPeopleResults.length;
+    summaryEl.textContent = `${pCount} ${pCount === 1 ? 'person' : 'people'} • ${postsCount} ${postsCount === 1 ? 'post' : 'posts'}`;
+}
+
+async function searchFeedPeople(query) {
+    if (!query) {
+        feedPeopleResults = [];
+        renderPeopleSearchResults();
+        return;
+    }
+    const safePattern = `%${query.replace(/[%_]/g, '')}%`;
+    const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('id, full_name, bio, account_type, upgrade_status, ministry_role')
+        .or(`full_name.ilike.${safePattern},bio.ilike.${safePattern},ministry_role.ilike.${safePattern}`)
+        .neq('upgrade_status', 'revoked')
+        .limit(12);
+
+    if (error) {
+        console.warn('People search error:', error.message);
+        feedPeopleResults = [];
+    } else {
+        feedPeopleResults = data || [];
+    }
+    renderPeopleSearchResults();
+    updateFeedSearchSummary(buildRankedFeedItems().length);
+}
+
+function renderPeopleSearchResults() {
+    const container = document.getElementById('feed-people-results');
+    if (!container) return;
+
+    const hasQuery = Boolean(feedSearchQuery.trim());
+    if (!hasQuery || feedSearchScope === 'posts') {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    container.classList.remove('hidden');
+    if (feedPeopleResults.length === 0) {
+        if (feedSearchScope === 'people') {
+            container.innerHTML = `
+                <div class="bg-white border border-slate-200/80 rounded-2xl p-8 text-center space-y-2 shadow-sm">
+                    <i class="fa-regular fa-user text-2xl text-slate-300"></i>
+                    <p class="text-xs font-bold text-accord-slate">No matching people or ministries found</p>
+                    <p class="text-[11px] text-accord-muted">Try searching by name, ministry role, or bio keywords.</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+        }
+        return;
+    }
+
+    const cardsHtml = feedPeopleResults.map(person => {
+        const name = person.full_name || 'Accord Member';
+        const verified = isMinistryOrMinister(person);
+        const profileHref = `user.html?id=${encodeURIComponent(person.id)}`;
+        const roleLabel = person.ministry_role || (verified ? 'Verified Ministry / Minister' : 'Community Member');
+        const isFollowing = followingIds.has(String(person.id));
+        const isSelf = currentUser?.id && String(currentUser.id) === String(person.id);
+
+        return `
+            <div class="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/70 transition-all">
+                <a href="${profileHref}" class="flex items-center gap-3 min-w-0 flex-1">
+                    <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-sm flex items-center justify-center shrink-0">
+                        <span>${escapeHtml(name.charAt(0).toUpperCase())}</span>
+                        ${verified ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <p class="text-xs sm:text-sm font-bold text-accord-slate truncate">${escapeHtml(name)}</p>
+                            ${verified ? `<span class="text-[10px] font-bold text-accord-blue bg-accord-lightBlue px-2 py-0.5 rounded-full shrink-0">Verified</span>` : ''}
+                        </div>
+                        <p class="text-[11px] text-accord-muted truncate">${escapeHtml(person.bio || roleLabel)}</p>
+                    </div>
+                </a>
+                ${isSelf ? '' : `
+                    <button type="button" onclick="toggleFeedPersonFollow('${person.id}', this)" class="px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all ${isFollowing ? 'bg-slate-100 text-accord-slate hover:bg-slate-200' : 'bg-accord-blue text-white hover:bg-accord-darkBlue'}">
+                        ${isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                `}
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-muted flex items-center gap-1.5">
+                    <i class="fa-solid fa-users text-accord-blue"></i>
+                    <span>People & Ministries (${feedPeopleResults.length})</span>
+                </h3>
+            </div>
+            <div class="space-y-2">${cardsHtml}</div>
+        </div>
+    `;
+}
+
+async function toggleFeedPersonFollow(targetUserId, btnEl) {
+    if (!currentUser) {
+        showToast('Please sign in to follow accounts.', true);
+        return;
+    }
+    const idStr = String(targetUserId);
+    const isFollowing = followingIds.has(idStr);
+    if (isFollowing) {
+        const { error } = await supabaseClient
+            .from('account_follows')
+            .delete()
+            .eq('follower_id', currentUser.id)
+            .eq('following_id', targetUserId);
+        if (!error) {
+            followingIds.delete(idStr);
+            if (btnEl) {
+                btnEl.textContent = 'Follow';
+                btnEl.className = 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-accord-blue text-white hover:bg-accord-darkBlue';
+            }
+        }
+    } else {
+        const { error } = await supabaseClient
+            .from('account_follows')
+            .insert([{ follower_id: currentUser.id, following_id: targetUserId }]);
+        if (!error) {
+            followingIds.add(idStr);
+            if (btnEl) {
+                btnEl.textContent = 'Following';
+                btnEl.className = 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-slate-100 text-accord-slate hover:bg-slate-200';
+            }
+        }
+    }
 }
 
 function getPostTypeMeta(type) {
@@ -390,6 +649,7 @@ function renderFeedCard(post, repost = null) {
     const bodyText = String(post.body || '');
     const isLongBody = bodyText.length > 260;
     const shortBody = isLongBody ? bodyText.slice(0, 260).trim() + '...' : bodyText;
+    const linkedBookId = extractBookIdFromText(bodyText);
 
     const myAvatarInitial = (currentProfile?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase();
 
@@ -451,6 +711,7 @@ function renderFeedCard(post, repost = null) {
         </div>
 
         ${mediaHtml}
+        ${linkedBookId ? `<div class="feed-book-link-preview mx-4 mb-3" data-book-id="${escapeHtml(linkedBookId)}"></div>` : ''}
 
         <!-- Engagement Summary Row (Facebook Style) -->
         <div class="px-4 py-2 flex items-center justify-between text-xs text-slate-500">
@@ -840,7 +1101,7 @@ function togglePostTypeFields() {
     } else if (!currentUser) {
         if (noteEl) noteEl.textContent = 'Sign in with a Ministry / Minister account to post Videos, Audio, or Text Posts.';
     } else if (!isMinistryOrMinister()) {
-        if (noteEl) noteEl.textContent = 'Your account is a Normal User. Request a Ministry / Minister upgrade in Profile to publish Videos, Audio, or Text Posts.';
+        if (noteEl) noteEl.innerHTML = 'Your account is a Normal User. <a href="verify.html" class="text-accord-blue font-bold underline">Apply for Ministry / Minister Verification</a> to publish Videos, Audio, or Text Posts.';
     } else {
         if (noteEl) noteEl.textContent = 'Verified Ministry / Minister account active: your post publishes directly to the feed.';
     }
@@ -869,7 +1130,7 @@ async function handleCreatePostSubmit(e) {
             return;
         }
         if (!isMinistryOrMinister()) {
-            showToast('Only Ministry / Minister accounts can publish Video, Audio, or Text Posts. Request an upgrade in Profile.', true);
+            showToast('Only verified Ministry / Minister accounts can publish Video, Audio, or Text Posts. Apply at verify.html.', true);
             return;
         }
     }

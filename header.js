@@ -12,6 +12,7 @@ let globalRealtimeChannel = null;
 
 function isVerifiedMinistryProfile(profile) {
     if (!profile) return false;
+    if (profile.upgrade_status === 'revoked') return false;
     return profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved';
 }
 

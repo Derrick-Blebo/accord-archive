@@ -136,33 +136,33 @@
             <div id="upgrade-pending-notice" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1.5">
                 <p class="font-bold flex items-center gap-1.5">
                     <i class="fa-solid fa-hourglass-half text-accord-gold"></i>
-                    <span>Upgrade Request Under Review</span>
+                    <span>Verification Application Under Review</span>
                 </p>
                 <p id="upgrade-pending-pitch-display" class="text-amber-800 italic leading-relaxed"></p>
             </div>
 
-            <!-- Upgrade Request Form -->
-            <form id="role-upgrade-form" onsubmit="submitRoleUpgradeRequest(event)" class="space-y-4">
-                <div>
-                    <label for="upgrade-pitch" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">
-                        Who You Are & How You Plan to Interact With the Community
-                    </label>
-                    <textarea
-                        id="upgrade-pitch"
-                        rows="4"
-                        required
-                        minlength="30"
-                        maxlength="700"
-                        placeholder="Share a short paragraph about your ministry, calling, or background, and explain how you intend to engage with and serve the Accord community..."
-                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"
-                    ></textarea>
-                    <p class="text-[11px] text-accord-muted mt-1">Minimum 30 characters. Include your ministry/role details and how you plan to contribute.</p>
-                </div>
+            <!-- Shown when verification was revoked -->
+            <div id="upgrade-revoked-notice" class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 text-xs text-red-900 space-y-1.5">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-ban text-red-600"></i>
+                    <span>Verification Revoked</span>
+                </p>
+                <p id="upgrade-revoked-reason-display" class="text-red-800 leading-relaxed"></p>
+            </div>
 
-                <button type="submit" id="upgrade-submit-btn" class="w-full bg-accord-slate hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-all">
-                    Request Ministry / Minister Account
-                </button>
-            </form>
+            <!-- Dedicated Verification Page CTA -->
+            <div id="role-upgrade-cta-box" class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="space-y-1">
+                    <p class="text-xs font-bold text-accord-slate">Ready to apply as a Ministry or Minister?</p>
+                    <p class="text-[11px] text-accord-muted leading-relaxed">
+                        Complete our dedicated verification form with your Gospel statement, <strong>5 initial sample posts</strong>, and optional Christian social links.
+                    </p>
+                </div>
+                <a href="verify.html" id="upgrade-apply-link" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Open Verification Form</span>
+                </a>
+            </div>
         </div>
     </main>
 
@@ -173,109 +173,64 @@
         function syncUpgradeCardUI(profile) {
             const type = profile?.account_type || 'normal_user';
             const status = profile?.upgrade_status || 'none';
+            const isVerified = (type === 'ministry_minister' || status === 'approved') && status !== 'revoked';
 
             const badge = document.getElementById('account-type-badge');
             const statusPill = document.getElementById('upgrade-status-pill');
             const activeNotice = document.getElementById('ministry-active-notice');
             const pendingNotice = document.getElementById('upgrade-pending-notice');
             const pendingPitch = document.getElementById('upgrade-pending-pitch-display');
-            const form = document.getElementById('role-upgrade-form');
-            const pitchInput = document.getElementById('upgrade-pitch');
+            const revokedNotice = document.getElementById('upgrade-revoked-notice');
+            const revokedReason = document.getElementById('upgrade-revoked-reason-display');
+            const ctaBox = document.getElementById('role-upgrade-cta-box');
+            const applyLink = document.getElementById('upgrade-apply-link');
 
-            if (type === 'ministry_minister' || status === 'approved') {
+            if (isVerified) {
                 badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200';
                 badge.innerHTML = '<i class="fa-solid fa-church mr-1.5"></i> Ministry / Minister';
                 statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700';
                 statusPill.innerText = 'Status: Approved';
                 activeNotice.classList.remove('hidden');
                 pendingNotice.classList.add('hidden');
-                form.classList.add('hidden');
+                revokedNotice?.classList.add('hidden');
+                ctaBox?.classList.add('hidden');
                 return;
             }
 
             badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-accord-lightBlue text-accord-blue';
             badge.innerHTML = '<i class="fa-solid fa-user mr-1.5"></i> Normal User';
             activeNotice.classList.add('hidden');
+            revokedNotice?.classList.add('hidden');
 
             if (status === 'pending') {
                 statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700';
                 statusPill.innerText = 'Status: Pending Review';
                 pendingNotice.classList.remove('hidden');
                 pendingPitch.innerText = `"${profile.upgrade_pitch || ''}"`;
-                if (pitchInput && profile.upgrade_pitch) pitchInput.value = profile.upgrade_pitch;
+                if (applyLink) applyLink.querySelector('span').textContent = 'View / Update Application';
+            } else if (status === 'revoked') {
+                statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700';
+                statusPill.innerText = 'Status: Revoked';
+                pendingNotice.classList.add('hidden');
+                revokedNotice?.classList.remove('hidden');
+                if (revokedReason) {
+                    revokedReason.innerText = profile.verification_revoked_reason
+                        ? `Reason: ${profile.verification_revoked_reason}`
+                        : 'Your verification was revoked due to policy or activity concerns.';
+                }
+                if (applyLink) applyLink.querySelector('span').textContent = 'View Verification Status';
             } else if (status === 'rejected') {
                 statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-600';
                 statusPill.innerText = 'Status: Declined (Resubmit)';
                 pendingNotice.classList.add('hidden');
-                if (pitchInput && profile.upgrade_pitch) pitchInput.value = profile.upgrade_pitch;
+                if (applyLink) applyLink.querySelector('span').textContent = 'Update & Resubmit Application';
             } else {
                 statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-muted';
                 statusPill.innerText = 'Status: Not Requested';
                 pendingNotice.classList.add('hidden');
             }
-            form.classList.remove('hidden');
+            ctaBox?.classList.remove('hidden');
         }
-
-        async function submitRoleUpgradeRequest(e) {
-            e.preventDefault();
-            const pitchEl = document.getElementById('upgrade-pitch');
-            const btn = document.getElementById('upgrade-submit-btn');
-            const pitch = pitchEl.value.trim();
-
-            if (pitch.length < 30) {
-                showToast('Please enter at least 30 characters explaining who you are and how you plan to interact.');
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = 'Submitting Request...';
-
-            const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-            if (authError || !user) {
-                btn.disabled = false;
-                btn.innerText = 'Request Ministry / Minister Account';
-                showToast('Please sign in first.');
-                return;
-            }
-
-            const nameVal = (
-                document.getElementById('profile-name')?.value?.trim() ||
-                user.user_metadata?.full_name ||
-                user.user_metadata?.name ||
-                (user.email ? user.email.split('@')[0] : '')
-            ).trim();
-
-            const payload = {
-                id: user.id,
-                email: user.email,
-                full_name: nameVal,
-                upgrade_status: 'pending',
-                upgrade_pitch: pitch,
-                upgrade_requested_at: new Date().toISOString()
-            };
-
-            const { data, error } = await supabaseClient
-                .from('profiles')
-                .upsert(payload, { onConflict: 'id' })
-                .select()
-                .single();
-
-            btn.disabled = false;
-            btn.innerText = 'Request Ministry / Minister Account';
-
-            if (error) {
-                console.error('Upgrade request failed:', error);
-                showToast(error.message || 'Could not submit request. Please try again.');
-                return;
-            }
-
-            syncUpgradeCardUI(data);
-            if (typeof applyMinistryVerificationUI === 'function') {
-                applyMinistryVerificationUI(data);
-            }
-            showToast('Ministry / Minister upgrade request sent.');
-        }
-
 
         document.addEventListener('DOMContentLoaded', async () => {
             if (typeof supabaseClient === 'undefined') return;
@@ -284,7 +239,7 @@
 
             const { data: profile } = await supabaseClient
                 .from('profiles')
-                .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch')
+                .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch, verification_revoked_reason')
                 .eq('id', user.id)
                 .maybeSingle();
 

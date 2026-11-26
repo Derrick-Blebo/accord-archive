@@ -221,6 +221,37 @@
             </div>
         </div>
 
+        <!-- Search Bar for People & Posts -->
+        <div class="bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 shadow-sm space-y-2.5">
+            <div class="relative flex items-center">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 text-slate-400 text-xs pointer-events-none"></i>
+                <input
+                    type="text"
+                    id="feed-search-input"
+                    oninput="handleFeedSearchInput(this.value)"
+                    placeholder="Search people, ministries, or posts..."
+                    class="w-full bg-[#F0F2F5] focus:bg-white border border-transparent focus:border-accord-blue rounded-full pl-9 pr-9 py-2 text-xs sm:text-sm text-accord-slate placeholder-slate-500 focus:outline-none transition-all"
+                />
+                <button
+                    type="button"
+                    id="feed-search-clear"
+                    onclick="clearFeedSearch()"
+                    class="hidden absolute right-3 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center text-[10px]"
+                    aria-label="Clear search"
+                >
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="feed-search-scope-bar" class="hidden items-center justify-between gap-2 pt-0.5">
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="setFeedSearchScope('all')" id="search-scope-all" class="feed-scope-btn px-3 py-1 rounded-full text-[11px] font-bold bg-accord-slate text-white">All Results</button>
+                    <button type="button" onclick="setFeedSearchScope('people')" id="search-scope-people" class="feed-scope-btn px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">People</button>
+                    <button type="button" onclick="setFeedSearchScope('posts')" id="search-scope-posts" class="feed-scope-btn px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Posts</button>
+                </div>
+                <span id="feed-search-summary" class="text-[11px] text-accord-muted font-medium"></span>
+            </div>
+        </div>
+
         <!-- 4 Post Type Filter Tabs (Video, Testimony, Audio, Text Posts) -->
         <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1">
             <button type="button" onclick="setFeedTab('all')" id="tab-all" class="feed-tab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">All Posts</button>
@@ -229,6 +260,9 @@
             <button type="button" onclick="setFeedTab('audio')" id="tab-audio" class="feed-tab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-podcast mr-1.5 text-accord-gold"></i>Audio</button>
             <button type="button" onclick="setFeedTab('text')" id="tab-text" class="feed-tab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200"><i class="fa-solid fa-align-left mr-1.5 text-emerald-600"></i>Text Posts</button>
         </div>
+
+        <!-- People Search Results Container -->
+        <div id="feed-people-results" class="hidden space-y-2.5"></div>
 
         <!-- Feed Stream Container -->
         <div id="feed-stream" class="space-y-4"></div>

@@ -307,6 +307,10 @@ function renderMessagesStream() {
             </button>
         `;
 
+        const linkedBookId = (!cardHtml && msg.body)
+            ? (String(msg.body).match(/(?:book\.html\?(?:[^#\s]*&)?(?:id|book)=|[?&]book=)(\d+)/i)?.[1] || null)
+            : null;
+
         return `
             <div data-msg-id="${msg.id}" class="group flex flex-col ${isMine ? 'items-end' : 'items-start'} transition-all duration-300 rounded-2xl">
                 ${!isMine && conv?.is_group ? `<span class="text-[10px] font-bold text-accord-muted ml-2 mb-0.5">${escapeChatHtml(senderName)}</span>` : ''}
@@ -314,6 +318,7 @@ function renderMessagesStream() {
                     <div class="max-w-[82%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 space-y-2 shadow-sm ${isMine ? 'bg-accord-blue text-white rounded-br-sm' : 'bg-white text-accord-slate border border-slate-200 rounded-bl-sm'}">
                         ${replyQuoteHtml}
                         ${cardHtml}
+                        ${linkedBookId ? `<div class="chat-book-link-preview" data-book-id="${linkedBookId}" data-mine="${isMine ? '1' : '0'}"></div>` : ''}
                         ${msg.body ? `<p class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed break-words">${escapeChatHtml(msg.body)}</p>` : ''}
                     </div>
                     ${replyBtnHtml}
@@ -324,6 +329,37 @@ function renderMessagesStream() {
     }).join('');
 
     stream.scrollTop = stream.scrollHeight;
+    hydrateChatBookLinkPreviews();
+}
+
+const _chatBookPreviewCache = new Map();
+async function hydrateChatBookLinkPreviews() {
+    const slots = Array.from(document.querySelectorAll('.chat-book-link-preview[data-book-id]'));
+    if (slots.length === 0) return;
+    const missing = [...new Set(slots.map(s => s.getAttribute('data-book-id')).filter(id => id && !_chatBookPreviewCache.has(id)))];
+    if (missing.length > 0) {
+        const { data } = await supabaseClient
+            .from('books')
+            .select('id, title, author, cover_url')
+            .in('id', missing)
+            .eq('is_visible', true);
+        (data || []).forEach(b => _chatBookPreviewCache.set(String(b.id), b));
+    }
+    slots.forEach(slot => {
+        const book = _chatBookPreviewCache.get(slot.getAttribute('data-book-id'));
+        if (!book) return;
+        const isMine = slot.getAttribute('data-mine') === '1';
+        slot.innerHTML = `
+            <a href="book.html?id=${encodeURIComponent(book.id)}" class="flex items-center gap-2.5 p-2.5 rounded-xl border ${isMine ? 'bg-white/15 border-white/25 text-white' : 'bg-slate-50 border-slate-200 text-accord-slate'}">
+                ${book.cover_url ? `<img src="${escapeChatHtml(book.cover_url)}" class="w-10 h-14 object-cover rounded-lg shrink-0" alt="">` : ''}
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase opacity-80">Book Preview</p>
+                    <p class="text-xs font-bold leading-snug line-clamp-2">${escapeChatHtml(book.title)}</p>
+                    <p class="text-[10px] opacity-80">${escapeChatHtml(book.author || '')}</p>
+                </div>
+            </a>
+        `;
+    });
 }
 
 function getMessagePreviewText(msg) {

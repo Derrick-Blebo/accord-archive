@@ -184,8 +184,18 @@ async function handleAuthorBookUpload(e) {
     const coverFile = document.getElementById('upload-book-cover').files?.[0] || null;
     const externalUrl = document.getElementById('upload-book-url').value.trim();
 
+    const rightsBasis = document.getElementById('upload-rights-basis')?.value || 'original_author';
+    const rightsStatement = document.getElementById('upload-rights-statement')?.value.trim() || '';
+    const rightsProofUrl = document.getElementById('upload-rights-proof-url')?.value.trim() || '';
+    const rightsAttested = Boolean(document.getElementById('upload-rights-attestation')?.checked);
+
     if (!title || !description) {
         showToast('Please enter both a book title and description.', true);
+        return;
+    }
+
+    if (rightsStatement.length < 15 || !rightsAttested) {
+        showToast('Please complete the Publishing Rights statement and attestation.', true);
         return;
     }
 
@@ -231,7 +241,12 @@ async function handleAuthorBookUpload(e) {
             gradient: 'from-blue-900 via-indigo-900 to-slate-900',
             is_visible: false,
             status: 'draft',
-            takedown_status: 'none'
+            takedown_status: 'none',
+            rights_basis: rightsBasis,
+            rights_statement: rightsStatement,
+            rights_proof_url: rightsProofUrl || null,
+            rights_verified: false,
+            copyright_status: 'clear'
         };
 
         const { data: insertedBook, error: bookError } = await supabaseClient
@@ -260,6 +275,9 @@ async function handleAuthorBookUpload(e) {
                 cover_url: coverUrl,
                 is_for_sale: isForSale,
                 price,
+                rights_basis: rightsBasis,
+                rights_statement: rightsStatement,
+                rights_proof_url: rightsProofUrl || null,
                 approval_status: 'pending'
             }]);
 
@@ -668,3 +686,118 @@ function handleAuthorCoverPreview(event) {
         previewBox.innerHTML = `<img src="${objectUrl}" alt="Cover preview" class="w-full h-full object-cover">`;
     }
 }
+
+let authorDisputes = [];
+
+async function loadAuthorCopyrightDisputes() {
+    const section = document.getElementById('author-disputes-section');
+    const listEl = document.getElementById('author-disputes-list');
+    if (!section || !listEl || !authorUser) return;
+
+    const bookIds = authorBooks.map(b => b.id);
+    if (bookIds.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    const { data, error } = await supabaseClient
+        .from('book_copyright_reports')
+        .select('*')
+        .in('book_id', bookIds)
+        .in('status', ['disputed', 'under_review', 'open'])
+        .order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+        authorDisputes = [];
+        section.classList.add('hidden');
+        return;
+    }
+
+    authorDisputes = data;
+    section.classList.remove('hidden');
+    listEl.innerHTML = data.map(rep => {
+        const book = authorBooks.find(b => String(b.id) === String(rep.book_id));
+        const hasResponded = Boolean(rep.author_counter_statement);
+        const canRespond = rep.status === 'disputed' && !hasResponded;
+        return `
+            <div class="bg-white border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="space-y-1 min-w-0">
+                    <p class="text-xs font-bold text-accord-slate">${escapeAuthorHtml(book?.title || 'Book #' + rep.book_id)} <span class="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">${escapeAuthorHtml(rep.status)}</span></p>
+                    <p class="text-[11px] text-accord-muted">Claim: <strong>${escapeAuthorHtml(rep.claim_type)}</strong> — ${escapeAuthorHtml(rep.details)}</p>
+                    ${hasResponded ? `<p class="text-[11px] text-emerald-700 font-semibold">Counter-notice submitted. Awaiting Library Admin settlement.</p>` : ''}
+                </div>
+                ${canRespond ? `
+                    <button type="button" onclick="openCounterNoticeModal('${rep.id}')" class="px-4 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shrink-0">
+                        Submit Counter-Notice
+                    </button>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function openCounterNoticeModal(reportId) {
+    const rep = authorDisputes.find(r => String(r.id) === String(reportId));
+    const book = rep ? authorBooks.find(b => String(b.id) === String(rep.book_id)) : null;
+    document.getElementById('counter-report-id').value = reportId;
+    document.getElementById('counter-notice-book-title').textContent = book ? book.title : '';
+    document.getElementById('counter-statement').value = '';
+    document.getElementById('counter-proof-url').value = '';
+    const modal = document.getElementById('counter-notice-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeCounterNoticeModal() {
+    const modal = document.getElementById('counter-notice-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+async function handleCounterNoticeSubmit(e) {
+    e.preventDefault();
+    const reportId = document.getElementById('counter-report-id').value;
+    const statement = document.getElementById('counter-statement').value.trim();
+    const proofUrl = document.getElementById('counter-proof-url').value.trim();
+    const btn = document.getElementById('counter-submit-btn');
+
+    if (statement.length < 20) {
+        showToast('Please provide at least 20 characters explaining your rights.', true);
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+    }
+
+    const { error } = await supabaseClient
+        .from('book_copyright_reports')
+        .update({
+            author_counter_statement: statement,
+            author_counter_proof_url: proofUrl || null,
+            author_responded_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Submit Counter-Notice';
+    }
+
+    if (error) {
+        showToast(`Could not submit counter-notice: ${error.message}`, true);
+        return;
+    }
+
+    closeCounterNoticeModal();
+    await loadAuthorCopyrightDisputes();
+    showToast('Counter-notice submitted for Library Admin settlement.');
+}
+
+// Hook into loadAuthorDashboardData completion
+const _origLoadAuthorDashboardData = loadAuthorDashboardData;
+loadAuthorDashboardData = async function () {
+    await _origLoadAuthorDashboardData();
+    await loadAuthorCopyrightDisputes();
+};

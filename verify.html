@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ministry & Minister Verification — Accord Archive</title>
+    <meta name="description" content="Apply for verified Ministry or Minister status on Accord Archive by sharing your Gospel mission and 5 initial sample posts." />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed.</span>
+    </div>
+
+    <!-- Global Header -->
+    <div id="accord-header"></div>
+    <script src="header.js?v=4"></script>
+
+    <main class="flex-grow max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 w-full space-y-6">
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <a href="profile.html" class="inline-flex items-center gap-2 text-xs font-bold text-accord-muted hover:text-accord-blue transition-colors">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Profile</span>
+            </a>
+            <span id="verify-status-pill" class="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-accord-muted">
+                Status: Loading...
+            </span>
+        </div>
+
+        <!-- Intro & Gospel Purpose Header -->
+        <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-accord-lightBlue text-accord-blue flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-church text-xl"></i>
+                </div>
+                <div class="space-y-1.5">
+                    <span class="bg-amber-50 text-accord-gold text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">Ministry / Minister Verification</span>
+                    <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Apply for Verified Ministry Status</h1>
+                    <p class="text-xs sm:text-sm text-accord-muted leading-relaxed">
+                        Verified accounts on Accord are reserved for genuine <strong>Christian ministries, churches, and ministers</strong> committed to sharing the Gospel of Jesus Christ. To help us verify your calling and intent, please share your ministry details, <strong>5 initial sample posts</strong>, and optional links to your existing Christian activities.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Status Banners -->
+            <div id="verify-approved-banner" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-900 space-y-1.5">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    <span>Your Ministry / Minister Verification is Active</span>
+                </p>
+                <p class="text-emerald-800 leading-relaxed">
+                    You can publish Videos, Audio teachings, and Text posts directly on the <a href="feed.html" class="underline font-bold">Fellowship Feed</a>.
+                </p>
+            </div>
+
+            <div id="verify-pending-banner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1.5">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-hourglass-half text-accord-gold"></i>
+                    <span>Application Under Review</span>
+                </p>
+                <p class="text-amber-800 leading-relaxed">
+                    Our Superadmin team is reviewing your Gospel statement, 5 sample posts, and social links. You can update and resubmit your application below if needed.
+                </p>
+            </div>
+
+            <div id="verify-revoked-banner" class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 text-xs text-red-900 space-y-1.5">
+                <p class="font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-ban text-red-600"></i>
+                    <span>Verification Revoked</span>
+                </p>
+                <p id="verify-revoked-reason-text" class="text-red-800 leading-relaxed"></p>
+            </div>
+        </section>
+
+        <!-- Verification Application Form -->
+        <form id="verification-application-form" onsubmit="submitVerificationApplication(event)" class="space-y-6">
+
+            <!-- Step 1: Ministry Identity & Gospel Intention -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+                <div class="border-b border-slate-100 pb-3">
+                    <h2 class="font-bold text-accord-slate text-base">1. Ministry / Minister Details & Gospel Intention</h2>
+                    <p class="text-xs text-accord-muted mt-0.5">Tell us who you are and how you intend to share the Gospel on Accord.</p>
+                </div>
+
+                <div>
+                    <label for="verify-ministry-role" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Ministry / Calling Category *</label>
+                    <select id="verify-ministry-role" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs sm:text-sm font-semibold focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <option value="Church / Local Assembly">Church / Local Assembly</option>
+                        <option value="Pastor / Ordained Minister">Pastor / Ordained Minister</option>
+                        <option value="Christian Ministry / Fellowship">Christian Ministry / Fellowship</option>
+                        <option value="Evangelist / Missionary">Evangelist / Missionary</option>
+                        <option value="Christian Educator / Author">Christian Educator / Author</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="verify-gospel-statement" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">
+                        Statement of Faith & Gospel Sharing Plan *
+                    </label>
+                    <textarea
+                        id="verify-gospel-statement"
+                        rows="4"
+                        required
+                        minlength="40"
+                        maxlength="1200"
+                        placeholder="Describe your ministry or calling, your church/fellowship affiliation, and how you plan to share the Gospel, biblical teachings, or testimonies on Accord..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs sm:text-sm focus:outline-none focus:border-accord-blue focus:bg-white"
+                    ></textarea>
+                    <p class="text-[11px] text-accord-muted mt-1">Minimum 40 characters.</p>
+                </div>
+            </section>
+
+            <!-- Step 2: 5 Initial Sample Posts -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+                <div class="border-b border-slate-100 pb-3">
+                    <h2 class="font-bold text-accord-slate text-base">2. 5 Initial Sample Posts (Required)</h2>
+                    <p class="text-xs text-accord-muted mt-0.5">
+                        Provide <strong>5 sample posts</strong> demonstrating the Gospel-centered content you intend to publish on Accord. Reviewers will inspect all 5 samples before approving your account.
+                    </p>
+                </div>
+
+                <div id="sample-posts-container" class="space-y-4">
+                    <!-- 5 sample post cards rendered by verify.js -->
+                </div>
+            </section>
+
+            <!-- Step 3: Optional Links to Other Socials -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+                <div class="border-b border-slate-100 pb-3">
+                    <h2 class="font-bold text-accord-slate text-base">3. Links to Other Christian Social Activities (Optional)</h2>
+                    <p class="text-xs text-accord-muted mt-0.5">
+                        Include links to your YouTube channel, Facebook page, Instagram, or ministry website where your Gospel activities can be verified.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="social-youtube" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5"><i class="fa-brands fa-youtube text-red-600 mr-1"></i> YouTube</label>
+                        <input type="url" id="social-youtube" placeholder="https://youtube.com/@yourministry" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="social-facebook" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5"><i class="fa-brands fa-facebook text-blue-600 mr-1"></i> Facebook</label>
+                        <input type="url" id="social-facebook" placeholder="https://facebook.com/yourministry" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="social-instagram" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5"><i class="fa-brands fa-instagram text-pink-600 mr-1"></i> Instagram</label>
+                        <input type="url" id="social-instagram" placeholder="https://instagram.com/yourministry" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="social-website" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5"><i class="fa-solid fa-globe text-accord-blue mr-1"></i> Ministry Website / Other</label>
+                        <input type="url" id="social-website" placeholder="https://yourministry.org" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 4: Pledge & Submit -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" id="verify-gospel-pledge" required class="mt-0.5 rounded text-accord-blue focus:ring-accord-blue w-4 h-4 shrink-0">
+                    <span class="text-xs text-accord-slate leading-relaxed">
+                        I confirm that I represent a genuine Christian ministry or minister, that my intention on Accord is to share the Gospel of Jesus Christ and edify believers, and that I understand verification may be revoked if my account engages in misleading, harmful, or non-Gospel-aligned activities.
+                    </span>
+                </label>
+
+                <button type="submit" id="verify-submit-btn" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white font-bold py-3.5 rounded-xl text-sm shadow-md shadow-blue-500/20 transition-all">
+                    Submit Verification Application (with 5 Sample Posts)
+                </button>
+            </section>
+        </form>
+    </main>
+
+    <script src="admin-core.js"></script>
+    <script src="footer.js"></script>
+    <script src="verify.js?v=1"></script>
+</body>
+</html>

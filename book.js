@@ -188,6 +188,7 @@ function renderBookDetails() {
 
     // Metadata
     document.getElementById('book-category').innerText = book.category || 'Archive';
+    document.getElementById('book-rights-verified-badge')?.classList.toggle('hidden', !book.rights_verified);
     document.getElementById('book-year').innerText = book.year ? `Published: ${book.year}` : '';
     document.getElementById('book-pages').innerText = book.pages ? `• ${book.pages} pages` : '';
     document.getElementById('book-downloads').innerText = `• ${Number(book.downloads) || 0} downloads`;
@@ -538,6 +539,76 @@ async function shareCurrentBook() {
     }
     await navigator.clipboard.writeText(shareUrl);
     showToast('Book link copied to clipboard!');
+}
+
+function openCopyrightReportModal() {
+    if (!currentBook) return;
+    const nameInput = document.getElementById('cr-reporter-name');
+    const emailInput = document.getElementById('cr-reporter-email');
+    if (nameInput && !nameInput.value && currentProfile?.full_name) {
+        nameInput.value = currentProfile.full_name;
+    }
+    if (emailInput && !emailInput.value && currentUser?.email) {
+        emailInput.value = currentUser.email;
+    }
+    const modal = document.getElementById('copyright-report-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeCopyrightReportModal() {
+    const modal = document.getElementById('copyright-report-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+    document.getElementById('copyright-report-form')?.reset();
+}
+
+async function handleCopyrightReportSubmit(e) {
+    e.preventDefault();
+    if (!currentBook) return;
+
+    const reporterName = document.getElementById('cr-reporter-name').value.trim();
+    const reporterEmail = document.getElementById('cr-reporter-email').value.trim();
+    const claimType = document.getElementById('cr-claim-type').value;
+    const proofUrl = document.getElementById('cr-proof-url').value.trim();
+    const details = document.getElementById('cr-details').value.trim();
+    const btn = document.getElementById('cr-submit-btn');
+
+    if (details.length < 20) {
+        showToast('Please provide at least 20 characters explaining the claim.');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+    }
+
+    const { error } = await supabaseClient
+        .from('book_copyright_reports')
+        .insert([{
+            book_id: currentBook.id,
+            reporter_id: currentUser ? currentUser.id : null,
+            reporter_name: reporterName,
+            reporter_email: reporterEmail,
+            claim_type: claimType,
+            proof_url: proofUrl || null,
+            details,
+            status: 'open'
+        }]);
+
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Submit Report';
+    }
+
+    if (error) {
+        showToast(`Could not submit copyright report: ${error.message}`);
+        return;
+    }
+
+    closeCopyrightReportModal();
+    showToast('Copyright report submitted. Our Library Admin team will review it.');
 }
 
 // ==========================================

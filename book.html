@@ -187,6 +187,7 @@
                 <div class="flex-1 min-w-0 space-y-4">
                     <div class="flex flex-wrap items-center gap-2">
                         <span id="book-category" class="bg-accord-lightBlue text-accord-blue text-[11px] font-bold px-3 py-1 rounded-lg"></span>
+                        <span id="book-rights-verified-badge" class="hidden bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><i class="fa-solid fa-shield-check"></i> Rights Verified</span>
                         <span id="book-year" class="text-xs font-semibold text-accord-muted"></span>
                         <span id="book-pages" class="text-xs font-semibold text-accord-muted"></span>
                         <span id="book-downloads" class="text-xs font-semibold text-accord-muted"></span>
@@ -220,6 +221,10 @@
                         <button type="button" onclick="shareCurrentBook()" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-accord-lightBlue hover:border-accord-blue hover:text-accord-blue text-accord-slate text-xs font-bold transition-all inline-flex items-center space-x-1.5">
                             <i class="fa-solid fa-share-nodes"></i>
                             <span>Share</span>
+                        </button>
+                        <button type="button" onclick="openCopyrightReportModal()" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-accord-muted text-xs font-bold transition-all inline-flex items-center space-x-1.5" title="Report Copyright Infringement">
+                            <i class="fa-solid fa-flag"></i>
+                            <span>Report Copyright</span>
                         </button>
                     </div>
 
@@ -307,6 +312,52 @@
                 <button id="auth-submit-btn" type="submit" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all">
                     Sign In
                 </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Copyright Report Modal -->
+    <div id="copyright-report-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-accord-slate/70 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Report Copyright Infringement</h3>
+                    <p class="text-[11px] text-accord-muted">Submit a rights claim so our Library Admin team can review and settle it.</p>
+                </div>
+                <button type="button" onclick="closeCopyrightReportModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <form id="copyright-report-form" onsubmit="handleCopyrightReportSubmit(event)" class="space-y-3.5 text-xs">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Your Name *</label>
+                    <input type="text" id="cr-reporter-name" required placeholder="Full name or organization" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Your Email *</label>
+                    <input type="email" id="cr-reporter-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Claim Type *</label>
+                    <select id="cr-claim-type" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 font-semibold focus:outline-none focus:border-accord-blue">
+                        <option value="Copyright Infringement (I am the Rights Holder)">Copyright Infringement (I am the Rights Holder)</option>
+                        <option value="Unauthorized Upload / Piracy">Unauthorized Upload / Piracy</option>
+                        <option value="Misattributed Author / Publisher">Misattributed Author / Publisher</option>
+                        <option value="Other Legal / Rights Issue">Other Legal / Rights Issue</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Proof / Reference Link (Optional)</label>
+                    <input type="url" id="cr-proof-url" placeholder="https://... (official book page, ISBN, or registration)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Claim Details *</label>
+                    <textarea id="cr-details" rows="3" required minlength="20" placeholder="Explain the copyright infringement and how you hold or represent the rights..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button type="button" onclick="closeCopyrightReportModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate font-bold">Cancel</button>
+                    <button type="submit" id="cr-submit-btn" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm">Submit Report</button>
+                </div>
             </form>
         </div>
     </div>

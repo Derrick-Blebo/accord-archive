@@ -166,16 +166,23 @@ async function handleAdminLogout() {
 }
 
 // FAST PARALLEL DATA FETCHING
+let copyrightReportsData = [];
+
 async function fetchAllData(isSilentRefresh = false) {
-    const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes, userBooksRes] = await Promise.all([
+    const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes, userBooksRes, copyrightRes] = await Promise.all([
         supabaseClient.from('books').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('user_purchases').select('book_id, amount_paid'),
         supabaseClient.from('categories').select('*').order('name', { ascending: true }),
         supabaseClient.from('submissions').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('testimonies').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('testimony_comments').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('user_book_submissions').select('*').eq('approval_status', 'pending').order('created_at', { ascending: false })
+        supabaseClient.from('user_book_submissions').select('*').eq('approval_status', 'pending').order('created_at', { ascending: false }),
+        supabaseClient.from('book_copyright_reports').select('*').order('created_at', { ascending: false })
     ]);
+
+    if (!copyrightRes?.error && copyrightRes?.data) {
+        copyrightReportsData = copyrightRes.data;
+    }
 
     if (!purchasesRes.error && purchasesRes.data) {
         purchasesData = purchasesRes.data;
@@ -1954,6 +1961,14 @@ function renderUserBookSubmissionsTable() {
             ? `<a href="${escapeHTML(book.download_url.split('?')[0])}" target="_blank" rel="noopener noreferrer" class="text-accord-blue hover:underline text-[11px] font-bold"><i class="fa-solid fa-file-pdf mr-1"></i>Preview File</a>`
             : `<span class="text-[10px] text-slate-400">No file</span>`;
 
+        const rightsInfo = book.rights_basis || book.rights_statement
+            ? `<div class="mt-1.5 p-2 rounded-lg bg-blue-50/70 border border-blue-100 text-[10px] space-y-0.5">
+                    <p class="font-bold text-accord-blue uppercase">${escapeHTML((book.rights_basis || 'rights').replace(/_/g, ' '))}</p>
+                    ${book.rights_statement ? `<p class="text-slate-700 line-clamp-2">${escapeHTML(book.rights_statement)}</p>` : ''}
+                    ${book.rights_proof_url ? `<a href="${escapeHTML(book.rights_proof_url)}" target="_blank" rel="noopener noreferrer" class="text-accord-blue underline font-bold">View Rights Proof</a>` : ''}
+               </div>`
+            : '';
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
         tr.innerHTML = `
@@ -1964,12 +1979,13 @@ function renderUserBookSubmissionsTable() {
             <td class="py-4 px-6">
                 <p class="font-bold text-accord-slate">${escapeHTML(book.title)}</p>
                 <p class="text-[10px] text-accord-muted">${escapeHTML(book.year || '')} • ${escapeHTML(book.pages || 'TBD')} p.</p>
+                ${rightsInfo}
             </td>
             <td class="py-4 px-6"><span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-1 rounded-md">${escapeHTML(book.category)}</span></td>
             <td class="py-4 px-6">${priceBadge}</td>
             <td class="py-4 px-6">${pdfLink}</td>
             <td class="py-4 px-6 text-right space-x-2 whitespace-nowrap">
-                <button onclick="toggleBookVisibility(${book.id}, true)" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Approve</button>
+                <button onclick="approveAuthorBookWithRights(${book.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"><i class="fa-solid fa-check mr-1"></i> Verify &amp; Approve</button>
                 <button onclick="promptDelete(${book.id})" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
             </td>
         `;
@@ -2525,7 +2541,8 @@ function updateStats() {
 
     const pendingAuthorBooks = getPendingAuthorBooks().length;
     const pendingTakedowns = catalogData.filter(b => b.takedown_status === 'pending').length;
-    const totalPending = pendingAuthorBooks + submissionsData.length + userBookSubmissionsData.length + pendingTakedowns;
+    const openCopyrightReports = copyrightReportsData.filter(r => ['open', 'under_review', 'disputed'].includes(r.status)).length;
+    const totalPending = pendingAuthorBooks + submissionsData.length + userBookSubmissionsData.length + pendingTakedowns + openCopyrightReports;
 
     const statPendingEl = document.getElementById('stat-pending');
     if (statPendingEl) statPendingEl.innerText = totalPending;
@@ -2535,4 +2552,166 @@ function updateStats() {
 
     const draftBadge = document.getElementById('drafts-subtab-badge');
     if (draftBadge) draftBadge.innerText = getAdminDraftBooks().length;
+
+    renderCopyrightReportsTable();
+}
+
+async function approveAuthorBookWithRights(bookId) {
+    const { error } = await supabaseClient
+        .from('books')
+        .update({
+            is_visible: true,
+            status: 'published',
+            rights_verified: true
+        })
+        .eq('id', bookId);
+
+    if (error) {
+        showToast(`Could not approve book: ${error.message}`);
+        return;
+    }
+
+    await fetchAllData();
+    showToast('Book rights verified and published to the library.');
+}
+
+function renderCopyrightReportsTable() {
+    const tbody = document.getElementById('copyright-reports-tbody');
+    const badge = document.getElementById('copyright-reports-badge');
+    const openCount = copyrightReportsData.filter(r => ['open', 'under_review', 'disputed'].includes(r.status)).length;
+    if (badge) badge.innerText = openCount;
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (copyrightReportsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-accord-muted">No copyright reports or disputes filed.</td></tr>`;
+        return;
+    }
+
+    copyrightReportsData.forEach(rep => {
+        const book = catalogData.find(b => String(b.id) === String(rep.book_id)) || allCatalogData?.find?.(b => String(b.id) === String(rep.book_id));
+        const statusColors = {
+            open: 'bg-red-50 text-red-700 border-red-200',
+            under_review: 'bg-amber-50 text-amber-700 border-amber-200',
+            disputed: 'bg-blue-50 text-accord-blue border-blue-200',
+            resolved_takedown: 'bg-slate-100 text-slate-700 border-slate-200',
+            resolved_dismissed: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        };
+        const pillClass = statusColors[rep.status] || 'bg-slate-100 text-slate-600';
+        const isResolved = rep.status === 'resolved_takedown' || rep.status === 'resolved_dismissed';
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0';
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(book?.title || 'Book #' + rep.book_id)}</p>
+                <p class="text-[10px] text-accord-muted">Reporter: ${escapeHTML(rep.reporter_name)} (${escapeHTML(rep.reporter_email)})</p>
+            </td>
+            <td class="py-4 px-6 max-w-md space-y-1.5">
+                <p class="text-[11px] font-bold text-red-700">${escapeHTML(rep.claim_type)}</p>
+                <p class="text-xs text-slate-700 leading-relaxed">${escapeHTML(rep.details)}</p>
+                ${rep.proof_url ? `<a href="${escapeHTML(rep.proof_url)}" target="_blank" rel="noopener noreferrer" class="inline-block text-[11px] font-bold text-accord-blue hover:underline">Claimant Proof Link</a>` : ''}
+                ${rep.author_counter_statement ? `
+                    <div class="mt-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100 text-[11px] space-y-1">
+                        <p class="font-bold text-accord-blue">Author Counter-Notice:</p>
+                        <p class="text-slate-700">${escapeHTML(rep.author_counter_statement)}</p>
+                        ${rep.author_counter_proof_url ? `<a href="${escapeHTML(rep.author_counter_proof_url)}" target="_blank" rel="noopener noreferrer" class="text-accord-blue underline font-bold">Counter Proof Link</a>` : ''}
+                    </div>
+                ` : ''}
+            </td>
+            <td class="py-4 px-6 text-center">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase ${pillClass}">${escapeHTML(rep.status.replace(/_/g, ' '))}</span>
+            </td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                ${isResolved ? `<span class="text-[11px] text-accord-muted">Settled</span>` : `
+                    ${rep.status !== 'disputed' && book?.author_id ? `<button type="button" onclick="requestAuthorCounterNotice('${rep.id}', ${rep.book_id}, '${book.author_id}')" class="bg-blue-50 hover:bg-blue-100 text-accord-blue text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Request Counter-Notice</button>` : ''}
+                    <button type="button" onclick="settleCopyrightTakedown('${rep.id}', ${rep.book_id})" class="bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Take Down Book</button>
+                    <button type="button" onclick="settleCopyrightDismiss('${rep.id}', ${rep.book_id})" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Dismiss Claim</button>
+                `}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function requestAuthorCounterNotice(reportId, bookId, authorId) {
+    const { error } = await supabaseClient
+        .from('book_copyright_reports')
+        .update({ status: 'disputed' })
+        .eq('id', reportId);
+
+    if (error) {
+        showToast(`Could not request counter-notice: ${error.message}`);
+        return;
+    }
+
+    await supabaseClient.from('books').update({ copyright_status: 'disputed' }).eq('id', bookId);
+    if (authorId) {
+        await supabaseClient.from('notifications').insert([{
+            user_id: authorId,
+            type: 'copyright_dispute',
+            title: 'Copyright Dispute Notice',
+            message: 'A copyright claim was filed on one of your books. Please submit a counter-notice in Author Studio.',
+            link_url: 'author.html'
+        }]);
+    }
+
+    await fetchAllData();
+    showToast('Dispute opened and author notified to submit a counter-notice.');
+}
+
+async function settleCopyrightTakedown(reportId, bookId) {
+    const notes = prompt('Enter settlement / takedown notes (optional):') || 'Copyright infringement confirmed; book taken down.';
+    const { error: repErr } = await supabaseClient
+        .from('book_copyright_reports')
+        .update({
+            status: 'resolved_takedown',
+            resolution_notes: notes,
+            resolved_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+    if (repErr) {
+        showToast(`Could not update report: ${repErr.message}`);
+        return;
+    }
+
+    await supabaseClient
+        .from('books')
+        .update({
+            is_visible: false,
+            deleted_at: new Date().toISOString(),
+            takedown_status: 'approved',
+            takedown_reason: notes,
+            copyright_status: 'taken_down'
+        })
+        .eq('id', bookId);
+
+    await fetchAllData();
+    showToast('Copyright dispute settled: infringing book taken down.');
+}
+
+async function settleCopyrightDismiss(reportId, bookId) {
+    const notes = prompt('Enter dismissal / rights upheld notes (optional):') || 'Publisher rights verified; claim dismissed.';
+    const { error: repErr } = await supabaseClient
+        .from('book_copyright_reports')
+        .update({
+            status: 'resolved_dismissed',
+            resolution_notes: notes,
+            resolved_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+    if (repErr) {
+        showToast(`Could not dismiss report: ${repErr.message}`);
+        return;
+    }
+
+    await supabaseClient
+        .from('books')
+        .update({ copyright_status: 'clear' })
+        .eq('id', bookId);
+
+    await fetchAllData();
+    showToast('Copyright claim dismissed and publisher rights upheld.');
 }
