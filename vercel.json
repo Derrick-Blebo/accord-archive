@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/preview.js": {
-      "includeFiles": "{index,book,forum,post,testimony,ministry}.html"
+      "includeFiles": "{index,book,forum,post,ministry}.html"
     }
   },
   "rewrites": [
@@ -39,11 +39,6 @@
       "source": "/post.html",
       "has": [{ "type": "query", "key": "id" }],
       "destination": "/api/preview?page=post"
-    },
-    {
-      "source": "/testimony.html",
-      "has": [{ "type": "query", "key": "id" }],
-      "destination": "/api/preview?page=testimony"
     },
     {
       "source": "/ministry.html",

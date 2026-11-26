@@ -6,7 +6,8 @@
 let targetUserId = null;
 let targetProfile = null;
 let viewerUser = null;
-let currentProfileTab = 'posts';
+let viewerProfile = null;
+let currentProfileTab = 'all';
 
 let followersList = [];
 let followingList = [];
@@ -14,8 +15,21 @@ let isFollowingTarget = false;
 
 let userOriginalPosts = [];
 let userReposts = [];
-let userTestimonies = [];
-let userActivities = [];
+let allVisibleProfilePosts = [];
+let likedPostIds = new Set();
+let viewerRepostedPostIds = new Set();
+let commentCountsByPost = {};
+let authorHandlesById = {};
+
+function getVoterKey() {
+    if (viewerUser?.id) return `user_${viewerUser.id}`;
+    let guestKey = localStorage.getItem('accord_guest_voter_key');
+    if (!guestKey) {
+        guestKey = 'guest_' + (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+        localStorage.setItem('accord_guest_voter_key', guestKey);
+    }
+    return guestKey;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
@@ -56,7 +70,7 @@ function showToast(message, isError = false) {
 async function loadUnifiedProfile() {
     const { data: profile, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, bio, avatar_url, account_type, upgrade_status, created_at')
+        .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, created_at')
         .eq('id', targetUserId)
         .maybeSingle();
 
@@ -69,22 +83,15 @@ async function loadUnifiedProfile() {
     const displayName = profile.full_name || 'Accord Member';
     document.title = `${displayName} — Accord Archive`;
 
-    const [
-        followersRes,
-        followingRes,
-        postsRes,
-        repostsRes,
-        postCommentsRes,
-        bookCommentsRes
-    ] = await Promise.all([
+    const requests = [
         supabaseClient
             .from('account_follows')
-            .select('follower_id, created_at, profiles!account_follows_follower_id_fkey(id, full_name, account_type, upgrade_status)')
+            .select('follower_id, created_at, profiles!account_follows_follower_id_fkey(id, full_name, handle, account_type, upgrade_status)')
             .eq('following_id', targetUserId)
             .order('created_at', { ascending: false }),
         supabaseClient
             .from('account_follows')
-            .select('following_id, created_at, profiles!account_follows_following_id_fkey(id, full_name, account_type, upgrade_status)')
+            .select('following_id, created_at, profiles!account_follows_following_id_fkey(id, full_name, handle, account_type, upgrade_status)')
             .eq('follower_id', targetUserId)
             .order('created_at', { ascending: false }),
         supabaseClient
@@ -96,70 +103,77 @@ async function loadUnifiedProfile() {
             .order('created_at', { ascending: false }),
         supabaseClient
             .from('post_reposts')
-            .select('id, post_id, quote_text, created_at, feed_posts(*)')
+            .select('id, post_id, user_id, quote_text, created_at, feed_posts(*)')
             .eq('user_id', targetUserId)
             .order('created_at', { ascending: false }),
         supabaseClient
-            .from('post_comments')
-            .select('id, post_id, body, created_at, feed_posts(id, title)')
-            .eq('user_id', targetUserId)
-            .order('created_at', { ascending: false })
-            .limit(20),
+            .from('post_likes')
+            .select('post_id')
+            .eq('voter_key', getVoterKey()),
         supabaseClient
-            .from('book_comments')
-            .select('id, book_id, body, created_at, books(id, title)')
-            .eq('user_id', targetUserId)
-            .order('created_at', { ascending: false })
-            .limit(20)
-    ]);
+            .from('post_comments')
+            .select('post_id')
+    ];
 
+    if (viewerUser?.id) {
+        requests.push(
+            supabaseClient.from('profiles').select('id, full_name, handle').eq('id', viewerUser.id).maybeSingle(),
+            supabaseClient.from('post_reposts').select('post_id').eq('user_id', viewerUser.id)
+        );
+    }
+
+    const [
+        followersRes,
+        followingRes,
+        postsRes,
+        repostsRes,
+        likesRes,
+        commentsRes,
+        viewerProfRes,
+        viewerRepostsRes
+    ] = await Promise.all(requests);
+
+    viewerProfile = viewerProfRes?.data || null;
     followersList = (followersRes.data || []).map(r => r.profiles).filter(Boolean);
     followingList = (followingRes.data || []).map(r => r.profiles).filter(Boolean);
 
-    const allAuthored = postsRes.data || [];
-    userOriginalPosts = allAuthored.filter(p => p.post_type !== 'testimony');
-    userTestimonies = allAuthored.filter(p => p.post_type === 'testimony');
+    userOriginalPosts = postsRes.data || [];
 
     userReposts = (repostsRes.data || [])
         .filter(r => r.feed_posts && r.feed_posts.is_approved)
         .map(r => ({
-            repost_id: r.id,
+            id: r.id,
+            user_id: r.user_id,
+            reposter_name: targetProfile.full_name || 'User',
+            reposter_handle: targetProfile.handle || '',
             quote_text: r.quote_text,
-            reposted_at: r.created_at,
+            created_at: r.created_at,
             post: r.feed_posts
         }));
 
-    // Build chronological activities feed
-    const activities = [];
-    userReposts.forEach(r => {
-        activities.push({
-            type: 'repost',
-            created_at: r.reposted_at,
-            title: `Reposted "${r.post.title}"`,
-            detail: r.quote_text || r.post.body,
-            url: `post.html?id=${encodeURIComponent(r.post.id)}`
+    const postMap = new Map();
+    userOriginalPosts.forEach(p => postMap.set(String(p.id), p));
+    userReposts.forEach(r => postMap.set(String(r.post.id), r.post));
+    allVisibleProfilePosts = Array.from(postMap.values());
+
+    authorHandlesById = {};
+    if (targetProfile.handle) authorHandlesById[String(targetProfile.id)] = targetProfile.handle;
+    const otherAuthorIds = [...new Set(allVisibleProfilePosts.map(p => p.author_id).filter(id => id && String(id) !== String(targetUserId)))];
+    if (otherAuthorIds.length > 0) {
+        const { data: apRows } = await supabaseClient.from('profiles').select('id, handle').in('id', otherAuthorIds);
+        (apRows || []).forEach(ap => {
+            if (ap.handle) authorHandlesById[String(ap.id)] = ap.handle;
         });
+    }
+
+    likedPostIds = new Set((likesRes.data || []).map(l => String(l.post_id)));
+    viewerRepostedPostIds = new Set((viewerRepostsRes?.data || []).map(r => String(r.post_id)));
+
+    commentCountsByPost = {};
+    (commentsRes.data || []).forEach(c => {
+        const key = String(c.post_id);
+        commentCountsByPost[key] = (commentCountsByPost[key] || 0) + 1;
     });
-    (postCommentsRes.data || []).forEach(c => {
-        activities.push({
-            type: 'post_comment',
-            created_at: c.created_at,
-            title: `Commented on "${c.feed_posts?.title || 'a feed post'}"`,
-            detail: c.body,
-            url: `post.html?id=${encodeURIComponent(c.post_id)}`
-        });
-    });
-    (bookCommentsRes.data || []).forEach(c => {
-        activities.push({
-            type: 'book_comment',
-            created_at: c.created_at,
-            title: `Reviewed "${c.books?.title || 'a book'}"`,
-            detail: c.body,
-            url: `book.html?id=${encodeURIComponent(c.book_id)}`
-        });
-    });
-    activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    userActivities = activities;
 
     isFollowingTarget = Boolean(
         viewerUser && followersList.some(f => f.id === viewerUser.id)
@@ -180,6 +194,16 @@ function renderProfileHeader() {
 
     document.getElementById('profile-avatar-initial').textContent = displayName.charAt(0).toUpperCase();
     document.getElementById('profile-display-name').textContent = displayName;
+
+    const handleEl = document.getElementById('profile-handle');
+    if (handleEl) {
+        if (targetProfile.handle) {
+            handleEl.textContent = targetProfile.handle;
+            handleEl.classList.remove('hidden');
+        } else {
+            handleEl.classList.add('hidden');
+        }
+    }
 
     const verifiedIcon = document.getElementById('profile-verified-icon');
     const roleBadge = document.getElementById('profile-role-badge');
@@ -372,11 +396,11 @@ function closeConnectionsModal() {
 function setProfileTab(tab) {
     currentProfileTab = tab;
     document.querySelectorAll('.ptab-btn').forEach(btn => {
-        btn.className = 'ptab-btn px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all';
+        btn.className = 'ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all';
     });
     const active = document.getElementById(`ptab-${tab}`);
     if (active) {
-        active.className = 'ptab-btn px-5 py-2.5 rounded-xl text-xs font-bold bg-accord-blue text-white shadow-sm transition-all';
+        active.className = 'ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-accord-blue text-white shadow-sm transition-all';
     }
     renderProfileStream();
 }
@@ -385,94 +409,296 @@ function renderProfileStream() {
     const stream = document.getElementById('profile-stream');
     if (!stream) return;
 
-    if (currentProfileTab === 'posts') {
-        const combined = [
-            ...userOriginalPosts.map(p => ({ kind: 'post', sortAt: p.created_at, post: p })),
-            ...userReposts.map(r => ({ kind: 'repost', sortAt: r.reposted_at, post: r.post, quote: r.quote_text }))
+    let items = [];
+    if (currentProfileTab === 'all') {
+        items = [
+            ...userOriginalPosts.map(p => ({ kind: 'post', sortAt: p.created_at, post: p, repost: null })),
+            ...userReposts.map(r => ({ kind: 'repost', sortAt: r.created_at, post: r.post, repost: r }))
         ].sort((a, b) => new Date(b.sortAt) - new Date(a.sortAt));
+    } else {
+        items = userOriginalPosts
+            .filter(p => p.post_type === currentProfileTab)
+            .map(p => ({ kind: 'post', sortAt: p.created_at, post: p, repost: null }));
+    }
 
-        if (combined.length === 0) {
-            stream.innerHTML = emptyCard('fa-regular fa-newspaper', 'No posts or reposts yet', 'Posts by verified accounts and reposts will appear here.');
-            return;
-        }
-
-        stream.innerHTML = combined.map(item => renderProfilePostCard(item)).join('');
+    if (items.length === 0) {
+        const emptyMessages = {
+            all: ['fa-regular fa-newspaper', 'No posts yet', 'Posts and reposts shared by this account will appear here.'],
+            testimony: ['fa-regular fa-heart', 'No testimonies yet', 'Testimonies shared by this account will appear here.'],
+            video: ['fa-solid fa-video', 'No video posts yet', 'Video posts shared by this account will appear here.'],
+            audio: ['fa-solid fa-podcast', 'No audio posts yet', 'Audio posts shared by this account will appear here.'],
+            text: ['fa-solid fa-align-left', 'No text posts yet', 'Text posts shared by this account will appear here.']
+        };
+        const [icon, title, subtitle] = emptyMessages[currentProfileTab] || emptyMessages.all;
+        stream.innerHTML = emptyCard(icon, title, subtitle);
         return;
     }
 
-    if (currentProfileTab === 'testimonies') {
-        if (userTestimonies.length === 0) {
-            stream.innerHTML = emptyCard('fa-regular fa-heart', 'No testimonies shared yet', 'Public testimonies shared by this account will appear here.');
-            return;
-        }
-        stream.innerHTML = userTestimonies.map(p => renderProfilePostCard({ kind: 'post', sortAt: p.created_at, post: p })).join('');
-        return;
-    }
+    const myAvatarInitial = (viewerProfile?.full_name || viewerUser?.email || 'U').charAt(0).toUpperCase();
+    stream.innerHTML = '';
+    items.forEach(item => {
+        const p = item.post;
+        const card = createSharedFeedCardElement(p, {
+            repost: item.repost,
+            isLiked: likedPostIds.has(String(p.id)),
+            isReposted: viewerRepostedPostIds.has(String(p.id)),
+            commentsCount: commentCountsByPost[String(p.id)] || 0,
+            myAvatarInitial,
+            authorHandle: p.author_id ? (authorHandlesById[String(p.author_id)] || '') : '',
+            reposterHandle: item.repost?.reposter_handle || ''
+        });
+        stream.appendChild(card);
+    });
+    hydrateSharedBookLinkPreviews(stream);
+}
 
-    if (currentProfileTab === 'activities') {
-        if (userActivities.length === 0) {
-            stream.innerHTML = emptyCard('fa-solid fa-bolt', 'No recent activity', 'Reposts and comments on posts or books will appear here.');
-            return;
-        }
-        stream.innerHTML = userActivities.map(act => {
-            const icon = act.type === 'repost'
-                ? 'fa-retweet text-emerald-600 bg-emerald-50'
-                : act.type === 'book_comment'
-                    ? 'fa-book-open text-accord-gold bg-accord-goldLight'
-                    : 'fa-comment-dots text-accord-blue bg-accord-lightBlue';
-            const dateStr = new Date(act.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            return `
-                <a href="${escapeProfileHtml(act.url)}" class="block bg-white border border-slate-200/90 rounded-2xl p-5 hover:shadow-md transition-shadow">
-                    <div class="flex items-start gap-3">
-                        <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${icon}">
-                            <i class="fa-solid ${icon.split(' ')[0]} text-xs"></i>
-                        </div>
-                        <div class="min-w-0 flex-1 space-y-1">
-                            <p class="text-xs font-bold text-accord-slate">${escapeProfileHtml(act.title)}</p>
-                            ${act.detail ? `<p class="text-xs text-accord-muted line-clamp-2">${escapeProfileHtml(act.detail)}</p>` : ''}
-                            <p class="text-[10px] text-slate-400 font-semibold">${dateStr}</p>
-                        </div>
-                    </div>
-                </a>
-            `;
-        }).join('');
+function closeAllFeedPostMenus() {
+    document.querySelectorAll('.feed-post-menu').forEach(el => el.classList.add('hidden'));
+}
+
+function toggleFeedPostMenu(e, postId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`feed-post-menu-${postId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    closeAllFeedPostMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+window.addEventListener('click', closeAllFeedPostMenus);
+
+function toggleExpandPostBody(postId) {
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    const bodyEl = document.getElementById(`post-body-${postId}`);
+    const btnEl = document.getElementById(`post-see-more-${postId}`);
+    if (!post || !bodyEl || !btnEl) return;
+
+    const expanded = btnEl.dataset.expanded === 'true';
+    if (expanded) {
+        bodyEl.textContent = String(post.body || '').slice(0, 260).trim() + '...';
+        btnEl.textContent = 'See more';
+        btnEl.dataset.expanded = 'false';
+    } else {
+        bodyEl.textContent = post.body || '';
+        btnEl.textContent = 'See less';
+        btnEl.dataset.expanded = 'true';
     }
 }
 
-function renderProfilePostCard(item) {
-    const p = item.post;
-    const dateStr = new Date(item.sortAt || p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const repostBanner = item.kind === 'repost'
-        ? `<div class="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 w-fit">
-               <i class="fa-solid fa-retweet"></i>
-               <span>${escapeProfileHtml(targetProfile.full_name || 'User')} reposted</span>
-           </div>`
-        : '';
-    const quoteHtml = item.quote
-        ? `<p class="text-xs italic text-accord-slate bg-slate-50 border-l-2 border-accord-blue pl-3 py-1.5 rounded-r-lg">"${escapeProfileHtml(item.quote)}"</p>`
-        : '';
+async function toggleInlineComments(postId) {
+    const container = document.getElementById(`inline-comments-${postId}`);
+    if (!container) return;
+    const willOpen = container.classList.contains('hidden');
+    container.classList.toggle('hidden');
+    if (willOpen) {
+        await loadInlineComments(postId);
+        document.getElementById(`inline-comment-input-${postId}`)?.focus();
+    }
+}
 
-    return `
-        <article class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-3 hover:shadow-md transition-shadow">
-            ${repostBanner}
-            ${quoteHtml}
-            <div class="flex items-center justify-between text-xs text-accord-muted">
-                <span class="font-bold text-accord-slate">${escapeProfileHtml(p.author_name || 'Member')}</span>
-                <span>${dateStr}</span>
-            </div>
-            <a href="post.html?id=${encodeURIComponent(p.id)}" class="block group">
-                <h3 class="serif-heading text-lg font-bold text-accord-slate group-hover:text-accord-blue transition-colors">${escapeProfileHtml(p.title)}</h3>
-            </a>
-            <p class="text-xs sm:text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap">${escapeProfileHtml(p.body)}</p>
-            <div class="pt-2 flex items-center justify-between text-xs text-accord-muted">
-                <div class="flex items-center gap-4">
-                    <span><i class="fa-regular fa-heart mr-1"></i>${Number(p.likes_count) || 0}</span>
-                    <span><i class="fa-solid fa-retweet mr-1"></i>${Number(p.reposts_count) || 0}</span>
-                </div>
-                <a href="post.html?id=${encodeURIComponent(p.id)}" class="font-bold text-accord-blue hover:underline">Open Post →</a>
-            </div>
-        </article>
-    `;
+async function loadInlineComments(postId) {
+    const listEl = document.getElementById(`inline-comments-list-${postId}`);
+    if (!listEl) return;
+
+    const { data } = await supabaseClient
+        .from('post_comments')
+        .select('id, author_name, comment_text, created_at')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
+        .limit(30);
+
+    listEl.innerHTML = renderSharedCommentsHtml(data || []);
+}
+
+async function submitInlineComment(e, postId) {
+    e.preventDefault();
+    if (!viewerUser) {
+        showToast('Please sign in to comment on posts.', true);
+        setTimeout(() => {
+            window.location.href = `signin.html?next=${encodeURIComponent('user.html?id=' + targetUserId)}`;
+        }, 800);
+        return;
+    }
+
+    const input = document.getElementById(`inline-comment-input-${postId}`);
+    const text = input?.value.trim() || '';
+    if (!text) return;
+
+    const authorName = viewerProfile?.full_name || viewerUser.email?.split('@')[0] || 'Member';
+    input.value = '';
+
+    const { error } = await supabaseClient.from('post_comments').insert([{
+        post_id: postId,
+        user_id: viewerUser.id,
+        author_id: viewerUser.id,
+        author_name: authorName,
+        comment_text: text
+    }]);
+
+    if (error) {
+        showToast(`Could not post comment: ${error.message}`, true);
+        input.value = text;
+        return;
+    }
+
+    commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
+    const countEl = document.getElementById(`comment-count-${postId}`);
+    if (countEl) countEl.textContent = commentCountsByPost[String(postId)];
+    await loadInlineComments(postId);
+}
+
+async function togglePostLike(postId) {
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    if (!post) return;
+    const voterKey = getVoterKey();
+    const alreadyLiked = likedPostIds.has(String(postId));
+    let nextCount = Number(post.likes_count) || 0;
+
+    if (alreadyLiked) {
+        await supabaseClient.from('post_likes').delete().eq('post_id', postId).eq('voter_key', voterKey);
+        likedPostIds.delete(String(postId));
+        nextCount = Math.max(0, nextCount - 1);
+    } else {
+        const { error } = await supabaseClient.from('post_likes').insert([{ post_id: postId, voter_key: voterKey }]);
+        if (error) {
+            showToast('Could not record like.', true);
+            return;
+        }
+        likedPostIds.add(String(postId));
+        nextCount += 1;
+    }
+
+    post.likes_count = nextCount;
+    await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
+
+    const countEl = document.getElementById(`like-count-${postId}`);
+    const btnEl = document.getElementById(`like-btn-${postId}`);
+    if (countEl) countEl.textContent = nextCount;
+    if (btnEl) {
+        btnEl.className = !alreadyLiked
+            ? 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-rose-600'
+            : 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-slate-600';
+        const icon = btnEl.querySelector('i');
+        if (icon) icon.className = !alreadyLiked ? 'fa-solid fa-heart text-sm' : 'fa-regular fa-heart text-sm';
+    }
+}
+
+async function handleRepostClick(postId) {
+    if (!viewerUser) {
+        showToast('Please sign in to repost to your followers.', true);
+        setTimeout(() => {
+            window.location.href = `signin.html?next=${encodeURIComponent('user.html?id=' + targetUserId)}`;
+        }, 800);
+        return;
+    }
+
+    if (viewerRepostedPostIds.has(String(postId))) {
+        const { error } = await supabaseClient
+            .from('post_reposts')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', viewerUser.id);
+        if (error) {
+            showToast(`Could not remove repost: ${error.message}`, true);
+            return;
+        }
+        showToast('Repost removed.');
+        await loadUnifiedProfile();
+        return;
+    }
+
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    document.getElementById('repost-post-id').value = postId;
+    const previewEl = document.getElementById('repost-post-preview');
+    if (previewEl && post) previewEl.textContent = `${post.title} — ${post.author_name || 'Member'}`;
+    const modal = document.getElementById('repost-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeRepostModal() {
+    const modal = document.getElementById('repost-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+    document.getElementById('repost-form')?.reset();
+}
+
+async function handleRepostSubmit(e) {
+    e.preventDefault();
+    if (!viewerUser) return;
+    const postId = document.getElementById('repost-post-id').value;
+    const quoteText = document.getElementById('repost-quote-text')?.value.trim() || null;
+    const btn = document.getElementById('repost-submit-btn');
+    if (btn) btn.disabled = true;
+
+    const { error } = await supabaseClient
+        .from('post_reposts')
+        .insert([{ post_id: postId, user_id: viewerUser.id, quote_text: quoteText }]);
+
+    if (btn) btn.disabled = false;
+    if (error) {
+        showToast(`Could not repost: ${error.message}`, true);
+        return;
+    }
+
+    closeRepostModal();
+    showToast('Reposted to your followers!');
+    await loadUnifiedProfile();
+}
+
+function handleShareClick(postId) {
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    if (!post) return;
+    shareOrCopyPost(post);
+}
+
+function handleSendPostToChat(postId) {
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    if (!post || typeof openShareToChatModal !== 'function') return;
+    openShareToChatModal({
+        type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
+        id: post.id,
+        title: post.title,
+        subtitle: (post.body || '').slice(0, 110),
+        url: getPostShareUrl(post.id),
+        author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
+        post_type: post.post_type
+    });
+}
+
+function openReportModal(postId) {
+    const input = document.getElementById('report-post-id');
+    if (input) input.value = postId;
+    const modal = document.getElementById('report-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeReportModal() {
+    const modal = document.getElementById('report-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+async function handleReportSubmit(e) {
+    e.preventDefault();
+    const postId = document.getElementById('report-post-id')?.value;
+    const category = document.getElementById('report-category-reason')?.value || 'Other';
+    const details = document.getElementById('report-reason')?.value.trim() || '';
+    if (!postId || !details) return;
+
+    const { error } = await supabaseClient.from('post_reports').insert([{
+        post_id: postId,
+        reporter_key: getVoterKey(),
+        reason: `${category}: ${details}`
+    }]);
+
+    if (error) {
+        showToast('Could not submit report.', true);
+        return;
+    }
+    closeReportModal();
+    showToast('Thank you. Post flagged for review.');
 }
 
 function emptyCard(iconClass, title, subtitle) {

@@ -101,7 +101,34 @@
         </div>
     </div>
 
-    <main class="flex-grow max-w-4xl mx-auto px-4 sm:px-6 py-10 w-full space-y-8">
+    <!-- Repost Modal -->
+    <div id="repost-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4" onclick="closeRepostModal()">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-accord-slate text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-retweet text-emerald-600"></i>
+                    <span>Repost to Followers</span>
+                </h3>
+                <button type="button" onclick="closeRepostModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p id="repost-post-preview" class="text-xs text-accord-muted bg-slate-50 border border-slate-100 rounded-xl p-3 line-clamp-2"></p>
+            <form id="repost-form" onsubmit="handleRepostSubmit(event)" class="space-y-4">
+                <input type="hidden" id="repost-post-id">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Add a Thought (Optional)</label>
+                    <textarea id="repost-quote-text" rows="3" placeholder="Why are you sharing this post?" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeRepostModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-xs font-bold">Cancel</button>
+                    <button type="submit" id="repost-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold">Repost Now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main class="flex-grow max-w-2xl mx-auto px-4 sm:px-6 py-8 w-full space-y-5">
         <div>
             <a href="feed.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-muted hover:text-accord-blue">
                 <i class="fa-solid fa-arrow-left"></i>
@@ -109,38 +136,26 @@
             </a>
         </div>
 
-        <!-- Post Article Container -->
-        <article id="single-post-container" class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
-            <div class="text-center py-8 text-xs text-accord-muted">Loading post...</div>
-        </article>
-
-        <!-- Comments Section -->
-        <section id="comments-section" class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
-                <h2 class="serif-heading text-xl font-bold text-accord-slate">Comments (<span id="comments-total-count">0</span>)</h2>
+        <!-- Facebook-Style Single Post Container -->
+        <div id="single-post-container" class="space-y-4">
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-10 text-center text-xs text-accord-muted shadow-sm">
+                <i class="fa-solid fa-spinner fa-spin text-xl text-accord-blue mb-2"></i>
+                <p>Loading post...</p>
             </div>
-
-            <form id="comment-form" onsubmit="handleCommentSubmit(event)" class="space-y-3">
-                <textarea id="comment-input" rows="3" required placeholder="Add a comment to this post..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
-                <div class="flex justify-end">
-                    <button type="submit" id="comment-submit-btn" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm">
-                        Post Comment
-                    </button>
-                </div>
-            </form>
-
-            <div id="comments-list" class="space-y-3 pt-2"></div>
-        </section>
+        </div>
     </main>
 
     <script src="admin-core.js"></script>
-    <script src="feed-shared.js"></script>
+    <script src="feed-shared.js?v=3"></script>
     <script src="footer.js"></script>
     <script>
         let currentPost = null;
         let currentUser = null;
         let currentProfile = null;
         let isLiked = false;
+        let isReposted = false;
+        let authorHandle = '';
+        let commentsList = [];
 
         function getVoterKey() {
             if (currentUser?.id) return `user_${currentUser.id}`;
@@ -185,9 +200,20 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             const params = new URLSearchParams(window.location.search);
-            const postId = params.get('id');
+            let postId = params.get('id');
+            const legacyTestimonyId = params.get('legacy_testimony');
+
+            if (!postId && legacyTestimonyId) {
+                const { data: legacyPost } = await supabaseClient
+                    .from('feed_posts')
+                    .select('id')
+                    .eq('legacy_testimony_id', Number(legacyTestimonyId))
+                    .maybeSingle();
+                if (legacyPost?.id) postId = legacyPost.id;
+            }
+
             if (!postId) {
-                document.getElementById('single-post-container').innerHTML = `<p class="text-xs text-accord-muted text-center py-8">No post ID specified.</p>`;
+                document.getElementById('single-post-container').innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-8 text-xs text-accord-muted text-center">No post ID specified.</div>`;
                 return;
             }
 
@@ -196,7 +222,7 @@
             if (currentUser) {
                 const { data: prof } = await supabaseClient
                     .from('profiles')
-                    .select('id, full_name, email, account_type')
+                    .select('id, full_name, handle, email, account_type')
                     .eq('id', currentUser.id)
                     .maybeSingle();
                 currentProfile = prof || {
@@ -210,95 +236,105 @@
         });
 
         async function loadPostAndComments(postId) {
-            const [postRes, likeRes, commentsRes] = await Promise.all([
+            const requests = [
                 supabaseClient.from('feed_posts').select('*').eq('id', postId).maybeSingle(),
                 supabaseClient.from('post_likes').select('id').eq('post_id', postId).eq('voter_key', getVoterKey()).maybeSingle(),
                 supabaseClient.from('post_comments').select('*').eq('post_id', postId).order('created_at', { ascending: true })
-            ]);
+            ];
+            if (currentUser?.id) {
+                requests.push(
+                    supabaseClient.from('post_reposts').select('id').eq('post_id', postId).eq('user_id', currentUser.id).maybeSingle()
+                );
+            }
+
+            const [postRes, likeRes, commentsRes, repostRes] = await Promise.all(requests);
 
             if (postRes.error || !postRes.data) {
-                document.getElementById('single-post-container').innerHTML = `<p class="text-xs text-red-600 text-center py-8">Post not found.</p>`;
+                document.getElementById('single-post-container').innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-8 text-xs text-red-600 text-center">Post not found.</div>`;
                 return;
             }
 
             currentPost = postRes.data;
             isLiked = Boolean(likeRes.data);
+            isReposted = Boolean(repostRes?.data);
+            commentsList = commentsRes.data || [];
+            authorHandle = '';
+
+            if (currentPost.author_id && !currentPost.is_anonymous) {
+                const { data: ap } = await supabaseClient
+                    .from('profiles')
+                    .select('handle')
+                    .eq('id', currentPost.author_id)
+                    .maybeSingle();
+                authorHandle = ap?.handle || '';
+            }
+
             document.title = `${currentPost.title} — Accord Fellowship Feed`;
 
+            if (currentUser?.id) {
+                supabaseClient
+                    .from('post_views')
+                    .upsert({ user_id: currentUser.id, post_id: currentPost.id, viewed_at: new Date().toISOString() }, { onConflict: 'user_id,post_id' })
+                    .then(() => {});
+            }
+
             renderSinglePost();
-            renderCommentsList(commentsRes.data || []);
         }
 
         function renderSinglePost() {
             const container = document.getElementById('single-post-container');
-            const displayAuthor = currentPost.is_anonymous ? 'Anonymous' : (currentPost.author_name || 'Anonymous');
-            const dateFormatted = currentPost.created_at
-                ? new Date(currentPost.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : '';
+            if (!container || !currentPost) return;
 
-            let mediaHtml = '';
-            if (currentPost.post_type === 'video' && currentPost.media_url) {
-                mediaHtml = `
-                    <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-900">
-                        <iframe src="${escapeHtml(getYouTubeEmbedUrl(currentPost.media_url))}" class="w-full h-full border-0" allowfullscreen></iframe>
-                    </div>
-                `;
-            } else if (currentPost.post_type === 'audio' && currentPost.media_url) {
-                const isDirect = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(currentPost.media_url);
-                mediaHtml = isDirect
-                    ? `<audio controls src="${escapeHtml(currentPost.media_url)}" class="w-full"></audio>`
-                    : `<a href="${escapeHtml(currentPost.media_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold text-accord-blue hover:underline">
-                           <i class="fa-solid fa-podcast text-accord-gold"></i>
-                           <span>Listen to Audio Stream →</span>
-                       </a>`;
+            const myAvatarInitial = (currentProfile?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase();
+            const card = createSharedFeedCardElement(currentPost, {
+                isLiked,
+                isReposted,
+                commentsCount: commentsList.length,
+                myAvatarInitial,
+                authorHandle,
+                expandFullBody: true,
+                openCommentsByDefault: true,
+                showOpenFullPostLink: false
+            });
+
+            container.innerHTML = '';
+            container.appendChild(card);
+
+            const listEl = document.getElementById(`inline-comments-list-${currentPost.id}`);
+            if (listEl) {
+                listEl.innerHTML = renderSharedCommentsHtml(commentsList);
             }
-
-            const shareLabel = isMobileShareContext() ? 'Share' : 'Copy Link';
-            const shareIcon = isMobileShareContext() ? 'fa-share-nodes' : 'fa-link';
-
-            const authorHtml = (!currentPost.is_anonymous && currentPost.author_id)
-                ? `<a href="user.html?id=${encodeURIComponent(currentPost.author_id)}" class="font-bold text-accord-slate hover:text-accord-blue hover:underline">${escapeHtml(displayAuthor)}</a>`
-                : `<strong class="text-accord-slate">${escapeHtml(displayAuthor)}</strong>`;
-
-            container.innerHTML = `
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full">${escapeHtml(currentPost.post_type)}</span>
-                        <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate mt-2">${escapeHtml(currentPost.title)}</h1>
-                        <p class="text-xs text-accord-muted mt-1">By ${authorHtml} • ${dateFormatted}</p>
-                    </div>
-                </div>
-
-                ${mediaHtml}
-
-                <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap pt-2">
-                    ${escapeHtml(currentPost.body)}
-                </div>
-
-                <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" onclick="toggleSingleLike()" id="single-like-btn" class="px-4 py-2 rounded-xl font-bold flex items-center space-x-1.5 ${isLiked ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}">
-                            <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
-                            <span id="single-like-count">${Number(currentPost.likes_count) || 0}</span>
-                        </button>
-                        <button type="button" onclick="sendCurrentPostToChat()" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold flex items-center space-x-1.5">
-                            <i class="fa-regular fa-paper-plane"></i>
-                            <span>Send to Chat</span>
-                        </button>
-                        <button type="button" onclick="shareOrCopyPost(currentPost)" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold flex items-center space-x-1.5">
-                            <i class="fa-solid ${shareIcon}"></i>
-                            <span>${shareLabel}</span>
-                        </button>
-                    </div>
-                    <button type="button" onclick="openReportModal()" class="px-3 py-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 font-semibold flex items-center space-x-1.5">
-                        <i class="fa-regular fa-flag"></i>
-                        <span>Flag</span>
-                    </button>
-                </div>
-            `;
+            hydrateSharedBookLinkPreviews(container);
         }
 
-        function sendCurrentPostToChat() {
+        function closeAllFeedPostMenus() {
+            document.querySelectorAll('.feed-post-menu').forEach(el => el.classList.add('hidden'));
+        }
+
+        function toggleFeedPostMenu(e, postId) {
+            e.stopPropagation();
+            const menu = document.getElementById(`feed-post-menu-${postId}`);
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            closeAllFeedPostMenus();
+            if (isHidden) menu.classList.remove('hidden');
+        }
+
+        window.addEventListener('click', closeAllFeedPostMenus);
+
+        function toggleInlineComments(postId) {
+            const container = document.getElementById(`inline-comments-${postId}`);
+            if (!container) return;
+            container.classList.remove('hidden');
+            document.getElementById(`inline-comment-input-${postId}`)?.focus();
+        }
+
+        function handleShareClick() {
+            if (!currentPost) return;
+            shareOrCopyPost(currentPost);
+        }
+
+        function handleSendPostToChat() {
             if (!currentPost || typeof openShareToChatModal !== 'function') return;
             openShareToChatModal({
                 type: currentPost.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
@@ -311,7 +347,7 @@
             });
         }
 
-        async function toggleSingleLike() {
+        async function togglePostLike() {
             if (!currentPost) return;
             const voterKey = getVoterKey();
             let nextCount = Number(currentPost.likes_count) || 0;
@@ -322,80 +358,113 @@
                 nextCount = Math.max(0, nextCount - 1);
             } else {
                 const { error } = await supabaseClient.from('post_likes').insert([{ post_id: currentPost.id, voter_key: voterKey }]);
-                if (error) return;
+                if (error) {
+                    showToast('Could not record like.', true);
+                    return;
+                }
                 isLiked = true;
                 nextCount += 1;
             }
 
             currentPost.likes_count = nextCount;
             await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', currentPost.id);
-            renderSinglePost();
+
+            const countEl = document.getElementById(`like-count-${currentPost.id}`);
+            const btnEl = document.getElementById(`like-btn-${currentPost.id}`);
+            if (countEl) countEl.textContent = nextCount;
+            if (btnEl) {
+                btnEl.className = isLiked
+                    ? 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-rose-600'
+                    : 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-slate-600';
+                const icon = btnEl.querySelector('i');
+                if (icon) icon.className = isLiked ? 'fa-solid fa-heart text-sm' : 'fa-regular fa-heart text-sm';
+            }
         }
 
-        function renderCommentsList(comments) {
-            const listEl = document.getElementById('comments-list');
-            const countEl = document.getElementById('comments-total-count');
-            if (countEl) countEl.textContent = comments.length;
-            if (!listEl) return;
-
-            if (comments.length === 0) {
-                listEl.innerHTML = `<p class="text-xs text-accord-muted italic py-2">No comments yet. Start the conversation below.</p>`;
+        async function handleRepostClick(postId) {
+            if (!currentUser) {
+                showToast('Please sign in to repost to your followers.', true);
+                setTimeout(() => { window.location.href = `signin.html?next=${encodeURIComponent('post.html?id=' + postId)}`; }, 800);
                 return;
             }
-
-            listEl.innerHTML = comments.map(c => {
-                const d = c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-                const name = c.author_name || 'Member';
-                return `
-                    <div class="flex items-start gap-2.5">
-                        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                            ${escapeHtml(name.charAt(0).toUpperCase())}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <div class="inline-block bg-[#F0F2F5] rounded-2xl px-3.5 py-2 max-w-full">
-                                <p class="text-xs font-bold text-slate-900">${escapeHtml(name)}</p>
-                                <p class="text-xs sm:text-[13px] text-slate-800 leading-snug whitespace-pre-wrap break-words mt-0.5">${escapeHtml(c.comment_text)}</p>
-                            </div>
-                            <div class="px-2 mt-0.5 text-[11px] font-semibold text-slate-500">${d}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            if (isReposted) {
+                const { error } = await supabaseClient
+                    .from('post_reposts')
+                    .delete()
+                    .eq('post_id', postId)
+                    .eq('user_id', currentUser.id);
+                if (error) {
+                    showToast(`Could not remove repost: ${error.message}`, true);
+                    return;
+                }
+                showToast('Repost removed.');
+                await loadPostAndComments(postId);
+                return;
+            }
+            document.getElementById('repost-post-id').value = postId;
+            const previewEl = document.getElementById('repost-post-preview');
+            if (previewEl && currentPost) previewEl.textContent = `${currentPost.title} — ${currentPost.author_name || 'Member'}`;
+            const modal = document.getElementById('repost-modal');
+            modal?.classList.remove('hidden');
+            modal?.classList.add('flex');
         }
 
-        async function handleCommentSubmit(e) {
+        function closeRepostModal() {
+            const modal = document.getElementById('repost-modal');
+            modal?.classList.add('hidden');
+            modal?.classList.remove('flex');
+            document.getElementById('repost-form')?.reset();
+        }
+
+        async function handleRepostSubmit(e) {
+            e.preventDefault();
+            if (!currentUser || !currentPost) return;
+            const quoteText = document.getElementById('repost-quote-text')?.value.trim() || null;
+            const btn = document.getElementById('repost-submit-btn');
+            if (btn) btn.disabled = true;
+            const { error } = await supabaseClient
+                .from('post_reposts')
+                .insert([{ post_id: currentPost.id, user_id: currentUser.id, quote_text: quoteText }]);
+            if (btn) btn.disabled = false;
+            if (error) {
+                showToast(`Could not repost: ${error.message}`, true);
+                return;
+            }
+            closeRepostModal();
+            showToast('Reposted to your followers!');
+            await loadPostAndComments(currentPost.id);
+        }
+
+        async function submitInlineComment(e, postId) {
             e.preventDefault();
             if (!currentUser) {
                 showToast('Please sign in to comment on posts.', true);
+                setTimeout(() => { window.location.href = `signin.html?next=${encodeURIComponent('post.html?id=' + postId)}`; }, 800);
                 return;
             }
             if (!currentPost) return;
 
-            const inputEl = document.getElementById('comment-input');
-            const btnEl = document.getElementById('comment-submit-btn');
-            const text = inputEl.value.trim();
+            const inputEl = document.getElementById(`inline-comment-input-${postId}`);
+            const text = inputEl?.value.trim() || '';
             if (!text) return;
 
-            btnEl.disabled = true;
-            btnEl.textContent = 'Posting...';
-
             const authorName = currentProfile?.full_name || currentUser.email.split('@')[0];
+            inputEl.value = '';
+
             const { error } = await supabaseClient.from('post_comments').insert([{
                 post_id: currentPost.id,
+                user_id: currentUser.id,
                 author_id: currentUser.id,
                 author_name: authorName,
                 comment_text: text
             }]);
 
-            btnEl.disabled = false;
-            btnEl.textContent = 'Post Comment';
-
             if (error) {
-                showToast('Could not post comment.', true);
+                showToast(`Could not post comment: ${error.message}`, true);
+                inputEl.value = text;
                 return;
             }
 
-            inputEl.value = '';
             showToast('Comment posted.');
             await loadPostAndComments(currentPost.id);
         }

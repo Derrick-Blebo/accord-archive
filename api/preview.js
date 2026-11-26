@@ -35,13 +35,6 @@ const PAGE_DEFAULTS = {
         url: `${SITE_URL}/post.html`,
         type: 'article'
     },
-    testimony: {
-        file: 'testimony.html',
-        title: 'Testimony — Accord Archive & Library',
-        description: 'Read documented Christian testimonies and stories of faith on Accord Archive.',
-        url: `${SITE_URL}/testimony.html`,
-        type: 'article'
-    },
     ministry: {
         file: 'ministry.html',
         title: 'Ministry Profile — Accord Archive & Library',
@@ -128,14 +121,6 @@ export default async function handler(req, res) {
                 if (normalizedCover) {
                     imageUrl = normalizedCover;
                 }
-            }
-        } else if (page === 'testimony' && id) {
-            const item = await fetchFromSupabase('testimonies', `id=eq.${encodeURIComponent(id)}&select=id,title,author_name,location,body`);
-            if (item) {
-                title = `"${item.title}" — Testimony by ${item.author_name || 'Believer'}`;
-                description = cleanDescription(item.body, defaults.description);
-                canonicalUrl = `${SITE_URL}/testimony.html?id=${item.id}`;
-                ogType = 'article';
             }
         } else if (testimony) {
             const item = await fetchFromSupabase('testimonies', `id=eq.${encodeURIComponent(testimony)}&select=id,title,author_name,location,body`);

@@ -23,17 +23,27 @@ async function generateGoogleNoncePair() {
     return { rawNonce, hashedNonce };
 }
 
-async function ensureUserProfileRow(client, user, overrideFullName = '') {
+async function ensureUserProfileRow(client, user, overrideFullName = '', overrideHandle = '') {
     if (!client || !user?.id) return null;
 
     try {
         const { data: existing, error: selectErr } = await client
             .from('profiles')
-            .select('id, full_name, account_type, upgrade_status')
+            .select('id, full_name, handle, account_type, upgrade_status')
             .eq('id', user.id)
             .maybeSingle();
 
+        const rawHandle = overrideHandle || user.user_metadata?.handle || '';
+        const cleanHandle = rawHandle
+            ? '@' + String(rawHandle).trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '')
+            : '';
+        const validHandle = /^@[a-z0-9_]{3,30}$/.test(cleanHandle) ? cleanHandle : null;
+
         if (selectErr || existing) {
+            if (existing && !existing.handle && validHandle) {
+                await client.from('profiles').update({ handle: validHandle }).eq('id', user.id);
+                existing.handle = validHandle;
+            }
             return existing || null;
         }
 
@@ -49,6 +59,7 @@ async function ensureUserProfileRow(client, user, overrideFullName = '') {
             id: user.id,
             email: user.email || '',
             full_name: resolvedName,
+            handle: validHandle,
             account_type: 'normal_user',
             upgrade_status: 'none'
         };
@@ -56,7 +67,7 @@ async function ensureUserProfileRow(client, user, overrideFullName = '') {
         const { data: inserted, error: insertErr } = await client
             .from('profiles')
             .insert([newProfile])
-            .select('id, full_name, account_type, upgrade_status')
+            .select('id, full_name, handle, account_type, upgrade_status')
             .maybeSingle();
 
         if (insertErr) {

@@ -305,7 +305,7 @@ function buildTestimonyGridCard(item) {
             <i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-xs"></i>
         </button>
 
-        <div onclick="window.location.href='testimony.html?id=${item.id}'" class="cursor-pointer space-y-3 pr-8">
+        <div onclick="window.location.href='post.html?legacy_testimony=${item.id}'" class="cursor-pointer space-y-3 pr-8">
             <div class="flex items-center justify-between gap-2">
                 <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">
                     ${escapeHTML(item.category)}
@@ -332,7 +332,7 @@ function buildTestimonyGridCard(item) {
                 <span>${Number(item.amen_count) || 0}</span>
             </button>
             
-            <a href="testimony.html?id=${item.id}" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors">
+            <a href="post.html?legacy_testimony=${item.id}" class="hover:text-accord-blue flex items-center space-x-1.5 transition-colors">
                 <i class="fa-regular fa-comment text-sm"></i>
                 <span>${comments.length}</span>
             </a>

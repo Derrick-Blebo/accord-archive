@@ -68,31 +68,32 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                     </a>
                 </nav>
 
-                <!-- Right: Notifications, Auth / Profile Dropdown & Mobile Toggle -->
+                <!-- Right: Notifications, Auth / Profile Dropdown -->
                 <div class="flex items-center space-x-1.5 sm:space-x-3 justify-self-end shrink-0">
                     <div id="auth-area" class="flex items-center space-x-1.5 sm:space-x-3 md:min-w-[140px] justify-end">
                         <!-- Dynamically injected -->
                     </div>
-                    <button type="button" onclick="toggleGlobalMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue shrink-0" aria-label="Toggle Menu">
-                        <i class="fa-solid fa-bars text-lg sm:text-xl"></i>
-                    </button>
                 </div>
             </div>
 
-            <!-- Mobile Menu -->
-            <div id="global-mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200 px-6 py-4 space-y-3">
-                <a href="index.html" class="block text-base font-medium text-accord-slate">Digital Library</a>
-                <a href="feed.html" class="block text-base font-medium text-accord-slate">Feed</a>
-                <a href="music.html" class="block text-base font-medium text-accord-slate">Music</a>
-                <a href="saved.html" class="flex items-center justify-between text-base font-medium text-accord-slate pt-1">
-                    <span class="flex items-center space-x-2">
-                        <i class="fa-solid fa-bookmark text-accord-gold"></i>
-                        <span>Saved</span>
-                    </span>
-                    <span id="mobile-bookmark-badge" class="bg-accord-gold text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            <!-- Facebook-style Mobile Icon Navigation Bar -->
+            <nav class="md:hidden grid grid-cols-4 border-t border-slate-100 bg-white/95" aria-label="Mobile Navigation">
+                <a href="index.html" id="mobile-nav-library" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Digital Library" title="Digital Library">
+                    <i class="fa-solid fa-book-open text-lg"></i>
                 </a>
-                <div id="mobile-auth-area" class="pt-3 border-t border-slate-100"></div>
-            </div>
+                <a href="feed.html" id="mobile-nav-feed" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Feed" title="Feed">
+                    <i class="fa-solid fa-house text-lg"></i>
+                </a>
+                <a href="music.html" id="mobile-nav-music" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Music" title="Music">
+                    <i class="fa-solid fa-music text-lg"></i>
+                </a>
+                <a href="saved.html" id="mobile-nav-saved" class="relative h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Saved" title="Saved">
+                    <span class="relative inline-flex items-center justify-center">
+                        <i class="fa-solid fa-bookmark text-lg text-accord-gold"></i>
+                        <span id="mobile-bookmark-badge" class="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 bg-accord-gold text-white text-[9px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">0</span>
+                    </span>
+                </a>
+            </nav>
         </header>
     `;
 
@@ -104,16 +105,32 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
 
 function highlightActiveNavLink() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
-    if (path.includes('index') || path.includes('book')) setActive('nav-library');
-    else if (path.includes('feed') || path.includes('ministry') || path.includes('post')) setActive('nav-feed');
-    else if (path.includes('music')) setActive('nav-music');
-    else if (path.includes('saved')) setActive('nav-saved');
+    if (path.includes('index') || path.includes('book')) {
+        setActive('nav-library');
+        setMobileActive('mobile-nav-library');
+    } else if (path.includes('feed') || path.includes('ministry') || path.includes('post') || path.includes('user')) {
+        setActive('nav-feed');
+        setMobileActive('mobile-nav-feed');
+    } else if (path.includes('music')) {
+        setActive('nav-music');
+        setMobileActive('mobile-nav-music');
+    } else if (path.includes('saved')) {
+        setActive('nav-saved');
+        setMobileActive('mobile-nav-saved');
+    }
 }
 
 function setActive(id) {
     const el = document.getElementById(id);
     if (el) {
         el.className = 'text-sm font-bold text-accord-blue transition-colors';
+    }
+}
+
+function setMobileActive(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.className = 'relative h-11 flex items-center justify-center text-accord-blue border-b-[2.5px] border-accord-blue transition-colors';
     }
 }
 
@@ -141,7 +158,6 @@ async function initGlobalHeaderAuth() {
         globalHeaderUser = user;
 
         const authArea = document.getElementById('auth-area');
-        const mobileAuthArea = document.getElementById('mobile-auth-area');
         if (!authArea) return;
 
         const adminEmails = ['accordmedia1@gmail.com', 'rickblebs1@gmail.com'];
@@ -161,24 +177,16 @@ async function initGlobalHeaderAuth() {
                 <a href="${loginUrl}" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
                     Log in
                 </a>
-                <a href="${signupUrl}" class="inline-flex items-center space-x-1.5 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                <a href="${signupUrl}" class="inline-flex items-center space-x-1.5 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
                     <span>Sign up</span>
                 </a>
             `;
-            if (mobileAuthArea) {
-                mobileAuthArea.innerHTML = `
-                    <div class="flex items-center space-x-3 pt-2">
-                        <a href="${loginUrl}" class="flex-1 text-center py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-accord-slate">Log in</a>
-                        <a href="${signupUrl}" class="flex-1 text-center py-2.5 rounded-xl bg-accord-blue text-white text-xs font-semibold shadow-sm">Sign up</a>
-                    </div>
-                `;
-            }
         } else {
             let profile = null;
             try {
                 const { data, error } = await client
                     .from('profiles')
-                    .select('id, full_name, account_type, upgrade_status')
+                    .select('id, full_name, handle, account_type, upgrade_status')
                     .eq('id', user.id)
                     .maybeSingle();
                 if (!error) profile = data || null;
@@ -257,8 +265,9 @@ async function initGlobalHeaderAuth() {
 
                     <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
                         <div class="px-4 py-3 border-b border-slate-100">
-                            <p class="text-xs font-bold text-accord-slate truncate">${escapeHeaderHtml(email)}</p>
-                            <p class="text-[10px] text-accord-muted">${roleLabel}</p>
+                            <p class="text-xs font-bold text-accord-slate truncate">${escapeHeaderHtml(profile?.full_name || email)}</p>
+                            ${profile?.handle ? `<p class="text-[11px] font-semibold text-accord-blue truncate">${escapeHeaderHtml(profile.handle)}</p>` : ''}
+                            <p class="text-[10px] text-accord-muted truncate">${roleLabel}</p>
                         </div>
                         <div class="py-1">
                             <a href="user.html?id=${encodeURIComponent(user.id)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
@@ -293,17 +302,8 @@ async function initGlobalHeaderAuth() {
                 </div>
             `;
 
-            if (mobileAuthArea) {
-                mobileAuthArea.innerHTML = `
-                    <div class="space-y-2">
-                        <a href="user.html?id=${encodeURIComponent(user.id)}" class="block text-base font-medium text-accord-slate">My Public Profile</a>
-                        <a href="messages.html" class="block text-base font-medium text-accord-slate">Messages</a>
-                        <a href="profile.html" class="block text-base font-medium text-accord-slate">Edit Profile</a>
-                        ${isAdmin ? '<a href="feed-admin.html" class="block text-base font-medium text-accord-slate">Admin Moderation</a>' : ''}
-                        ${isSuperadmin ? '<a href="Superadmin.html" class="block text-base font-medium text-accord-slate">Superadmin Portal</a>' : ''}
-                        <button onclick="handleGlobalSignOut()" class="text-base font-medium text-red-600 text-left">Log out</button>
-                    </div>
-                `;
+            if (profile && !profile.handle && !isSignInPage) {
+                promptMissingHandleOnboarding(user, profile);
             }
 
             await Promise.all([
@@ -605,9 +605,115 @@ window.addEventListener('click', () => {
     document.getElementById('notifications-dropdown')?.classList.add('hidden');
 });
 
-function toggleGlobalMobileMenu() {
-    const menu = document.getElementById('global-mobile-menu');
-    if (menu) menu.classList.toggle('hidden');
+window.normalizeAccordHandle = function (raw) {
+    const cleaned = String(raw || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+    return cleaned ? `@${cleaned}` : '';
+};
+
+window.isValidAccordHandle = function (handle) {
+    return /^@[a-z0-9_]{3,30}$/.test(String(handle || ''));
+};
+
+function promptMissingHandleOnboarding(user, profile) {
+    if (!user || document.getElementById('accord-handle-onboarding-modal')) return;
+    const suggested = window.normalizeAccordHandle(profile?.full_name || user.email?.split('@')[0] || '');
+    const modal = document.createElement('div');
+    modal.id = 'accord-handle-onboarding-modal';
+    modal.className = 'fixed inset-0 z-[70] bg-accord-slate/75 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-4">
+            <div class="space-y-1">
+                <span class="inline-block px-2.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue text-[10px] font-bold uppercase tracking-wider">Account Setup</span>
+                <h2 class="text-xl font-bold text-accord-slate">Choose Your Unique @Handle</h2>
+                <p class="text-xs text-accord-muted leading-relaxed">Every Accord account has a unique handle starting with <strong>@</strong> so others can find and mention you.</p>
+            </div>
+            <form id="handle-onboarding-form" class="space-y-3">
+                <div>
+                    <label for="onboarding-handle-input" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Your Handle</label>
+                    <div class="relative">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-accord-blue">@</span>
+                        <input type="text" id="onboarding-handle-input" required minlength="3" maxlength="30" value="${escapeHeaderHtml(suggested.replace(/^@/, ''))}" placeholder="your_handle" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <p id="onboarding-handle-status" class="text-[11px] text-accord-muted mt-1.5">Letters, numbers, and underscores only (3–30 characters).</p>
+                </div>
+                <button type="submit" id="onboarding-handle-submit" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                    Save Handle &amp; Continue
+                </button>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const inputEl = document.getElementById('onboarding-handle-input');
+    const statusEl = document.getElementById('onboarding-handle-status');
+    const formEl = document.getElementById('handle-onboarding-form');
+    const submitBtn = document.getElementById('onboarding-handle-submit');
+    let checkTimer = null;
+
+    inputEl?.addEventListener('input', () => {
+        const clean = inputEl.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+        if (inputEl.value !== clean) inputEl.value = clean;
+        const fullHandle = `@${clean}`;
+        clearTimeout(checkTimer);
+        if (!window.isValidAccordHandle(fullHandle)) {
+            statusEl.textContent = 'Use 3–30 letters, numbers, or underscores.';
+            statusEl.className = 'text-[11px] text-amber-600 mt-1.5';
+            return;
+        }
+        statusEl.textContent = `Checking ${fullHandle}...`;
+        statusEl.className = 'text-[11px] text-accord-muted mt-1.5';
+        checkTimer = setTimeout(async () => {
+            const { data: available } = await window.supabaseClient.rpc('is_handle_available', {
+                candidate: fullHandle,
+                exclude_user_id: user.id
+            });
+            if (available) {
+                statusEl.textContent = `${fullHandle} is available!`;
+                statusEl.className = 'text-[11px] text-emerald-600 font-semibold mt-1.5';
+            } else {
+                statusEl.textContent = `${fullHandle} is already taken. Try another.`;
+                statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1.5';
+            }
+        }, 250);
+    });
+
+    formEl?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fullHandle = window.normalizeAccordHandle(inputEl?.value || '');
+        if (!window.isValidAccordHandle(fullHandle)) {
+            statusEl.textContent = 'Please enter a valid handle (3–30 letters, numbers, or underscores).';
+            statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1.5';
+            return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+        const { data: available } = await window.supabaseClient.rpc('is_handle_available', {
+            candidate: fullHandle,
+            exclude_user_id: user.id
+        });
+        if (!available) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Handle & Continue';
+            statusEl.textContent = `${fullHandle} is already taken. Please choose another.`;
+            statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1.5';
+            return;
+        }
+        const { error } = await window.supabaseClient
+            .from('profiles')
+            .update({ handle: fullHandle })
+            .eq('id', user.id);
+        if (error) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Handle & Continue';
+            statusEl.textContent = error.message || 'Could not save handle.';
+            statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1.5';
+            return;
+        }
+        modal.remove();
+        if (typeof window.refreshGlobalHeaderAuth === 'function') {
+            window.refreshGlobalHeaderAuth();
+        }
+    });
 }
 
 async function handleGlobalSignOut() {

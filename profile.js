@@ -76,7 +76,7 @@ async function loadUserProfileData() {
 
     let { data: profile } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, bio, account_type, upgrade_status, upgrade_pitch')
+        .select('id, email, full_name, handle, bio, account_type, upgrade_status, upgrade_pitch')
         .eq('id', currentProfileUser.id)
         .maybeSingle();
 
@@ -84,6 +84,8 @@ async function loadUserProfileData() {
     const resolvedName = profile?.full_name || metaName || currentProfileUser.email.split('@')[0];
 
     if (nameInput) nameInput.value = resolvedName;
+    const handleInput = document.getElementById('profile-handle');
+    if (handleInput) handleInput.value = (profile?.handle || '').replace(/^@+/, '');
     const bioInput = document.getElementById('profile-bio-input');
     if (bioInput) bioInput.value = profile?.bio || '';
     const publicLink = document.getElementById('view-public-profile-btn');
@@ -115,18 +117,61 @@ async function loadUserProfileData() {
     applyMinistryVerificationUI(profile);
 }
 
+let profileHandleCheckTimer = null;
+function handleProfileHandleInput(inputEl) {
+    const clean = inputEl.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+    if (inputEl.value !== clean) inputEl.value = clean;
+    const statusEl = document.getElementById('profile-handle-status');
+    if (!statusEl) return;
+    const candidate = clean ? `@${clean}` : '';
+    clearTimeout(profileHandleCheckTimer);
+    if (!/^@[a-z0-9_]{3,30}$/.test(candidate)) {
+        statusEl.textContent = 'Use 3–30 letters, numbers, or underscores.';
+        statusEl.className = 'text-[11px] text-amber-600 mt-1';
+        return;
+    }
+    if (currentUserProfile?.handle && currentUserProfile.handle.toLowerCase() === candidate.toLowerCase()) {
+        statusEl.textContent = `${candidate} is your current handle.`;
+        statusEl.className = 'text-[11px] text-accord-muted mt-1';
+        return;
+    }
+    statusEl.textContent = `Checking ${candidate}...`;
+    statusEl.className = 'text-[11px] text-accord-muted mt-1';
+    profileHandleCheckTimer = setTimeout(async () => {
+        const { data: available } = await supabaseClient.rpc('is_handle_available', {
+            candidate,
+            exclude_user_id: currentProfileUser?.id || null
+        });
+        if (available) {
+            statusEl.textContent = `${candidate} is available!`;
+            statusEl.className = 'text-[11px] text-emerald-600 font-semibold mt-1';
+        } else {
+            statusEl.textContent = `${candidate} is already taken. Try another.`;
+            statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1';
+        }
+    }, 250);
+}
+
 async function handleProfileUpdate(e) {
     e.preventDefault();
     if (!currentProfileUser) return;
 
     const nameInput = document.getElementById('profile-name');
+    const handleInput = document.getElementById('profile-handle');
     const bioInput = document.getElementById('profile-bio-input');
     const saveBtn = document.getElementById('profile-save-btn');
     const fullName = nameInput?.value.trim() || '';
+    const rawHandle = (handleInput?.value || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+    const handle = rawHandle ? `@${rawHandle}` : '';
     const bio = bioInput?.value.trim() || '';
 
     if (!fullName) {
         showToast('Please enter your full name.');
+        return;
+    }
+
+    if (!/^@[a-z0-9_]{3,30}$/.test(handle)) {
+        showToast('Please enter a valid @handle (3–30 letters, numbers, or underscores).');
         return;
     }
 
@@ -135,9 +180,22 @@ async function handleProfileUpdate(e) {
         saveBtn.textContent = 'Saving Changes...';
     }
 
+    const { data: available, error: availErr } = await supabaseClient.rpc('is_handle_available', {
+        candidate: handle,
+        exclude_user_id: currentProfileUser.id
+    });
+    if (!availErr && available === false) {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Profile Changes';
+        }
+        showToast(`Handle ${handle} is already in use by another account.`);
+        return;
+    }
+
     const [authRes, profileRes] = await Promise.all([
         supabaseClient.auth.updateUser({
-            data: { full_name: fullName }
+            data: { full_name: fullName, handle }
         }),
         supabaseClient
             .from('profiles')
@@ -145,6 +203,7 @@ async function handleProfileUpdate(e) {
                 id: currentProfileUser.id,
                 email: currentProfileUser.email,
                 full_name: fullName,
+                handle,
                 bio
             }, { onConflict: 'id' })
     ]);
@@ -155,12 +214,14 @@ async function handleProfileUpdate(e) {
     }
 
     if (authRes.error || profileRes.error) {
-        showToast(authRes.error?.message || profileRes.error?.message || 'Could not update profile.');
+        const errMsg = authRes.error?.message || profileRes.error?.message || 'Could not update profile.';
+        showToast(/unique|duplicate/i.test(errMsg) ? `Handle ${handle} is already taken.` : errMsg);
         return;
     }
 
     if (currentUserProfile) {
         currentUserProfile.full_name = fullName;
+        currentUserProfile.handle = handle;
     }
 
     const authNavLabel = document.getElementById('auth-nav-label');

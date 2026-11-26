@@ -170,7 +170,7 @@ function renderSavedPages() {
             const card = document.createElement('div');
             card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between";
             card.innerHTML = `
-                <div onclick="window.location.href='testimony.html?id=${t.id}'" class="cursor-pointer space-y-3">
+                <div onclick="window.location.href='post.html?legacy_testimony=${t.id}'" class="cursor-pointer space-y-3">
                     <div class="flex items-center justify-between gap-2">
                         <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">${escapeHTML(t.category)}</span>
                         <span class="text-[10px] font-semibold text-accord-muted shrink-0">${new Date(t.created_at).toLocaleDateString()}</span>
@@ -180,7 +180,7 @@ function renderSavedPages() {
                     <p class="text-xs text-accord-muted leading-relaxed line-clamp-3">${escapeHTML(t.body)}</p>
                 </div>
                 <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
-                    <a href="testimony.html?id=${t.id}" class="text-accord-blue hover:underline">Read Full Testimony</a>
+                    <a href="post.html?legacy_testimony=${t.id}" class="text-accord-blue hover:underline">Read Full Testimony</a>
                     <button onclick="removeTestimonyBookmark(${t.id})" class="text-red-500 hover:text-red-600" title="Remove"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             `;

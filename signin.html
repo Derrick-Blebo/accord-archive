@@ -111,6 +111,14 @@
                     <label for="auth-name" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
                     <input type="text" id="auth-name" autocomplete="name" placeholder="e.g., Grace Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                 </div>
+                <div id="auth-handle-field" class="hidden">
+                    <label for="auth-handle" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Unique Handle</label>
+                    <div class="relative">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-accord-blue">@</span>
+                        <input type="text" id="auth-handle" minlength="3" maxlength="30" autocomplete="username" oninput="handleSignUpHandleInput(this)" placeholder="grace_mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <p id="auth-handle-status" class="text-[11px] text-accord-muted mt-1">Required. Letters, numbers, and underscores (3–30 chars).</p>
+                </div>
                 <div>
                     <label for="auth-email" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
                     <input type="email" id="auth-email" required autocomplete="email" placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
@@ -295,6 +303,8 @@
             const submitBtn = document.getElementById('auth-submit-btn');
             const nameField = document.getElementById('auth-name-field');
             const nameInput = document.getElementById('auth-name');
+            const handleField = document.getElementById('auth-handle-field');
+            const handleInput = document.getElementById('auth-handle');
             const passwordInput = document.getElementById('auth-password');
             const passwordHint = document.getElementById('password-hint');
             const forgotBtn = document.getElementById('forgot-password-btn');
@@ -305,6 +315,8 @@
                 submitBtn.textContent = 'Create Account';
                 nameField?.classList.remove('hidden');
                 if (nameInput) nameInput.required = true;
+                handleField?.classList.remove('hidden');
+                if (handleInput) handleInput.required = true;
                 if (passwordInput) passwordInput.autocomplete = 'new-password';
                 passwordHint?.classList.remove('hidden');
                 forgotBtn?.classList.add('hidden');
@@ -314,6 +326,8 @@
                 submitBtn.textContent = 'Sign In to Account';
                 nameField?.classList.add('hidden');
                 if (nameInput) nameInput.required = false;
+                handleField?.classList.add('hidden');
+                if (handleInput) handleInput.required = false;
                 if (passwordInput) passwordInput.autocomplete = 'current-password';
                 passwordHint?.classList.add('hidden');
                 forgotBtn?.classList.remove('hidden');
@@ -387,6 +401,38 @@
             }
         }
 
+        let signUpHandleCheckTimer = null;
+        function normalizeSignUpHandle(raw) {
+            const clean = String(raw || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+            return clean ? `@${clean}` : '';
+        }
+
+        function handleSignUpHandleInput(inputEl) {
+            const clean = inputEl.value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
+            if (inputEl.value !== clean) inputEl.value = clean;
+            const statusEl = document.getElementById('auth-handle-status');
+            if (!statusEl) return;
+            const candidate = clean ? `@${clean}` : '';
+            clearTimeout(signUpHandleCheckTimer);
+            if (!/^@[a-z0-9_]{3,30}$/.test(candidate)) {
+                statusEl.textContent = 'Use 3–30 letters, numbers, or underscores.';
+                statusEl.className = 'text-[11px] text-amber-600 mt-1';
+                return;
+            }
+            statusEl.textContent = `Checking ${candidate}...`;
+            statusEl.className = 'text-[11px] text-accord-muted mt-1';
+            signUpHandleCheckTimer = setTimeout(async () => {
+                const { data: available } = await supabaseClient.rpc('is_handle_available', { candidate });
+                if (available) {
+                    statusEl.textContent = `${candidate} is available!`;
+                    statusEl.className = 'text-[11px] text-emerald-600 font-semibold mt-1';
+                } else {
+                    statusEl.textContent = `${candidate} is already taken. Try another.`;
+                    statusEl.className = 'text-[11px] text-red-600 font-semibold mt-1';
+                }
+            }, 250);
+        }
+
         async function handleAuthSubmit(e) {
             e.preventDefault();
             clearAuthAlert();
@@ -394,10 +440,17 @@
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value;
             const fullName = document.getElementById('auth-name')?.value.trim() || '';
+            const rawHandle = document.getElementById('auth-handle')?.value || '';
+            const userHandle = normalizeSignUpHandle(rawHandle);
             const submitBtn = document.getElementById('auth-submit-btn');
 
             if (isSignUpMode && !fullName) {
                 showAuthAlert('Please enter your full name to create an account.', 'error');
+                return;
+            }
+
+            if (isSignUpMode && !/^@[a-z0-9_]{3,30}$/.test(userHandle)) {
+                showAuthAlert('Please choose a valid @handle (3–30 letters, numbers, or underscores).', 'error');
                 return;
             }
 
@@ -410,11 +463,19 @@
             submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Processing...';
 
             if (isSignUpMode) {
+                const { data: handleAvailable, error: handleCheckErr } = await supabaseClient.rpc('is_handle_available', { candidate: userHandle });
+                if (!handleCheckErr && handleAvailable === false) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Account';
+                    showAuthAlert(`The handle ${userHandle} is already taken. Please choose another.`, 'error');
+                    return;
+                }
+
                 const { data, error } = await supabaseClient.auth.signUp({
                     email,
                     password,
                     options: {
-                        data: { full_name: fullName },
+                        data: { full_name: fullName, handle: userHandle },
                         emailRedirectTo: `${window.location.origin}/signin.html`
                     }
                 });
@@ -437,7 +498,7 @@
                 }
 
                 if (data?.session) {
-                    await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName);
+                    await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName, userHandle);
                     showToast(`Welcome to Accord Archive, ${fullName}!`);
                     setTimeout(() => { window.location.href = nextUrl; }, 900);
                     return;

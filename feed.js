@@ -8,6 +8,10 @@ let myRepostedPostIds = new Set();
 let likedPostIds = new Set();
 let commentCountsByPost = {};
 let revokedAuthorIds = new Set();
+let viewedPostIds = new Set();
+let initialViewedPostIds = new Set(); // Snapshot at load/tab switch so feed doesn't jump mid-scroll
+let authorHandlesById = {};
+let feedViewObserver = null;
 let feedSearchQuery = '';
 let feedSearchScope = 'all'; // 'all' | 'people' | 'posts'
 let feedPeopleResults = [];
@@ -63,7 +67,7 @@ async function initFeedSession() {
 
         const { data: profile } = await supabaseClient
             .from('profiles')
-            .select('id, full_name, email, account_type, upgrade_status')
+            .select('id, full_name, handle, email, account_type, upgrade_status')
             .eq('id', currentUser.id)
             .maybeSingle();
 
@@ -145,21 +149,20 @@ async function loadFeedPosts() {
         supabaseClient.from('post_comments').select('post_id'),
         supabaseClient
             .from('post_reposts')
-            .select('id, post_id, user_id, quote_text, created_at, profiles(id, full_name, account_type, upgrade_status)')
+            .select('id, post_id, user_id, quote_text, created_at, profiles(id, full_name, handle, account_type, upgrade_status)')
             .order('created_at', { ascending: false })
             .limit(120),
-        supabaseClient.from('testimonies').select('*').eq('is_approved', true).order('created_at', { ascending: false }),
-        supabaseClient.from('testimony_comments').select('testimony_id'),
         supabaseClient.from('profiles').select('id').eq('upgrade_status', 'revoked')
     ];
 
     if (currentUser?.id) {
         requests.push(
-            supabaseClient.from('account_follows').select('following_id').eq('follower_id', currentUser.id)
+            supabaseClient.from('account_follows').select('following_id').eq('follower_id', currentUser.id),
+            supabaseClient.from('post_views').select('post_id').eq('user_id', currentUser.id)
         );
     }
 
-    const [postsRes, likesRes, commentsRes, repostsRes, testimoniesRes, testimonyCommentsRes, revokedRes, followsRes] = await Promise.all(requests);
+    const [postsRes, likesRes, commentsRes, repostsRes, revokedRes, followsRes, viewsRes] = await Promise.all(requests);
 
     if (postsRes.error) {
         streamContainer.innerHTML = `
@@ -172,27 +175,21 @@ async function loadFeedPosts() {
     }
 
     revokedAuthorIds = new Set((!revokedRes?.error && revokedRes?.data ? revokedRes.data : []).map(r => String(r.id)));
-    const feedPostRows = (postsRes.data || [])
-        .filter(p => !p.author_id || !revokedAuthorIds.has(String(p.author_id)))
-        .map(p => ({ ...p, _source: 'feed_posts' }));
-    const testimonyRows = (!testimoniesRes?.error && testimoniesRes?.data ? testimoniesRes.data : []).map(t => ({
-        id: `testimony_${t.id}`,
-        _rawId: t.id,
-        _source: 'testimonies',
-        post_type: 'testimony',
-        title: t.title,
-        body: t.body,
-        author_name: t.author_name || 'Anonymous',
-        author_id: null,
-        author_role: null,
-        is_anonymous: !t.author_name || t.author_name.toLowerCase() === 'anonymous',
-        media_url: null,
-        likes_count: Number(t.likes_count) || 0,
-        reposts_count: 0,
-        created_at: t.created_at
-    }));
+    allFeedPosts = (postsRes.data || [])
+        .filter(p => !p.author_id || !revokedAuthorIds.has(String(p.author_id)));
 
-    allFeedPosts = [...feedPostRows, ...testimonyRows];
+    const authorIds = [...new Set(allFeedPosts.map(p => p.author_id).filter(Boolean))];
+    authorHandlesById = {};
+    if (authorIds.length > 0) {
+        const { data: authorProfiles } = await supabaseClient
+            .from('profiles')
+            .select('id, handle')
+            .in('id', authorIds);
+        (authorProfiles || []).forEach(ap => {
+            if (ap.handle) authorHandlesById[String(ap.id)] = ap.handle;
+        });
+    }
+
     allReposts = (!repostsRes?.error && repostsRes?.data) ? repostsRes.data : [];
     followingIds = new Set((followsRes?.data || []).map(f => String(f.following_id)));
     myRepostedPostIds = new Set(
@@ -201,19 +198,16 @@ async function loadFeedPosts() {
             : []
     );
 
-    const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
-    likedPostIds = new Set([
-        ...(likesRes.data || []).map(l => String(l.post_id)),
-        ...amenedIds.map(id => `testimony_${id}`)
-    ]);
+    const localViewed = JSON.parse(localStorage.getItem('accord_viewed_post_ids') || '[]').map(String);
+    const dbViewed = (!viewsRes?.error && viewsRes?.data ? viewsRes.data : []).map(v => String(v.post_id));
+    viewedPostIds = new Set([...localViewed, ...dbViewed]);
+    initialViewedPostIds = new Set(viewedPostIds);
+
+    likedPostIds = new Set((likesRes.data || []).map(l => String(l.post_id)));
 
     commentCountsByPost = {};
     (commentsRes.data || []).forEach(c => {
         const key = String(c.post_id);
-        commentCountsByPost[key] = (commentCountsByPost[key] || 0) + 1;
-    });
-    (!testimonyCommentsRes?.error && testimonyCommentsRes?.data ? testimonyCommentsRes.data : []).forEach(c => {
-        const key = `testimony_${c.testimony_id}`;
         commentCountsByPost[key] = (commentCountsByPost[key] || 0) + 1;
     });
 
@@ -264,6 +258,8 @@ function buildRankedFeedItems() {
 
     const now = Date.now();
     items.forEach(item => {
+        const isViewed = initialViewedPostIds.has(String(item.post.id));
+        const unseenBonus = isViewed ? 0 : 100000;
         const isFollowedActor = Boolean(item.actorId && followingIds.has(String(item.actorId)));
         const ageHours = Math.max(0, (now - item.timestamp) / 3600000);
         const engagement =
@@ -271,11 +267,63 @@ function buildRankedFeedItems() {
             (commentCountsByPost[String(item.post.id)] || 0) * 3 +
             (Number(item.post.reposts_count) || 0) * 4;
         const recencyScore = Math.max(0, 500 - ageHours * 1.5);
-        item.score = (isFollowedActor ? 10000 : 0) + recencyScore + Math.min(200, engagement);
+        item.score = unseenBonus + (isFollowedActor ? 10000 : 0) + recencyScore + Math.min(200, engagement);
     });
 
     items.sort((a, b) => b.score - a.score || b.timestamp - a.timestamp);
     return items;
+}
+
+function markPostAsViewed(postId) {
+    const idStr = String(postId || '');
+    if (!idStr || viewedPostIds.has(idStr)) return;
+    viewedPostIds.add(idStr);
+
+    try {
+        const existing = JSON.parse(localStorage.getItem('accord_viewed_post_ids') || '[]').map(String);
+        if (!existing.includes(idStr)) {
+            const updated = [...existing.slice(-499), idStr];
+            localStorage.setItem('accord_viewed_post_ids', JSON.stringify(updated));
+        }
+    } catch (e) {}
+
+    if (currentUser?.id) {
+        supabaseClient
+            .from('post_views')
+            .upsert({ user_id: currentUser.id, post_id: postId, viewed_at: new Date().toISOString() }, { onConflict: 'user_id,post_id' })
+            .then(() => {});
+    }
+}
+
+function setupFeedViewObserver() {
+    if (feedViewObserver) {
+        feedViewObserver.disconnect();
+    }
+    if (typeof IntersectionObserver === 'undefined') return;
+    const timers = new Map();
+    feedViewObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const postId = entry.target.getAttribute('data-post-id');
+            if (!postId) return;
+            if (entry.isIntersecting) {
+                if (!timers.has(postId)) {
+                    const t = setTimeout(() => {
+                        markPostAsViewed(postId);
+                        feedViewObserver?.unobserve(entry.target);
+                        timers.delete(postId);
+                    }, 900);
+                    timers.set(postId, t);
+                }
+            } else if (timers.has(postId)) {
+                clearTimeout(timers.get(postId));
+                timers.delete(postId);
+            }
+        });
+    }, { threshold: 0.45 });
+
+    document.querySelectorAll('#feed-stream article[data-post-id]').forEach(el => {
+        feedViewObserver.observe(el);
+    });
 }
 
 function renderFeedStream() {
@@ -307,6 +355,7 @@ function renderFeedStream() {
         streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
     });
     hydrateFeedBookLinkPreviews();
+    setupFeedViewObserver();
 }
 
 function extractBookIdFromText(text) {
@@ -414,8 +463,8 @@ async function searchFeedPeople(query) {
     const safePattern = `%${query.replace(/[%_]/g, '')}%`;
     const { data, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, bio, account_type, upgrade_status, ministry_role')
-        .or(`full_name.ilike.${safePattern},bio.ilike.${safePattern},ministry_role.ilike.${safePattern}`)
+        .select('id, full_name, handle, bio, account_type, upgrade_status, ministry_role')
+        .or(`full_name.ilike.${safePattern},handle.ilike.${safePattern},bio.ilike.${safePattern},ministry_role.ilike.${safePattern}`)
         .neq('upgrade_status', 'revoked')
         .limit(12);
 
@@ -473,8 +522,9 @@ function renderPeopleSearchResults() {
                         ${verified ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
                     </div>
                     <div class="min-w-0">
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center gap-1.5 flex-wrap">
                             <p class="text-xs sm:text-sm font-bold text-accord-slate truncate">${escapeHtml(name)}</p>
+                            ${person.handle ? `<span class="text-[11px] font-semibold text-accord-blue truncate">${escapeHtml(person.handle)}</span>` : ''}
                             ${verified ? `<span class="text-[10px] font-bold text-accord-blue bg-accord-lightBlue px-2 py-0.5 rounded-full shrink-0">Verified</span>` : ''}
                         </div>
                         <p class="text-[11px] text-accord-muted truncate">${escapeHtml(person.bio || roleLabel)}</p>
@@ -561,221 +611,20 @@ function formatFeedTimeAgo(dateStr) {
 }
 
 function getFeedPostDetailUrl(post) {
-    if (post._source === 'testimonies') {
-        return `${window.location.origin}/testimony.html?id=${encodeURIComponent(post._rawId)}`;
-    }
     return getPostShareUrl(post.id);
 }
 
 function renderFeedCard(post, repost = null) {
-    const card = document.createElement('article');
-    card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
-
-    const postUrl = getFeedPostDetailUrl(post);
-    const isTestimonyTable = post._source === 'testimonies';
-    const isLiked = likedPostIds.has(String(post.id));
-    const isReposted = myRepostedPostIds.has(String(post.id));
-    const likesCount = Number(post.likes_count) || 0;
-    const repostsCount = Number(post.reposts_count) || 0;
-    const commentsCount = commentCountsByPost[String(post.id)] || 0;
-    const dateFormatted = formatFeedTimeAgo(post.created_at);
-
-    const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
-    const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
-    const authorProfileUrl = (!post.is_anonymous && post.author_id)
-        ? `user.html?id=${encodeURIComponent(post.author_id)}`
-        : null;
-
-    let repostBannerHtml = '';
-    if (repost) {
-        const reposterName = repost.profiles?.full_name || 'Member';
-        const reposterUrl = `user.html?id=${encodeURIComponent(repost.user_id)}`;
-        const quoteHtml = repost.quote_text
-            ? `<p class="text-xs italic text-slate-700 bg-slate-50 border-l-2 border-emerald-500 pl-3 py-1.5 rounded-r-lg mt-1.5">"${escapeHtml(repost.quote_text)}"</p>`
-            : '';
-        repostBannerHtml = `
-            <div class="px-4 pt-3 pb-2 border-b border-slate-100">
-                <a href="${escapeHtml(reposterUrl)}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-emerald-700">
-                    <i class="fa-solid fa-retweet text-emerald-600"></i>
-                    <span><strong class="text-slate-900">${escapeHtml(reposterName)}</strong> reposted</span>
-                </a>
-                ${quoteHtml}
-            </div>
-        `;
-    }
-
-    const avatarInner = `
-        <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
-            <span>${escapeHtml(displayAuthor.charAt(0).toUpperCase())}</span>
-            ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
-        </div>
-    `;
-
-    const authorAvatarHtml = authorProfileUrl
-        ? `<a href="${escapeHtml(authorProfileUrl)}" class="shrink-0 hover:opacity-90 transition-opacity">${avatarInner}</a>`
-        : avatarInner;
-
-    const authorNameHtml = authorProfileUrl
-        ? `<a href="${escapeHtml(authorProfileUrl)}" class="text-[14px] font-bold text-slate-900 hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
-        : `<span class="text-[14px] font-bold text-slate-900 truncate">${escapeHtml(displayAuthor)}</span>`;
-
-    const typeMeta = getPostTypeMeta(post.post_type);
-    let mediaHtml = '';
-
-    if (post.post_type === 'video' && post.media_url) {
-        const embedUrl = getYouTubeEmbedUrl(post.media_url);
-        mediaHtml = `
-            <div class="relative w-full aspect-video bg-black">
-                <iframe src="${escapeHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
-            </div>
-        `;
-    } else if (post.post_type === 'audio' && post.media_url) {
-        const isDirectAudio = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(post.media_url);
-        mediaHtml = isDirectAudio
-            ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                   <audio controls src="${escapeHtml(post.media_url)}" class="w-full"></audio>
-               </div>`
-            : `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5">
-                   <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                       <i class="fa-solid fa-podcast text-lg"></i>
-                   </div>
-                   <div class="flex-grow min-w-0">
-                       <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
-                       <a href="${escapeHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</a>
-                   </div>
-               </div>`;
-    }
-
-    const bodyText = String(post.body || '');
-    const isLongBody = bodyText.length > 260;
-    const shortBody = isLongBody ? bodyText.slice(0, 260).trim() + '...' : bodyText;
-    const linkedBookId = extractBookIdFromText(bodyText);
-
     const myAvatarInitial = (currentProfile?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase();
-
-    card.innerHTML = `
-        ${repostBannerHtml}
-
-        <!-- Facebook-Style Card Header -->
-        <div class="px-4 pt-3.5 pb-2 flex items-start justify-between gap-3">
-            <div class="flex items-center space-x-2.5 min-w-0">
-                ${authorAvatarHtml}
-                <div class="min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        ${authorNameHtml}
-                        ${isVerifiedAuthor ? '<i class="fa-solid fa-circle-check text-accord-blue text-xs" title="Verified Ministry / Minister"></i>' : ''}
-                    </div>
-                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
-                        <span>${dateFormatted}</span>
-                        <span>·</span>
-                        <span class="inline-flex items-center gap-1 font-semibold ${post.post_type === 'testimony' ? 'text-rose-600' : post.post_type === 'video' ? 'text-accord-blue' : post.post_type === 'audio' ? 'text-accord-gold' : 'text-emerald-600'}">
-                            <i class="fa-solid ${typeMeta.icon} text-[10px]"></i>
-                            <span>${typeMeta.label}</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3-Dots More Menu -->
-            <div class="relative shrink-0">
-                <button type="button" onclick="toggleFeedPostMenu(event, '${post.id}')" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors" aria-label="Post options">
-                    <i class="fa-solid fa-ellipsis text-sm"></i>
-                </button>
-                <div id="feed-post-menu-${post.id}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 top-9 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
-                    <a href="${escapeHtml(postUrl)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
-                        <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
-                        <span>Open Full Post</span>
-                    </a>
-                    <button type="button" onclick="closeAllFeedPostMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
-                        <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
-                        <span>Send to Chat</span>
-                    </button>
-                    <button type="button" onclick="closeAllFeedPostMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
-                        <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
-                        <span>Copy Link / Share</span>
-                    </button>
-                    ${!isTestimonyTable ? `
-                    <button type="button" onclick="closeAllFeedPostMenus(); openReportModal('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
-                        <i class="fa-regular fa-flag w-3.5 text-center"></i>
-                        <span>Flag Post</span>
-                    </button>` : ''}
-                </div>
-            </div>
-        </div>
-
-        <!-- Post Content -->
-        <div class="px-4 pb-3 space-y-1.5">
-            ${post.title ? `<a href="${escapeHtml(postUrl)}" class="block text-[15px] font-bold text-slate-900 hover:text-accord-blue leading-snug">${escapeHtml(post.title)}</a>` : ''}
-            <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeHtml(shortBody)}</p>
-            ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
-        </div>
-
-        ${mediaHtml}
-        ${linkedBookId ? `<div class="feed-book-link-preview mx-4 mb-3" data-book-id="${escapeHtml(linkedBookId)}"></div>` : ''}
-
-        <!-- Engagement Summary Row (Facebook Style) -->
-        <div class="px-4 py-2 flex items-center justify-between text-xs text-slate-500">
-            <div class="flex items-center gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px]">
-                    <i class="fa-solid fa-heart"></i>
-                </span>
-                <span id="like-count-${post.id}">${likesCount}</span>
-            </div>
-            <div class="flex items-center gap-3">
-                <button type="button" onclick="toggleInlineComments('${post.id}')" class="hover:underline">
-                    <span id="comment-count-${post.id}">${commentsCount}</span> ${commentsCount === 1 ? 'comment' : 'comments'}
-                </button>
-                ${!isTestimonyTable ? `<span>${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>` : ''}
-            </div>
-        </div>
-
-        <!-- Facebook-Style Action Bar -->
-        <div class="mx-4 border-t border-slate-200/80 py-1 grid ${isTestimonyTable ? 'grid-cols-3' : 'grid-cols-4'} gap-1">
-            <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isLiked ? 'text-rose-600' : 'text-slate-600'}">
-                <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm"></i>
-                <span>Like</span>
-            </button>
-
-            <button type="button" onclick="toggleInlineComments('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
-                <i class="fa-regular fa-comment text-sm"></i>
-                <span>Comment</span>
-            </button>
-
-            ${!isTestimonyTable ? `
-            <button type="button" onclick="handleRepostClick('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isReposted ? 'text-emerald-600' : 'text-slate-600'}">
-                <i class="fa-solid fa-retweet text-sm"></i>
-                <span>Repost</span>
-            </button>` : ''}
-
-            <button type="button" onclick="handleShareClick('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
-                <i class="fa-solid fa-share text-sm"></i>
-                <span>Share</span>
-            </button>
-        </div>
-
-        <!-- Facebook-Style Inline Comment Section -->
-        <div id="inline-comments-${post.id}" class="hidden border-t border-slate-200/80 px-4 py-3 space-y-3 bg-white rounded-b-xl sm:rounded-b-2xl">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
-                    ${escapeHtml(myAvatarInitial)}
-                </div>
-                <form onsubmit="submitInlineComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                    <input type="text" id="inline-comment-input-${post.id}" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
-                    <button type="submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
-                        <i class="fa-solid fa-paper-plane"></i>
-                    </button>
-                </form>
-            </div>
-            <div id="inline-comments-list-${post.id}" class="space-y-2.5">
-                <p class="text-xs text-slate-400 text-center py-2">Loading comments...</p>
-            </div>
-            <div class="pt-1">
-                <a href="${escapeHtml(postUrl)}#comments-section" class="text-xs font-semibold text-slate-500 hover:underline">Open full post &amp; all comments →</a>
-            </div>
-        </div>
-    `;
-
-    return card;
+    return createSharedFeedCardElement(post, {
+        repost,
+        isLiked: likedPostIds.has(String(post.id)),
+        isReposted: myRepostedPostIds.has(String(post.id)),
+        commentsCount: commentCountsByPost[String(post.id)] || 0,
+        myAvatarInitial,
+        authorHandle: post.author_id ? (authorHandlesById[String(post.author_id)] || '') : '',
+        reposterHandle: repost?.profiles?.handle || ''
+    });
 }
 
 function closeAllFeedPostMenus() {
@@ -827,83 +676,39 @@ async function loadInlineComments(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!listEl || !post) return;
 
-    let comments = [];
-    if (post._source === 'testimonies') {
-        const { data } = await supabaseClient
-            .from('testimony_comments')
-            .select('id, author_name, comment_text, created_at')
-            .eq('testimony_id', post._rawId)
-            .order('created_at', { ascending: true })
-            .limit(30);
-        comments = (data || []).map(c => ({
-            author_name: c.author_name || 'Member',
-            text: c.comment_text,
-            created_at: c.created_at
-        }));
-    } else {
-        const { data } = await supabaseClient
-            .from('post_comments')
-            .select('id, author_name, comment_text, created_at')
-            .eq('post_id', post.id)
-            .order('created_at', { ascending: true })
-            .limit(30);
-        comments = (data || []).map(c => ({
-            author_name: c.author_name || 'Member',
-            text: c.comment_text,
-            created_at: c.created_at
-        }));
-    }
+    const { data } = await supabaseClient
+        .from('post_comments')
+        .select('id, author_name, comment_text, created_at')
+        .eq('post_id', post.id)
+        .order('created_at', { ascending: true })
+        .limit(30);
 
-    if (comments.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-slate-400 py-1">No comments yet. Be the first to comment!</p>`;
-        return;
-    }
-
-    listEl.innerHTML = comments.map(c => `
-        <div class="flex items-start gap-2">
-            <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                ${escapeHtml((c.author_name || 'M').charAt(0).toUpperCase())}
-            </div>
-            <div class="min-w-0 flex-1">
-                <div class="inline-block bg-[#F0F2F5] rounded-2xl px-3.5 py-2 max-w-full">
-                    <p class="text-xs font-bold text-slate-900">${escapeHtml(c.author_name)}</p>
-                    <p class="text-xs sm:text-[13px] text-slate-800 whitespace-pre-wrap break-words leading-snug mt-0.5">${escapeHtml(c.text)}</p>
-                </div>
-                <div class="px-2 mt-0.5 text-[11px] font-semibold text-slate-500">
-                    ${formatFeedTimeAgo(c.created_at)}
-                </div>
-            </div>
-        </div>
-    `).join('');
+    listEl.innerHTML = renderSharedCommentsHtml(data || []);
 }
 
 async function submitInlineComment(e, postId) {
     e.preventDefault();
+    if (!currentUser) {
+        showToast('Please sign in to comment on posts.', true);
+        setTimeout(() => { window.location.href = 'signin.html?next=feed.html'; }, 800);
+        return;
+    }
+
     const input = document.getElementById(`inline-comment-input-${postId}`);
     const text = input?.value.trim() || '';
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!text || !post) return;
 
-    const authorName = currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Guest Member';
+    const authorName = currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Member';
     input.value = '';
 
-    let error = null;
-    if (post._source === 'testimonies') {
-        const res = await supabaseClient.from('testimony_comments').insert([{
-            testimony_id: post._rawId,
-            author_name: authorName,
-            comment_text: text
-        }]);
-        error = res.error;
-    } else {
-        const res = await supabaseClient.from('post_comments').insert([{
-            post_id: post.id,
-            author_id: currentUser?.id || null,
-            author_name: authorName,
-            comment_text: text
-        }]);
-        error = res.error;
-    }
+    const { error } = await supabaseClient.from('post_comments').insert([{
+        post_id: post.id,
+        user_id: currentUser.id,
+        author_id: currentUser.id,
+        author_name: authorName,
+        comment_text: text
+    }]);
 
     if (error) {
         showToast(`Could not post comment: ${error.message}`, true);
@@ -911,6 +716,7 @@ async function submitInlineComment(e, postId) {
         return;
     }
 
+    markPostAsViewed(postId);
     commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
     const countEl = document.getElementById(`comment-count-${postId}`);
     if (countEl) countEl.textContent = commentCountsByPost[String(postId)];
@@ -920,15 +726,6 @@ async function submitInlineComment(e, postId) {
 function handleShareClick(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!post) return;
-    if (post._source === 'testimonies') {
-        const shareUrl = getFeedPostDetailUrl(post);
-        if (isMobileShareContext() && navigator.share) {
-            navigator.share({ title: post.title, url: shareUrl }).catch(() => {});
-        } else {
-            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied to clipboard!'));
-        }
-        return;
-    }
     shareOrCopyPost(post);
 }
 
@@ -937,7 +734,7 @@ function handleSendPostToChat(postId) {
     if (!post || typeof openShareToChatModal !== 'function') return;
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
-        id: post._source === 'testimonies' ? post._rawId : post.id,
+        id: post.id,
         title: post.title,
         subtitle: (post.body || '').slice(0, 110),
         url: getFeedPostDetailUrl(post),
@@ -1017,40 +814,22 @@ async function togglePostLike(postId) {
     const alreadyLiked = likedPostIds.has(String(postId));
     let nextCount = Number(post.likes_count) || 0;
 
-    if (post._source === 'testimonies') {
-        const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]').map(Number);
-        const rawId = Number(post._rawId);
-        if (alreadyLiked) {
-            likedPostIds.delete(String(postId));
-            nextCount = Math.max(0, nextCount - 1);
-            localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds.filter(id => id !== rawId)));
-        } else {
-            likedPostIds.add(String(postId));
-            nextCount += 1;
-            if (!amenedIds.includes(rawId)) {
-                amenedIds.push(rawId);
-                localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds));
-            }
-        }
-        post.likes_count = nextCount;
-        await supabaseClient.from('testimonies').update({ likes_count: nextCount }).eq('id', post._rawId);
+    if (alreadyLiked) {
+        await supabaseClient.from('post_likes').delete().eq('post_id', postId).eq('voter_key', voterKey);
+        likedPostIds.delete(String(postId));
+        nextCount = Math.max(0, nextCount - 1);
     } else {
-        if (alreadyLiked) {
-            await supabaseClient.from('post_likes').delete().eq('post_id', postId).eq('voter_key', voterKey);
-            likedPostIds.delete(String(postId));
-            nextCount = Math.max(0, nextCount - 1);
-        } else {
-            const { error } = await supabaseClient.from('post_likes').insert([{ post_id: postId, voter_key: voterKey }]);
-            if (error) {
-                showToast('Could not record like.', true);
-                return;
-            }
-            likedPostIds.add(String(postId));
-            nextCount += 1;
+        const { error } = await supabaseClient.from('post_likes').insert([{ post_id: postId, voter_key: voterKey }]);
+        if (error) {
+            showToast('Could not record like.', true);
+            return;
         }
-        post.likes_count = nextCount;
-        await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
+        likedPostIds.add(String(postId));
+        nextCount += 1;
+        markPostAsViewed(postId);
     }
+    post.likes_count = nextCount;
+    await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
 
     const countEl = document.getElementById(`like-count-${postId}`);
     const btnEl = document.getElementById(`like-btn-${postId}`);
