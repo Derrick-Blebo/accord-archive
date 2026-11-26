@@ -174,7 +174,8 @@ function renderBookDetails() {
     const isPurchased = purchasedBookIds.includes(String(book.id));
     const isBookmarked = savedBookmarks.includes(book.title);
     const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-    const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
+    const isSignedSupabase = isSupabaseFile && book.download_url.includes('token=');
+    const cleanReadUrl = book.download_url ? (isSupabaseFile && !isSignedSupabase ? book.download_url.split('?')[0] : book.download_url) : '';
 
     // Cover
     const coverWrapper = document.getElementById('book-cover-wrapper');

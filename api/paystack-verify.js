@@ -4,17 +4,31 @@
  * Requires PAYSTACK_SECRET_KEY in environment variables.
  * Also exposes GET ?config=1 to safely return PAYSTACK_PUBLIC_KEY to the frontend.
  */
+function sanitizeEnvKey(val) {
+    return String(val || '').trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+function getPaystackKeyMode(key) {
+    if (key.startsWith('pk_test_') || key.startsWith('sk_test_')) return 'test';
+    if (key.startsWith('pk_live_') || key.startsWith('sk_live_')) return 'live';
+    return 'unknown';
+}
+
 export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
 
-    const publicKey = process.env.PAYSTACK_PUBLIC_KEY || '';
-    const secretKey = process.env.PAYSTACK_SECRET_KEY || '';
+    const publicKey = sanitizeEnvKey(process.env.PAYSTACK_PUBLIC_KEY);
+    const secretKey = sanitizeEnvKey(process.env.PAYSTACK_SECRET_KEY);
+    const publicValid = publicKey.startsWith('pk_');
+    const secretValid = secretKey.startsWith('sk_');
+    const modeMismatch = publicValid && secretValid && getPaystackKeyMode(publicKey) !== getPaystackKeyMode(secretKey);
 
     if (req.method === 'GET') {
         return res.status(200).json({
-            configured: Boolean(publicKey && secretKey),
-            publicKey: publicKey || null,
-            currency: process.env.PAYSTACK_CURRENCY || 'GHS'
+            configured: Boolean(publicValid && secretValid && !modeMismatch),
+            publicKey: publicValid ? publicKey : null,
+            currency: sanitizeEnvKey(process.env.PAYSTACK_CURRENCY) || 'GHS',
+            ...(modeMismatch ? { error: 'Paystack public and secret keys are from different modes (test vs live).' } : {})
         });
     }
 
@@ -22,11 +36,13 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    if (!secretKey) {
+    if (!secretValid || modeMismatch) {
         return res.status(503).json({
             verified: false,
             configured: false,
-            error: 'Paystack is not configured yet. Add PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY to environment variables.'
+            error: modeMismatch
+                ? 'Paystack key mismatch: PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY must both be test keys or both be live keys.'
+                : 'Paystack secret key is missing or invalid. Ensure PAYSTACK_SECRET_KEY starts with sk_test_ or sk_live_ (with no quotes or spaces).'
         });
     }
 
@@ -47,9 +63,13 @@ export default async function handler(req, res) {
 
         const payload = await verifyResp.json();
         if (!verifyResp.ok || !payload?.status || payload?.data?.status !== 'success') {
+            const rawMsg = payload?.data?.gateway_response || payload?.message || 'Transaction could not be verified.';
+            const friendlyMsg = /invalid key/i.test(rawMsg)
+                ? 'Paystack verification failed: Invalid key. Please verify PAYSTACK_SECRET_KEY in your Vercel environment variables matches PAYSTACK_PUBLIC_KEY (same Paystack account and test/live mode, without quotes).'
+                : rawMsg;
             return res.status(400).json({
                 verified: false,
-                error: payload?.data?.gateway_response || payload?.message || 'Transaction could not be verified.'
+                error: friendlyMsg
             });
         }
 

@@ -58,12 +58,13 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="serif-heading text-3xl font-bold text-accord-slate">Your Saved Library</h1>
-                <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your bookmarked publications and saved testimonies.</p>
+                <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your purchased books, bookmarked publications, and saved testimonies.</p>
             </div>
 
             <!-- Filter Buttons to Switch Views -->
-            <div class="inline-flex items-center space-x-1.5 bg-slate-100 p-1.5 rounded-2xl">
+            <div class="inline-flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
                 <button type="button" onclick="setSavedFilter('all')" id="sfilter-all" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white shadow-sm">All Saved</button>
+                <button type="button" onclick="setSavedFilter('purchased')" id="sfilter-purchased" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Purchased</button>
                 <button type="button" onclick="setSavedFilter('books')" id="sfilter-books" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Books</button>
                 <button type="button" onclick="setSavedFilter('testimonies')" id="sfilter-testimonies" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Testimonies</button>
             </div>

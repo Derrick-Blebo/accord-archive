@@ -56,7 +56,7 @@ async function loadSavedData() {
 
 function setSavedFilter(filter) {
     currentFilter = filter;
-    ['all', 'books', 'testimonies'].forEach(f => {
+    ['all', 'purchased', 'books', 'testimonies'].forEach(f => {
         const btn = document.getElementById(`sfilter-${f}`);
         if (btn) {
             btn.className = f === filter
@@ -72,20 +72,34 @@ function renderSavedPages() {
     const testimoniesGrid = document.getElementById('saved-testimonies-grid');
     const booksSection = document.getElementById('saved-books-section');
     const testimoniesSection = document.getElementById('saved-testimonies-section');
+    const headingBooks = document.getElementById('heading-books');
     const emptyState = document.getElementById('saved-empty-state');
     const subtitle = document.getElementById('saved-subtitle');
 
     booksGrid.innerHTML = '';
     testimoniesGrid.innerHTML = '';
 
-    const matchedBooks = allBooks.filter(b => savedBookmarks.includes(b.title));
+    const purchasedBooks = allBooks.filter(b => purchasedBookIds.includes(Number(b.id)));
+    const bookmarkedBooks = allBooks.filter(b => savedBookmarks.includes(b.title));
+    const allSavedAndPurchasedBooks = allBooks.filter(
+        b => purchasedBookIds.includes(Number(b.id)) || savedBookmarks.includes(b.title)
+    );
+
+    const matchedBooks = currentFilter === 'purchased'
+        ? purchasedBooks
+        : (currentFilter === 'books' ? bookmarkedBooks : allSavedAndPurchasedBooks);
     const matchedTestimonies = allTestimonies.filter(t => savedTestimonyIds.includes(Number(t.id)));
 
     if (subtitle) {
-        subtitle.innerText = `You have ${matchedBooks.length} saved publication(s) and ${matchedTestimonies.length} saved testimony(ies).`;
+        subtitle.innerText = `You have ${purchasedBooks.length} purchased book(s), ${bookmarkedBooks.length} bookmarked publication(s), and ${matchedTestimonies.length} saved testimony(ies).`;
+    }
+    if (headingBooks) {
+        headingBooks.innerText = currentFilter === 'purchased'
+            ? 'Purchased Publications & Books'
+            : 'Purchased & Saved Publications';
     }
 
-    const showBooks = currentFilter === 'all' || currentFilter === 'books';
+    const showBooks = currentFilter === 'all' || currentFilter === 'purchased' || currentFilter === 'books';
     const showTestimonies = currentFilter === 'all' || currentFilter === 'testimonies';
 
     booksSection.style.display = showBooks && matchedBooks.length > 0 ? 'block' : 'none';
@@ -97,12 +111,12 @@ function renderSavedPages() {
         emptyState.classList.remove('hidden');
     }
 
-    // Render Saved Books using original home page card design
+    // Render Saved & Purchased Books
     if (showBooks) {
         matchedBooks.forEach(book => {
             const isPurchased = purchasedBookIds.includes(Number(book.id));
+            const isBookmarked = savedBookmarks.includes(book.title);
             const safeTitle = book.title.replace(/'/g, "\\'");
-            const safeAuthor = (book.author || '').replace(/'/g, "\\'");
 
             const coverVisual = book.cover_url
                 ? `<div class="w-full h-48 sm:h-full min-h-[195px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-sm relative bg-slate-100">
@@ -118,7 +132,8 @@ function renderSavedPages() {
                    </div>`;
 
             const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-            const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
+            const isSignedSupabase = isSupabaseFile && book.download_url.includes('token=');
+            const cleanReadUrl = book.download_url ? (isSupabaseFile && !isSignedSupabase ? book.download_url.split('?')[0] : book.download_url) : '';
 
             const priceLine = (book.is_for_sale && !isPurchased)
                 ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`
@@ -127,15 +142,23 @@ function renderSavedPages() {
             let primaryActionButton = '';
             if (book.is_for_sale && !isPurchased) {
                 primaryActionButton = `<a href="book.html?id=${book.id}" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5"><i class="fa-solid fa-cart-shopping text-[11px]"></i><span>Buy Now</span></a>`;
-            } else if (book.is_for_sale && isPurchased) {
+            } else if (isPurchased) {
                 primaryActionButton = cleanReadUrl
                     ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read</span></a>`
-                    : `<button class="flex-1 h-9 bg-emerald-600 text-white text-xs font-bold px-4 rounded-full">Read</button>`;
+                    : `<a href="book.html?id=${book.id}" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Open Book</span></a>`;
             } else {
                 primaryActionButton = book.download_url
                     ? `<a href="${book.download_url}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-download text-[10px]"></i><span>Download</span></a>`
-                    : `<button class="flex-1 h-9 bg-accord-blue text-white text-xs font-bold px-3 rounded-xl">Download</button>`;
+                    : `<a href="book.html?id=${book.id}" class="flex-1 h-9 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 rounded-xl flex items-center justify-center">Open Book</a>`;
             }
+
+            const bookmarkActionBtn = isBookmarked
+                ? `<button onclick="removeBookBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border text-accord-gold border-accord-gold bg-amber-50 rounded-xl flex items-center justify-center transition-all" title="Remove Bookmark">
+                       <i class="fa-solid fa-bookmark text-[11px]"></i>
+                   </button>`
+                : `<a href="book.html?id=${book.id}" class="w-9 h-9 shrink-0 border border-slate-200 bg-slate-50 hover:border-accord-blue text-accord-slate rounded-xl flex items-center justify-center transition-all" title="View Book Details">
+                       <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+                   </a>`;
 
             const card = document.createElement('div');
             card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-stretch group";
@@ -144,19 +167,22 @@ function renderSavedPages() {
                 <div class="flex-1 flex flex-col justify-between min-w-0">
                     <div>
                         <div class="flex items-center justify-between gap-2 mb-1.5">
-                            <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">${escapeHTML(book.category || 'Archive')}</span>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2.5 py-0.5 rounded-md truncate">${escapeHTML(book.category || 'Archive')}</span>
+                                ${isPurchased ? `<span class="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0"><i class="fa-solid fa-circle-check mr-1"></i>Purchased</span>` : ''}
+                            </div>
                             ${book.year ? `<span class="text-[11px] font-semibold text-accord-muted shrink-0">${book.year}</span>` : ''}
                         </div>
-                        <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2">${escapeHTML(book.title)}</h3>
+                        <a href="book.html?id=${book.id}" class="block">
+                            <h3 class="font-bold text-accord-slate text-sm sm:text-[15px] leading-snug mb-1 line-clamp-2 hover:text-accord-blue transition-colors">${escapeHTML(book.title)}</h3>
+                        </a>
                         <p class="text-[11px] font-bold text-accord-slate mb-1.5 truncate">${escapeHTML(book.author)}</p>
                         <p class="text-[11px] text-accord-muted leading-relaxed line-clamp-2 mb-2.5">${escapeHTML(book.description || '')}</p>
                         ${priceLine}
                     </div>
                     <div class="flex items-center gap-1.5">
                         ${primaryActionButton}
-                        <button onclick="removeBookBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border text-accord-gold border-accord-gold bg-amber-50 rounded-xl flex items-center justify-center transition-all" title="Remove Bookmark">
-                            <i class="fa-solid fa-bookmark text-[11px]"></i>
-                        </button>
+                        ${bookmarkActionBtn}
                     </div>
                 </div>
             `;

@@ -442,7 +442,8 @@ function buildBookCardElement(book) {
         : fallbackCoverHtml;
 
     const isSupabaseFile = book.download_url && book.download_url.includes('/archive-files/');
-    const cleanReadUrl = book.download_url ? (isSupabaseFile ? book.download_url.split('?')[0] : book.download_url) : '';
+    const isSignedSupabase = isSupabaseFile && book.download_url.includes('token=');
+    const cleanReadUrl = book.download_url ? (isSupabaseFile && !isSignedSupabase ? book.download_url.split('?')[0] : book.download_url) : '';
 
     const priceLine = (book.is_for_sale && !isPurchased)
         ? `<p class="text-xs font-extrabold text-accord-blue mb-2.5">USD ${Number(book.price || 0).toFixed(2)}</p>`

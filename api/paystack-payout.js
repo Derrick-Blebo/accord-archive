@@ -52,7 +52,7 @@ export default async function handler(req, res) {
         return res.status(auth.status).json({ success: false, error: auth.error });
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY || '';
+    const secretKey = String(process.env.PAYSTACK_SECRET_KEY || '').trim().replace(/^['"]|['"]$/g, '').trim();
     if (!secretKey) {
         return res.status(503).json({
             success: false,
