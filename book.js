@@ -513,6 +513,19 @@ async function initiateBookPurchase() {
     }
 }
 
+function sendCurrentBookToChat() {
+    if (!currentBook || typeof openShareToChatModal !== 'function') return;
+    openShareToChatModal({
+        type: 'shared_book',
+        id: currentBook.id,
+        title: currentBook.title,
+        subtitle: (currentBook.description || '').slice(0, 110),
+        url: `${window.location.origin}/book.html?id=${encodeURIComponent(currentBook.id)}`,
+        image_url: currentBook.cover_url || '',
+        author_name: currentBook.author || 'Accord Library'
+    });
+}
+
 async function shareCurrentBook() {
     if (!currentBook) return;
     const shareUrl = `${window.location.origin}/book.html?id=${currentBook.id}`;

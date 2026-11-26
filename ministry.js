@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     ministryId = params.get('id');
 
+    if (ministryId) {
+        window.location.replace(`user.html?id=${encodeURIComponent(ministryId)}`);
+        return;
+    }
+
     await initMinistrySession();
 
     if (!ministryId) {

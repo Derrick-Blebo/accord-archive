@@ -213,6 +213,10 @@
                             <span id="book-save-label">Save</span>
                         </button>
 
+                        <button type="button" onclick="sendCurrentBookToChat()" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-accord-lightBlue hover:border-accord-blue hover:text-accord-blue text-accord-slate text-xs font-bold transition-all inline-flex items-center space-x-1.5">
+                            <i class="fa-regular fa-paper-plane"></i>
+                            <span>Send to Chat</span>
+                        </button>
                         <button type="button" onclick="shareCurrentBook()" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-accord-lightBlue hover:border-accord-blue hover:text-accord-blue text-accord-slate text-xs font-bold transition-all inline-flex items-center space-x-1.5">
                             <i class="fa-solid fa-share-nodes"></i>
                             <span>Share</span>
@@ -312,6 +316,7 @@
         <span id="toast-message"></span>
     </div>
 
-    <script src="book.js?v=3"></script>
+    <script src="feed-shared.js?v=2"></script>
+    <script src="book.js?v=4"></script>
 </body>
 </html>

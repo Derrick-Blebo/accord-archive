@@ -2,6 +2,9 @@ let currentTab = 'all';
 let currentUser = null;
 let currentProfile = null; // { account_type: 'normal_user' | 'ministry_minister', upgrade_status, full_name }
 let allFeedPosts = [];
+let allReposts = [];
+let followingIds = new Set();
+let myRepostedPostIds = new Set();
 let likedPostIds = new Set();
 let commentCountsByPost = {};
 
@@ -129,11 +132,24 @@ async function loadFeedPosts() {
         </div>
     `;
 
-    const [postsRes, likesRes, commentsRes] = await Promise.all([
+    const requests = [
         supabaseClient.from('feed_posts').select('*').eq('is_approved', true).order('created_at', { ascending: false }),
         supabaseClient.from('post_likes').select('post_id').eq('voter_key', getVoterKey()),
-        supabaseClient.from('post_comments').select('post_id')
-    ]);
+        supabaseClient.from('post_comments').select('post_id'),
+        supabaseClient
+            .from('post_reposts')
+            .select('id, post_id, user_id, quote_text, created_at, profiles(id, full_name, account_type, upgrade_status)')
+            .order('created_at', { ascending: false })
+            .limit(120)
+    ];
+
+    if (currentUser?.id) {
+        requests.push(
+            supabaseClient.from('account_follows').select('following_id').eq('follower_id', currentUser.id)
+        );
+    }
+
+    const [postsRes, likesRes, commentsRes, repostsRes, followsRes] = await Promise.all(requests);
 
     if (postsRes.error) {
         streamContainer.innerHTML = `
@@ -146,6 +162,13 @@ async function loadFeedPosts() {
     }
 
     allFeedPosts = postsRes.data || [];
+    allReposts = (!repostsRes?.error && repostsRes?.data) ? repostsRes.data : [];
+    followingIds = new Set((followsRes?.data || []).map(f => String(f.following_id)));
+    myRepostedPostIds = new Set(
+        currentUser?.id
+            ? allReposts.filter(r => r.user_id === currentUser.id).map(r => String(r.post_id))
+            : []
+    );
     likedPostIds = new Set((likesRes.data || []).map(l => String(l.post_id)));
 
     commentCountsByPost = {};
@@ -157,15 +180,58 @@ async function loadFeedPosts() {
     renderFeedStream();
 }
 
+function buildRankedFeedItems() {
+    const postById = new Map(allFeedPosts.map(p => [String(p.id), p]));
+    const items = [];
+
+    allFeedPosts.forEach(post => {
+        const matchesTab = currentTab === 'all' || post.post_type === currentTab;
+        if (!matchesTab) return;
+        items.push({
+            kind: 'post',
+            post,
+            actorId: post.is_anonymous ? null : post.author_id,
+            timestamp: new Date(post.created_at).getTime()
+        });
+    });
+
+    allReposts.forEach(rep => {
+        const post = postById.get(String(rep.post_id));
+        if (!post) return;
+        const matchesTab = currentTab === 'all' || post.post_type === currentTab;
+        if (!matchesTab) return;
+        items.push({
+            kind: 'repost',
+            post,
+            repost: rep,
+            actorId: rep.user_id,
+            timestamp: new Date(rep.created_at).getTime()
+        });
+    });
+
+    const now = Date.now();
+    items.forEach(item => {
+        const isFollowedActor = Boolean(item.actorId && followingIds.has(String(item.actorId)));
+        const ageHours = Math.max(0, (now - item.timestamp) / 3600000);
+        const engagement =
+            (Number(item.post.likes_count) || 0) * 2 +
+            (commentCountsByPost[String(item.post.id)] || 0) * 3 +
+            (Number(item.post.reposts_count) || 0) * 4;
+        const recencyScore = Math.max(0, 500 - ageHours * 1.5);
+        item.score = (isFollowedActor ? 10000 : 0) + recencyScore + Math.min(200, engagement);
+    });
+
+    items.sort((a, b) => b.score - a.score || b.timestamp - a.timestamp);
+    return items;
+}
+
 function renderFeedStream() {
     const streamContainer = document.getElementById('feed-stream');
     if (!streamContainer) return;
 
-    const visiblePosts = currentTab === 'all'
-        ? allFeedPosts
-        : allFeedPosts.filter(p => p.post_type === currentTab);
+    const visibleItems = buildRankedFeedItems();
 
-    if (visiblePosts.length === 0) {
+    if (visibleItems.length === 0) {
         streamContainer.innerHTML = `
             <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
                 <i class="fa-regular fa-folder-open text-3xl text-slate-300"></i>
@@ -177,8 +243,8 @@ function renderFeedStream() {
     }
 
     streamContainer.innerHTML = '';
-    visiblePosts.forEach(post => {
-        streamContainer.appendChild(renderFeedCard(post));
+    visibleItems.forEach(item => {
+        streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
     });
 }
 
@@ -196,13 +262,15 @@ function getPostTypeMeta(type) {
     }
 }
 
-function renderFeedCard(post) {
+function renderFeedCard(post, repost = null) {
     const card = document.createElement('article');
     card.className = 'bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4 hover:shadow-md transition-shadow';
 
     const postUrl = getPostShareUrl(post.id);
     const isLiked = likedPostIds.has(String(post.id));
+    const isReposted = myRepostedPostIds.has(String(post.id));
     const likesCount = Number(post.likes_count) || 0;
+    const repostsCount = Number(post.reposts_count) || 0;
     const commentsCount = commentCountsByPost[String(post.id)] || 0;
     const dateFormatted = post.created_at
         ? new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -210,9 +278,27 @@ function renderFeedCard(post) {
 
     const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
     const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
-    const ministryUrl = (isVerifiedAuthor && post.author_id)
-        ? `ministry.html?id=${encodeURIComponent(post.author_id)}`
+    const authorProfileUrl = (!post.is_anonymous && post.author_id)
+        ? `user.html?id=${encodeURIComponent(post.author_id)}`
         : null;
+
+    let repostBannerHtml = '';
+    if (repost) {
+        const reposterName = repost.profiles?.full_name || 'Member';
+        const reposterUrl = `user.html?id=${encodeURIComponent(repost.user_id)}`;
+        const quoteHtml = repost.quote_text
+            ? `<p class="text-xs italic text-accord-slate bg-slate-50 border-l-2 border-emerald-500 pl-3 py-1.5 rounded-r-lg mt-2">"${escapeHtml(repost.quote_text)}"</p>`
+            : '';
+        repostBannerHtml = `
+            <div class="pb-1">
+                <a href="${escapeHtml(reposterUrl)}" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1 hover:bg-emerald-100 transition-colors">
+                    <i class="fa-solid fa-retweet"></i>
+                    <span>${escapeHtml(reposterName)} reposted</span>
+                </a>
+                ${quoteHtml}
+            </div>
+        `;
+    }
 
     const roleBadge = isVerifiedAuthor
         ? `<span class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-accord-gold border border-amber-200"><i class="fa-solid fa-circle-check text-[9px]"></i>Ministry / Minister</span>`
@@ -225,12 +311,12 @@ function renderFeedCard(post) {
         </div>
     `;
 
-    const authorAvatarHtml = ministryUrl
-        ? `<a href="${escapeHtml(ministryUrl)}" class="shrink-0 hover:opacity-90 transition-opacity" title="View ${escapeHtml(displayAuthor)}">${avatarInner}</a>`
+    const authorAvatarHtml = authorProfileUrl
+        ? `<a href="${escapeHtml(authorProfileUrl)}" class="shrink-0 hover:opacity-90 transition-opacity" title="View ${escapeHtml(displayAuthor)}">${avatarInner}</a>`
         : avatarInner;
 
-    const authorNameHtml = ministryUrl
-        ? `<a href="${escapeHtml(ministryUrl)}" class="text-xs font-bold text-accord-slate hover:text-accord-blue hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
+    const authorNameHtml = authorProfileUrl
+        ? `<a href="${escapeHtml(authorProfileUrl)}" class="text-xs font-bold text-accord-slate hover:text-accord-blue hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
         : `<h4 class="text-xs font-bold text-accord-slate truncate">${escapeHtml(displayAuthor)}</h4>`;
 
     const typeMeta = getPostTypeMeta(post.post_type);
@@ -264,6 +350,7 @@ function renderFeedCard(post) {
     const shareBtnIcon = isMobileShareContext() ? 'fa-share-nodes' : 'fa-link';
 
     card.innerHTML = `
+        ${repostBannerHtml}
         <div class="flex items-center justify-between gap-3">
             <div class="flex items-center space-x-3 min-w-0">
                 ${authorAvatarHtml}
@@ -297,9 +384,9 @@ function renderFeedCard(post) {
 
         ${mediaHtml}
 
-        <!-- Post Actions Bar: Like, Comments Link, Adaptive Share/Copy Link, Report/Flag -->
+        <!-- Post Actions Bar: Like, Comments, Repost, Send to Chat, Share Link, Flag -->
         <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div class="flex items-center space-x-2">
+            <div class="flex flex-wrap items-center gap-2">
                 <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${post.id}" class="px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${isLiked ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}">
                     <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
                     <span id="like-count-${post.id}">${likesCount}</span>
@@ -309,6 +396,16 @@ function renderFeedCard(post) {
                     <i class="fa-regular fa-comment"></i>
                     <span>${commentsCount}</span>
                 </a>
+
+                <button type="button" onclick="handleRepostClick('${post.id}')" class="px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${isReposted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 hover:bg-emerald-50 text-accord-slate hover:text-emerald-700 border border-slate-200'}" title="Repost to your followers">
+                    <i class="fa-solid fa-retweet"></i>
+                    <span>${repostsCount}</span>
+                </button>
+
+                <button type="button" onclick="handleSendPostToChat('${post.id}')" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold transition-all flex items-center space-x-1.5" title="Send to Chat">
+                    <i class="fa-regular fa-paper-plane"></i>
+                    <span class="hidden sm:inline">Send</span>
+                </button>
 
                 <button type="button" onclick="handleShareClick('${post.id}')" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold transition-all flex items-center space-x-1.5">
                     <i class="fa-solid ${shareBtnIcon}"></i>
@@ -329,6 +426,83 @@ function renderFeedCard(post) {
 function handleShareClick(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (post) shareOrCopyPost(post);
+}
+
+function handleSendPostToChat(postId) {
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    if (!post || typeof openShareToChatModal !== 'function') return;
+    openShareToChatModal({
+        type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
+        id: post.id,
+        title: post.title,
+        subtitle: (post.body || '').slice(0, 110),
+        url: getPostShareUrl(post.id),
+        author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
+        post_type: post.post_type
+    });
+}
+
+async function handleRepostClick(postId) {
+    if (!currentUser) {
+        showToast('Please sign in to repost to your followers.', true);
+        setTimeout(() => { window.location.href = 'signin.html?next=feed.html'; }, 800);
+        return;
+    }
+
+    if (myRepostedPostIds.has(String(postId))) {
+        const { error } = await supabaseClient
+            .from('post_reposts')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', currentUser.id);
+        if (error) {
+            showToast(`Could not remove repost: ${error.message}`, true);
+            return;
+        }
+        showToast('Repost removed.');
+        await loadFeedPosts();
+        return;
+    }
+
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    document.getElementById('repost-post-id').value = postId;
+    const previewEl = document.getElementById('repost-post-preview');
+    if (previewEl && post) previewEl.textContent = `${post.title} — ${post.author_name || 'Member'}`;
+    const modal = document.getElementById('repost-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeRepostModal() {
+    const modal = document.getElementById('repost-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+    document.getElementById('repost-form')?.reset();
+}
+
+async function handleRepostSubmit(e) {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    const postId = document.getElementById('repost-post-id').value;
+    const quoteText = document.getElementById('repost-quote-text')?.value.trim() || null;
+    const btn = document.getElementById('repost-submit-btn');
+    if (btn) btn.disabled = true;
+
+    const { error } = await supabaseClient
+        .from('post_reposts')
+        .insert([{ post_id: postId, user_id: currentUser.id, quote_text: quoteText }]);
+
+    if (btn) btn.disabled = false;
+
+    if (error) {
+        showToast(`Could not repost: ${error.message}`, true);
+        return;
+    }
+
+    closeRepostModal();
+    showToast('Reposted to your followers!');
+    await loadFeedPosts();
 }
 
 async function togglePostLike(postId) {

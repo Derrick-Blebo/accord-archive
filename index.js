@@ -492,6 +492,9 @@ function buildBookCardElement(book) {
                 <button type="button" onclick="toggleBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold border-slate-200 hover:border-accord-gold bg-slate-50'} rounded-xl flex items-center justify-center transition-all" title="${isBookmarked ? 'Remove from Saved' : 'Save Book'}">
                     <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
                 </button>
+                <button type="button" onclick="sendBookToChat(${book.id})" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Send Book to Chat">
+                    <i class="fa-regular fa-paper-plane text-[11px]"></i>
+                </button>
                 <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Share Book">
                     <i class="fa-solid fa-share-nodes text-[11px]"></i>
                 </button>
@@ -499,6 +502,20 @@ function buildBookCardElement(book) {
         </div>
     `;
     return card;
+}
+
+function sendBookToChat(bookId) {
+    const book = (typeof allBooks !== 'undefined' ? allBooks : []).find(b => String(b.id) === String(bookId));
+    if (!book || typeof openShareToChatModal !== 'function') return;
+    openShareToChatModal({
+        type: 'shared_book',
+        id: book.id,
+        title: book.title,
+        subtitle: (book.description || '').slice(0, 110),
+        url: `${window.location.origin}/book.html?id=${encodeURIComponent(book.id)}`,
+        image_url: book.cover_url || '',
+        author_name: book.author || 'Accord Library'
+    });
 }
 
 function stopBannerSliderInterval() {

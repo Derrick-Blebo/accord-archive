@@ -256,12 +256,16 @@
             const shareLabel = isMobileShareContext() ? 'Share' : 'Copy Link';
             const shareIcon = isMobileShareContext() ? 'fa-share-nodes' : 'fa-link';
 
+            const authorHtml = (!currentPost.is_anonymous && currentPost.author_id)
+                ? `<a href="user.html?id=${encodeURIComponent(currentPost.author_id)}" class="font-bold text-accord-slate hover:text-accord-blue hover:underline">${escapeHtml(displayAuthor)}</a>`
+                : `<strong class="text-accord-slate">${escapeHtml(displayAuthor)}</strong>`;
+
             container.innerHTML = `
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <span class="bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full">${escapeHtml(currentPost.post_type)}</span>
                         <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate mt-2">${escapeHtml(currentPost.title)}</h1>
-                        <p class="text-xs text-accord-muted mt-1">By <strong class="text-accord-slate">${escapeHtml(displayAuthor)}</strong> • ${dateFormatted}</p>
+                        <p class="text-xs text-accord-muted mt-1">By ${authorHtml} • ${dateFormatted}</p>
                     </div>
                 </div>
 
@@ -272,10 +276,14 @@
                 </div>
 
                 <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <button type="button" onclick="toggleSingleLike()" id="single-like-btn" class="px-4 py-2 rounded-xl font-bold flex items-center space-x-1.5 ${isLiked ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}">
                             <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
                             <span id="single-like-count">${Number(currentPost.likes_count) || 0}</span>
+                        </button>
+                        <button type="button" onclick="sendCurrentPostToChat()" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold flex items-center space-x-1.5">
+                            <i class="fa-regular fa-paper-plane"></i>
+                            <span>Send to Chat</span>
                         </button>
                         <button type="button" onclick="shareOrCopyPost(currentPost)" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold flex items-center space-x-1.5">
                             <i class="fa-solid ${shareIcon}"></i>
@@ -288,6 +296,19 @@
                     </button>
                 </div>
             `;
+        }
+
+        function sendCurrentPostToChat() {
+            if (!currentPost || typeof openShareToChatModal !== 'function') return;
+            openShareToChatModal({
+                type: currentPost.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
+                id: currentPost.id,
+                title: currentPost.title,
+                subtitle: (currentPost.body || '').slice(0, 110),
+                url: getPostShareUrl(currentPost.id),
+                author_name: currentPost.is_anonymous ? 'Anonymous' : (currentPost.author_name || 'Member'),
+                post_type: currentPost.post_type
+            });
         }
 
         async function toggleSingleLike() {

@@ -8,6 +8,7 @@ let globalHeaderProfile = null;
 let globalNotifications = [];
 let globalHeaderAuthSubscribed = false;
 let globalHeaderAuthRequestId = 0;
+let globalRealtimeChannel = null;
 
 function isVerifiedMinistryProfile(profile) {
     if (!profile) return false;
@@ -216,6 +217,12 @@ async function initGlobalHeaderAuth() {
             ` : '';
 
             authArea.innerHTML = `
+                <!-- Messages Link -->
+                <a href="messages.html" class="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all" aria-label="Messages" title="Messages">
+                    <i class="fa-regular fa-paper-plane text-sm"></i>
+                    <span id="chat-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-accord-blue text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">0</span>
+                </a>
+
                 <!-- Notification Bell Dropdown -->
                 <div class="relative">
                     <button type="button" onclick="toggleNotificationsDropdown(event)" class="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all focus:outline-none cursor-pointer" aria-label="Notifications" title="Notifications">
@@ -253,6 +260,14 @@ async function initGlobalHeaderAuth() {
                             <p class="text-[10px] text-accord-muted">${roleLabel}</p>
                         </div>
                         <div class="py-1">
+                            <a href="user.html?id=${encodeURIComponent(user.id)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                                <i class="fa-solid fa-id-badge text-accord-blue w-4"></i>
+                                <span>My Public Profile</span>
+                            </a>
+                            <a href="messages.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                                <i class="fa-regular fa-paper-plane text-accord-blue w-4"></i>
+                                <span>Messages</span>
+                            </a>
                             <a href="profile.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                                 <i class="fa-regular fa-user text-accord-blue w-4"></i>
                                 <span>Edit Profile</span>
@@ -280,6 +295,8 @@ async function initGlobalHeaderAuth() {
             if (mobileAuthArea) {
                 mobileAuthArea.innerHTML = `
                     <div class="space-y-2">
+                        <a href="user.html?id=${encodeURIComponent(user.id)}" class="block text-base font-medium text-accord-slate">My Public Profile</a>
+                        <a href="messages.html" class="block text-base font-medium text-accord-slate">Messages</a>
                         <a href="profile.html" class="block text-base font-medium text-accord-slate">Edit Profile</a>
                         ${isAdmin ? '<a href="feed-admin.html" class="block text-base font-medium text-accord-slate">Admin Moderation</a>' : ''}
                         ${isSuperadmin ? '<a href="Superadmin.html" class="block text-base font-medium text-accord-slate">Superadmin Portal</a>' : ''}
@@ -288,7 +305,11 @@ async function initGlobalHeaderAuth() {
                 `;
             }
 
-            await loadGlobalNotifications();
+            await Promise.all([
+                loadGlobalNotifications(),
+                loadGlobalUnreadChatCount()
+            ]);
+            initGlobalRealtimeSubscriptions();
         }
     } catch (err) {
         console.error('Header auth check error:', err);
@@ -380,13 +401,91 @@ function getNotificationIconMeta(type) {
             return { icon: 'fa-user-plus', bgClass: 'bg-accord-lightBlue text-accord-blue' };
         case 'new_post':
             return { icon: 'fa-bullhorn', bgClass: 'bg-accord-goldLight text-accord-gold' };
+        case 'post_repost':
+            return { icon: 'fa-retweet', bgClass: 'bg-emerald-50 text-emerald-600' };
+        case 'post_like':
+            return { icon: 'fa-heart', bgClass: 'bg-rose-50 text-rose-500' };
         case 'book_comment':
             return { icon: 'fa-book-open', bgClass: 'bg-emerald-50 text-emerald-600' };
         case 'post_comment':
             return { icon: 'fa-comment-dots', bgClass: 'bg-rose-50 text-rose-500' };
+        case 'new_message':
+            return { icon: 'fa-paper-plane', bgClass: 'bg-indigo-50 text-indigo-600' };
         default:
             return { icon: 'fa-bell', bgClass: 'bg-slate-100 text-accord-slate' };
     }
+}
+
+async function loadGlobalUnreadChatCount() {
+    const client = window.supabaseClient;
+    const badge = document.getElementById('chat-unread-badge');
+    if (!client || !globalHeaderUser || !badge) return;
+
+    try {
+        const { data: memberships, error } = await client
+            .from('conversation_members')
+            .select('conversation_id, last_read_at, conversations(last_message_at)')
+            .eq('user_id', globalHeaderUser.id);
+
+        if (error || !Array.isArray(memberships)) return;
+
+        const unreadConvs = memberships.filter(m => {
+            const lastMsg = m.conversations?.last_message_at;
+            if (!lastMsg) return false;
+            if (!m.last_read_at) return true;
+            return new Date(lastMsg).getTime() > new Date(m.last_read_at).getTime();
+        }).length;
+
+        if (unreadConvs > 0) {
+            badge.textContent = unreadConvs > 99 ? '99+' : String(unreadConvs);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch (_) {}
+}
+window.refreshGlobalChatBadge = loadGlobalUnreadChatCount;
+
+function initGlobalRealtimeSubscriptions() {
+    const client = window.supabaseClient;
+    if (!client || !globalHeaderUser || typeof client.channel !== 'function') return;
+
+    if (globalRealtimeChannel) {
+        try { client.removeChannel(globalRealtimeChannel); } catch (_) {}
+        globalRealtimeChannel = null;
+    }
+
+    globalRealtimeChannel = client
+        .channel(`accord_user_${globalHeaderUser.id}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `user_id=eq.${globalHeaderUser.id}`
+            },
+            (payload) => {
+                if (payload?.new) {
+                    globalNotifications = [payload.new, ...globalNotifications.filter(n => n.id !== payload.new.id)].slice(0, 30);
+                    renderGlobalNotifications();
+                }
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'chat_messages'
+            },
+            (payload) => {
+                if (payload?.new && payload.new.sender_id !== globalHeaderUser.id) {
+                    loadGlobalUnreadChatCount();
+                }
+            }
+        )
+        .subscribe();
 }
 
 async function handleNotificationClick(notifId) {

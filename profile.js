@@ -75,7 +75,7 @@ async function loadUserProfileData() {
 
     let { data: profile } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch')
+        .select('id, email, full_name, bio, account_type, upgrade_status, upgrade_pitch')
         .eq('id', currentProfileUser.id)
         .maybeSingle();
 
@@ -83,6 +83,10 @@ async function loadUserProfileData() {
     const resolvedName = profile?.full_name || metaName || currentProfileUser.email.split('@')[0];
 
     if (nameInput) nameInput.value = resolvedName;
+    const bioInput = document.getElementById('profile-bio-input');
+    if (bioInput) bioInput.value = profile?.bio || '';
+    const publicLink = document.getElementById('view-public-profile-btn');
+    if (publicLink) publicLink.href = `user.html?id=${encodeURIComponent(currentProfileUser.id)}`;
     if (authNavLabel) authNavLabel.textContent = resolvedName;
     if (mobileAuthLabel) mobileAuthLabel.textContent = `Account (${resolvedName})`;
     if (profileIcon && !profileIcon.querySelector('i, img')) {
@@ -115,8 +119,10 @@ async function handleProfileUpdate(e) {
     if (!currentProfileUser) return;
 
     const nameInput = document.getElementById('profile-name');
+    const bioInput = document.getElementById('profile-bio-input');
     const saveBtn = document.getElementById('profile-save-btn');
     const fullName = nameInput?.value.trim() || '';
+    const bio = bioInput?.value.trim() || '';
 
     if (!fullName) {
         showToast('Please enter your full name.');
@@ -137,7 +143,8 @@ async function handleProfileUpdate(e) {
             .upsert({
                 id: currentProfileUser.id,
                 email: currentProfileUser.email,
-                full_name: fullName
+                full_name: fullName,
+                bio
             }, { onConflict: 'id' })
     ]);
 

@@ -71,15 +71,24 @@
                     <h1 class="serif-heading text-2xl font-bold text-accord-slate">Profile Settings</h1>
                     <p class="text-xs text-accord-muted mt-1">Manage your account credentials and personal details.</p>
                 </div>
-                <span id="account-type-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-accord-lightBlue text-accord-blue">
-                    <i class="fa-solid fa-user mr-1.5"></i> Normal User
-                </span>
+                <div class="flex items-center gap-2">
+                    <a id="view-public-profile-btn" href="user.html" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 hover:bg-slate-200 text-accord-slate transition-colors">
+                        <i class="fa-solid fa-id-badge mr-1.5 text-accord-blue"></i> View Public Profile
+                    </a>
+                    <span id="account-type-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-accord-lightBlue text-accord-blue">
+                        <i class="fa-solid fa-user mr-1.5"></i> Normal User
+                    </span>
+                </div>
             </div>
 
             <form onsubmit="handleProfileUpdate(event)" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
                     <input type="text" id="profile-name" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Bio</label>
+                    <textarea id="profile-bio-input" rows="3" placeholder="Tell the community a little about yourself or your ministry..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address (Read-only)</label>
