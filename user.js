@@ -587,13 +587,21 @@ async function submitInlineComment(e, postId) {
     const text = input?.value.trim() || '';
     if (!text) return;
 
-    const authorName = viewerProfile?.full_name || viewerUser.email?.split('@')[0] || 'Member';
+    const activeCtx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (activeCtx?.isSwitched && !activeCtx.permissions?.can_post) {
+        showToast('You do not have permission to comment on behalf of this verified page.', true);
+        return;
+    }
+    const commentAuthorId = activeCtx?.isSwitched ? activeCtx.activeProfileId : viewerUser.id;
+    const authorName = activeCtx?.isSwitched
+        ? (activeCtx.activeProfile?.full_name || 'Verified Page')
+        : (viewerProfile?.full_name || viewerUser.email?.split('@')[0] || 'Member');
     input.value = '';
 
     const { error } = await supabaseClient.from('post_comments').insert([{
         post_id: postId,
         user_id: viewerUser.id,
-        author_id: viewerUser.id,
+        author_id: commentAuthorId,
         author_name: authorName,
         comment_text: text
     }]);

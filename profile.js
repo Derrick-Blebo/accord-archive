@@ -426,23 +426,115 @@ function renderPermissionBadgesHtml(perms) {
     return active.map(m => `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${m.color}">${escapeProfileMgmtHtml(m.badge)}</span>`).join('');
 }
 
+const PAGE_ADMIN_PRESETS = {
+    editor: { label: 'Post Editor', perms: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_edit_profile: false, can_withdraw_funds: false } },
+    media: { label: 'Page & Media Manager', perms: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_edit_profile: true, can_withdraw_funds: false } },
+    manager: { label: 'Books & Growth Manager', perms: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: false, can_withdraw_funds: false } },
+    full: { label: 'Full Page Admin', perms: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: true, can_withdraw_funds: true } }
+};
+
+function getAdminRoleLabel(perms) {
+    for (const key of Object.keys(PAGE_ADMIN_PRESETS)) {
+        const preset = PAGE_ADMIN_PRESETS[key].perms;
+        const matches = PAGE_ADMIN_PERMS_META.every(m => Boolean(perms[m.key]) === Boolean(preset[m.key]));
+        if (matches) return PAGE_ADMIN_PRESETS[key].label;
+    }
+    return 'Custom Role';
+}
+
 function applyAdminPowerPreset(preset) {
-    const presets = {
-        editor: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_edit_profile: false, can_withdraw_funds: false },
-        manager: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: false, can_withdraw_funds: false },
-        full: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_edit_profile: true, can_withdraw_funds: true }
-    };
-    const vals = presets[preset];
-    if (!vals) return;
+    const entry = PAGE_ADMIN_PRESETS[preset];
+    if (!entry) return;
     PAGE_ADMIN_PERMS_META.forEach(m => {
         const cb = document.getElementById(`perm-add-${m.key}`);
-        if (cb) cb.checked = Boolean(vals[m.key]);
+        if (cb) cb.checked = Boolean(entry.perms[m.key]);
+    });
+    const badge = document.getElementById('page-admin-role-badge');
+    if (badge) badge.textContent = entry.label;
+}
+
+function selectAdminRoleCard(preset) {
+    const sel = document.getElementById('page-admin-preset');
+    if (sel) sel.value = preset;
+    applyAdminPowerPreset(preset);
+    document.querySelectorAll('.role-card-btn').forEach(btn => {
+        const isSelected = btn.getAttribute('data-role-card') === preset;
+        btn.classList.toggle('border-2', isSelected);
+        btn.classList.toggle('border-accord-blue', isSelected);
+        btn.classList.toggle('bg-blue-50/50', isSelected);
+        btn.classList.toggle('border', !isSelected);
+        btn.classList.toggle('border-slate-200', !isSelected);
     });
 }
 
+function toggleCustomPowersDrawer() {
+    const drawer = document.getElementById('page-admin-custom-drawer');
+    const chevron = document.getElementById('custom-powers-chevron');
+    if (!drawer) return;
+    const isHidden = drawer.classList.toggle('hidden');
+    chevron?.classList.toggle('rotate-180', !isHidden);
+}
+
 function syncPresetSelectFromCheckboxes() {
+    const current = readAddAdminPermissions();
+    const roleLabel = getAdminRoleLabel(current);
     const sel = document.getElementById('page-admin-preset');
-    if (sel) sel.value = 'custom';
+    const badge = document.getElementById('page-admin-role-badge');
+    if (badge) badge.textContent = roleLabel;
+    const matchedKey = Object.keys(PAGE_ADMIN_PRESETS).find(k => PAGE_ADMIN_PRESETS[k].label === roleLabel) || 'custom';
+    if (sel) sel.value = matchedKey;
+    document.querySelectorAll('.role-card-btn').forEach(btn => {
+        const isSelected = btn.getAttribute('data-role-card') === matchedKey;
+        btn.classList.toggle('border-2', isSelected);
+        btn.classList.toggle('border-accord-blue', isSelected);
+        btn.classList.toggle('bg-blue-50/50', isSelected);
+        btn.classList.toggle('border', !isSelected);
+        btn.classList.toggle('border-slate-200', !isSelected);
+    });
+}
+
+let _adminLookupTimer = null;
+function schedulePageAdminLookup(rawVal) {
+    clearTimeout(_adminLookupTimer);
+    const preview = document.getElementById('page-admin-lookup-preview');
+    const raw = String(rawVal || '').trim();
+    if (!raw || raw.length < 3) {
+        if (preview) {
+            preview.innerHTML = '';
+            preview.classList.add('hidden');
+        }
+        return;
+    }
+    _adminLookupTimer = setTimeout(async () => {
+        if (!preview) return;
+        let query = supabaseClient.from('profiles').select('id, full_name, handle, avatar_url, email');
+        if (raw.includes('@') && !raw.startsWith('@')) {
+            query = query.ilike('email', raw);
+        } else {
+            const cleanHandle = '@' + raw.replace(/^@+/, '').toLowerCase();
+            query = query.ilike('handle', cleanHandle);
+        }
+        const { data } = await query.maybeSingle();
+        if (!data) {
+            preview.innerHTML = `<p class="text-[11px] text-accord-muted px-2 py-1">No member matched yet — enter full @handle or email.</p>`;
+            preview.classList.remove('hidden');
+            return;
+        }
+        const initial = (data.full_name || data.email || 'M').charAt(0).toUpperCase();
+        preview.innerHTML = `
+            <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-blue-50/70 border border-blue-200/80">
+                <span class="w-7 h-7 rounded-full bg-accord-blue text-white text-xs font-bold flex items-center justify-center overflow-hidden shrink-0">
+                    ${data.avatar_url ? `<img src="${escapeProfileMgmtHtml(data.avatar_url)}" class="w-full h-full object-cover" alt="">` : escapeProfileMgmtHtml(initial)}
+                </span>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(data.full_name || 'Member')}</p>
+                    <p class="text-[10px] font-semibold text-accord-blue truncate">${escapeProfileMgmtHtml(data.handle || data.email || '')}</p>
+                </div>
+                <span class="ml-auto text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Found</span>
+            </div>
+        `;
+        preview.classList.remove('hidden');
+    }, 350);
 }
 
 function readAddAdminPermissions() {
@@ -510,6 +602,7 @@ async function loadPageAdminsManagement(profile) {
                     const name = adminProf.full_name || adminProf.email || 'Member';
                     const handle = adminProf.handle ? ` ${adminProf.handle}` : '';
                     const perms = normalizePageAdminPermissions(r.permissions, r.role);
+                    const roleTitle = getAdminRoleLabel(perms);
                     const checkboxesHtml = PAGE_ADMIN_PERMS_META.map(m => `
                         <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
                             <input type="checkbox" id="perm-edit-${escapeProfileMgmtHtml(r.id)}-${m.key}" ${perms[m.key] ? 'checked' : ''} class="rounded text-accord-blue focus:ring-accord-blue">
@@ -520,7 +613,10 @@ async function loadPageAdminsManagement(profile) {
                         <div class="bg-white border border-slate-200 rounded-2xl p-3.5 space-y-3">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div class="min-w-0 space-y-1.5">
-                                    <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(name)}<span class="text-accord-blue font-semibold">${escapeProfileMgmtHtml(handle)}</span></p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(name)}<span class="text-accord-blue font-semibold">${escapeProfileMgmtHtml(handle)}</span></p>
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-accord-slate border border-slate-200">${escapeProfileMgmtHtml(roleTitle)}</span>
+                                    </div>
                                     <div class="flex flex-wrap gap-1.5">
                                         ${renderPermissionBadgesHtml(perms)}
                                     </div>
@@ -564,26 +660,25 @@ async function loadPageAdminsManagement(profile) {
                 managedListEl.innerHTML = activePages.map(m => {
                     const p = m.profiles;
                     const perms = normalizePageAdminPermissions(m.permissions, m.role);
-                    const actionLinks = [
-                        perms.can_post ? `<a href="feed.html" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-accord-blue text-[10px] font-bold">Feed</a>` : '',
-                        (perms.can_post_books || perms.can_withdraw_funds) ? `<a href="author.html?page=${encodeURIComponent(p.id)}" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold">Books &amp; Earnings</a>` : '',
-                        perms.can_promote ? `<a href="promote.html" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold">Promote</a>` : '',
-                        perms.can_edit_profile ? `<a href="user.html?id=${encodeURIComponent(p.id)}&edit=1" class="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-[10px] font-bold">Edit Profile</a>` : ''
-                    ].filter(Boolean).join('');
+                    const roleTitle = getAdminRoleLabel(perms);
+                    const isCurrentlyActive = typeof window.getAccordActiveContext === 'function' && String(window.getAccordActiveContext()?.activeProfileId) === String(p.id);
                     return `
-                        <div class="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 space-y-2">
+                        <div class="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 space-y-2.5">
                             <div class="flex items-center justify-between gap-3">
                                 <a href="user.html?id=${encodeURIComponent(p.id)}" class="min-w-0 flex-1">
                                     <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(p.full_name || 'Verified Ministry')} <span class="text-accord-blue">${escapeProfileMgmtHtml(p.handle || '')}</span></p>
+                                    <p class="text-[10px] font-semibold text-accord-muted mt-0.5">Role: ${escapeProfileMgmtHtml(roleTitle)}</p>
                                 </a>
-                                <button type="button" onclick="leaveManagedPage('${escapeProfileMgmtHtml(m.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-600 text-accord-slate text-[11px] font-bold shrink-0 transition-colors">
-                                    Leave
-                                </button>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button type="button" onclick="switchAccordProfile('${escapeProfileMgmtHtml(p.id)}')" class="px-3 py-1.5 rounded-lg ${isCurrentlyActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-accord-blue hover:bg-accord-darkBlue text-white'} text-[11px] font-bold transition-colors">
+                                        <i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>${isCurrentlyActive ? 'Active Profile' : 'Switch to Page'}
+                                    </button>
+                                    <button type="button" onclick="leaveManagedPage('${escapeProfileMgmtHtml(m.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-600 text-accord-slate text-[11px] font-bold shrink-0 transition-colors">
+                                        Leave
+                                    </button>
+                                </div>
                             </div>
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div class="flex flex-wrap gap-1.5">${renderPermissionBadgesHtml(perms)}</div>
-                                <div class="flex items-center gap-1.5">${actionLinks}</div>
-                            </div>
+                            <div class="flex flex-wrap gap-1.5">${renderPermissionBadgesHtml(perms)}</div>
                         </div>
                     `;
                 }).join('');
@@ -664,9 +759,12 @@ async function handleAddPageAdmin(e) {
     }]);
 
     if (input) input.value = '';
-    const presetSel = document.getElementById('page-admin-preset');
-    if (presetSel) presetSel.value = 'editor';
-    applyAdminPowerPreset('editor');
+    const preview = document.getElementById('page-admin-lookup-preview');
+    if (preview) {
+        preview.innerHTML = '';
+        preview.classList.add('hidden');
+    }
+    selectAdminRoleCard('editor');
     showToast(`${targetProfile.full_name || targetProfile.handle || 'Member'} added as Page Admin.`);
     await loadPageAdminsManagement(currentUserProfile);
 }

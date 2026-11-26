@@ -5,10 +5,79 @@
 
 let globalHeaderUser = null;
 let globalHeaderProfile = null;
+let globalManagedPages = [];
+let globalActiveContext = {
+    isSwitched: false,
+    userId: null,
+    activeProfileId: null,
+    activeProfile: null,
+    personalProfile: null,
+    managedPages: [],
+    permissions: {
+        can_post: true,
+        can_edit_delete_posts: true,
+        can_post_books: true,
+        can_promote: true,
+        can_edit_profile: true,
+        can_withdraw_funds: true
+    }
+};
+let _accordContextReadyResolve = null;
+let _accordContextReadyPromise = new Promise((resolve) => {
+    _accordContextReadyResolve = resolve;
+});
 let globalNotifications = [];
 let globalHeaderAuthSubscribed = false;
 let globalHeaderAuthRequestId = 0;
 let globalRealtimeChannel = null;
+
+function normalizeAccordPagePerms(rawPerms, role = 'admin') {
+    const p = rawPerms && typeof rawPerms === 'object' ? rawPerms : {};
+    return {
+        can_post: p.can_post !== undefined ? Boolean(p.can_post) : true,
+        can_edit_delete_posts: p.can_edit_delete_posts !== undefined ? Boolean(p.can_edit_delete_posts) : (role === 'admin'),
+        can_post_books: Boolean(p.can_post_books),
+        can_promote: Boolean(p.can_promote),
+        can_edit_profile: Boolean(p.can_edit_profile),
+        can_withdraw_funds: Boolean(p.can_withdraw_funds)
+    };
+}
+
+function getActiveProfileStorageKey(userId) {
+    return userId ? `accord_active_profile_id:${userId}` : null;
+}
+
+window.getAccordActiveContext = function () {
+    return globalActiveContext;
+};
+
+window.waitForAccordActiveContext = function () {
+    return _accordContextReadyPromise;
+};
+
+window.hasActivePagePermission = function (permKey) {
+    if (!globalActiveContext.isSwitched) return true;
+    return Boolean(globalActiveContext.permissions && globalActiveContext.permissions[permKey]);
+};
+
+window.switchAccordProfile = function (targetProfileId) {
+    if (!globalHeaderUser) return;
+    const key = getActiveProfileStorageKey(globalHeaderUser.id);
+    const target = String(targetProfileId || '').trim();
+    if (!target || target === String(globalHeaderUser.id)) {
+        if (key) localStorage.removeItem(key);
+    } else {
+        if (key) localStorage.setItem(key, target);
+    }
+    const pageName = window.location.pathname.split('/').pop() || 'index.html';
+    if (pageName.includes('author.html')) {
+        window.location.href = (!target || target === String(globalHeaderUser.id))
+            ? 'author.html'
+            : `author.html?page=${encodeURIComponent(target)}`;
+        return;
+    }
+    window.location.reload();
+};
 
 function isVerifiedMinistryProfile(profile) {
     if (!profile) return false;
@@ -94,6 +163,24 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                     </span>
                 </a>
             </nav>
+
+            <!-- Persistent "Acting As" Context Bar (shown when switched into a Verified Page) -->
+            <div id="accord-acting-bar" class="hidden border-t border-blue-200/80 bg-gradient-to-r from-blue-50 via-indigo-50/80 to-blue-50">
+                <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span id="accord-acting-avatar" class="w-6 h-6 rounded-full bg-accord-blue text-white text-[10px] font-bold flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-blue-300"></span>
+                        <p class="text-xs text-accord-slate truncate">
+                            <span class="font-semibold text-accord-muted">Acting as</span>
+                            <strong id="accord-acting-name" class="font-extrabold text-accord-slate"></strong>
+                            <span id="accord-acting-handle" class="text-accord-blue font-semibold"></span>
+                        </p>
+                    </div>
+                    <button type="button" id="accord-acting-switch-back" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-slate-100 text-accord-slate border border-slate-200 text-[11px] font-bold shadow-sm transition-colors cursor-pointer">
+                        <i class="fa-solid fa-arrow-right-arrow-left text-accord-blue text-[10px]"></i>
+                        <span>Switch to Personal</span>
+                    </button>
+                </div>
+            </div>
         </header>
     `;
 
@@ -173,6 +260,19 @@ async function initGlobalHeaderAuth() {
 
         if (!user) {
             globalHeaderProfile = null;
+            globalManagedPages = [];
+            globalActiveContext = {
+                isSwitched: false,
+                userId: null,
+                activeProfileId: null,
+                activeProfile: null,
+                personalProfile: null,
+                managedPages: [],
+                permissions: normalizeAccordPagePerms({}, 'admin')
+            };
+            document.getElementById('accord-acting-bar')?.classList.add('hidden');
+            if (_accordContextReadyResolve) _accordContextReadyResolve(globalActiveContext);
+
             authArea.innerHTML = `
                 <a href="${loginUrl}" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
                     Log in
@@ -183,32 +283,124 @@ async function initGlobalHeaderAuth() {
             `;
         } else {
             let profile = null;
+            let managedRows = [];
             try {
-                const { data, error } = await client
-                    .from('profiles')
-                    .select('id, full_name, handle, avatar_url, account_type, upgrade_status, terms_accepted_at, warning_count, country')
-                    .eq('id', user.id)
-                    .maybeSingle();
-                if (!error) profile = data || null;
+                const [profRes, adminRes] = await Promise.all([
+                    client
+                        .from('profiles')
+                        .select('id, full_name, handle, avatar_url, account_type, upgrade_status, terms_accepted_at, warning_count, country')
+                        .eq('id', user.id)
+                        .maybeSingle(),
+                    client
+                        .from('page_admins')
+                        .select('id, page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, avatar_url, account_type, upgrade_status)')
+                        .eq('admin_user_id', user.id)
+                ]);
+                if (!profRes.error) profile = profRes.data || null;
+                if (!adminRes.error) {
+                    managedRows = (adminRes.data || [])
+                        .filter(r => r.profiles && isVerifiedMinistryProfile(r.profiles))
+                        .map(r => ({
+                            rowId: r.id,
+                            pageId: String(r.page_id),
+                            role: r.role || 'editor',
+                            permissions: normalizeAccordPagePerms(r.permissions, r.role),
+                            profile: r.profiles
+                        }));
+                }
             } catch (profileErr) {
                 console.warn('Could not load header profile status:', profileErr);
             }
             if (requestId !== globalHeaderAuthRequestId) return;
 
             globalHeaderProfile = profile;
-            const isVerifiedMinistry = isVerifiedMinistryProfile(profile);
+            globalManagedPages = managedRows;
 
+            const storageKey = getActiveProfileStorageKey(user.id);
+            const savedTargetId = storageKey ? localStorage.getItem(storageKey) : null;
+            const activeManaged = savedTargetId
+                ? managedRows.find(m => String(m.pageId) === String(savedTargetId)) || null
+                : null;
+
+            if (savedTargetId && !activeManaged && storageKey) {
+                localStorage.removeItem(storageKey);
+            }
+
+            const isSwitched = Boolean(activeManaged);
+            const activeProfile = isSwitched ? activeManaged.profile : profile;
+            const activeProfileId = isSwitched ? activeManaged.pageId : String(user.id);
+            const activePermissions = isSwitched
+                ? activeManaged.permissions
+                : {
+                    can_post: true,
+                    can_edit_delete_posts: true,
+                    can_post_books: true,
+                    can_promote: true,
+                    can_edit_profile: true,
+                    can_withdraw_funds: true
+                };
+
+            globalActiveContext = {
+                isSwitched,
+                userId: String(user.id),
+                activeProfileId,
+                activeProfile,
+                personalProfile: profile,
+                managedPages: managedRows,
+                permissions: activePermissions
+            };
+            if (_accordContextReadyResolve) _accordContextReadyResolve(globalActiveContext);
+
+            // Sync persistent "Acting As" bar
+            const actingBar = document.getElementById('accord-acting-bar');
+            if (actingBar) {
+                if (isSwitched && activeProfile) {
+                    const actingAvatar = document.getElementById('accord-acting-avatar');
+                    const actingName = document.getElementById('accord-acting-name');
+                    const actingHandle = document.getElementById('accord-acting-handle');
+                    const switchBackBtn = document.getElementById('accord-acting-switch-back');
+                    if (actingAvatar) {
+                        actingAvatar.innerHTML = activeProfile.avatar_url
+                            ? `<img src="${escapeHeaderHtml(activeProfile.avatar_url)}" class="w-full h-full object-cover" alt="">`
+                            : escapeHeaderHtml((activeProfile.full_name || 'P').charAt(0).toUpperCase());
+                    }
+                    if (actingName) actingName.textContent = activeProfile.full_name || 'Verified Page';
+                    if (actingHandle) actingHandle.textContent = activeProfile.handle ? ` (${activeProfile.handle})` : '';
+                    if (switchBackBtn) {
+                        switchBackBtn.onclick = () => window.switchAccordProfile(user.id);
+                    }
+                    actingBar.classList.remove('hidden');
+                } else {
+                    actingBar.classList.add('hidden');
+                }
+            }
+
+            const isVerifiedMinistry = isVerifiedMinistryProfile(activeProfile);
             const email = user.email || 'user@accord.com';
-            const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-            const initial = email.charAt(0).toUpperCase();
+            const personalAvatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+            const personalInitial = (profile?.full_name || email).charAt(0).toUpperCase();
+            const activeAvatarUrl = isSwitched
+                ? (activeProfile?.avatar_url || null)
+                : personalAvatarUrl;
+            const activeInitial = isSwitched
+                ? (activeProfile?.full_name || 'P').charAt(0).toUpperCase()
+                : personalInitial;
 
-            const avatarContent = avatarUrl
-                ? `<img src="${escapeHeaderHtml(avatarUrl)}" class="w-full h-full object-cover" alt="Profile">`
-                : `<span class="text-white font-bold text-sm">${escapeHeaderHtml(initial)}</span>`;
+            const avatarContent = activeAvatarUrl
+                ? `<img src="${escapeHeaderHtml(activeAvatarUrl)}" class="w-full h-full object-cover" alt="Profile">`
+                : `<span class="text-white font-bold text-sm">${escapeHeaderHtml(activeInitial)}</span>`;
 
-            const roleLabel = isAdmin
-                ? (isVerifiedMinistry ? 'Administrator · Verified Ministry' : 'Administrator')
-                : (isVerifiedMinistry ? 'Verified Ministry / Minister' : 'Authenticated Member');
+            const switchedMiniBadgeHtml = isSwitched ? `
+                <span title="Managed by ${escapeHeaderHtml(profile?.full_name || email)}" class="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-slate-700 text-white text-[8px] font-bold flex items-center justify-center ring-2 ring-white overflow-hidden pointer-events-none">
+                    ${personalAvatarUrl ? `<img src="${escapeHeaderHtml(personalAvatarUrl)}" class="w-full h-full object-cover" alt="">` : escapeHeaderHtml(personalInitial)}
+                </span>
+            ` : '';
+
+            const roleLabel = isSwitched
+                ? `Acting as Page · Managed by ${escapeHeaderHtml(profile?.handle || profile?.full_name || 'You')}`
+                : (isAdmin
+                    ? (isVerifiedMinistry ? 'Administrator · Verified Ministry' : 'Administrator')
+                    : (isVerifiedMinistry ? 'Verified Ministry / Minister' : 'Authenticated Member'));
 
             const superadminLinkHtml = isSuperadmin ? `
                 <a href="superadmin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
@@ -224,6 +416,101 @@ async function initGlobalHeaderAuth() {
                 </a>
                 ${superadminLinkHtml}
             ` : '';
+
+            const switcherSectionHtml = managedRows.length > 0 ? `
+                <div class="px-3 py-2 border-b border-slate-100 bg-slate-50/70">
+                    <p class="px-1 pb-1.5 text-[10px] font-extrabold uppercase tracking-wider text-accord-muted flex items-center justify-between">
+                        <span>Switch Profile</span>
+                        <i class="fa-solid fa-arrow-right-arrow-left text-accord-blue"></i>
+                    </p>
+                    <div class="space-y-1 max-h-44 overflow-y-auto">
+                        <button type="button" onclick="switchAccordProfile('${escapeHeaderHtml(user.id)}')" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl text-left transition-colors ${!isSwitched ? 'bg-blue-50 border border-blue-200/80' : 'hover:bg-white border border-transparent'}">
+                            <span class="flex items-center gap-2 min-w-0">
+                                <span class="w-6 h-6 rounded-full bg-accord-blue text-white text-[10px] font-bold flex items-center justify-center overflow-hidden shrink-0">
+                                    ${personalAvatarUrl ? `<img src="${escapeHeaderHtml(personalAvatarUrl)}" class="w-full h-full object-cover" alt="">` : escapeHeaderHtml(personalInitial)}
+                                </span>
+                                <span class="min-w-0">
+                                    <span class="block text-[11px] font-bold text-accord-slate truncate">${escapeHeaderHtml(profile?.full_name || 'Personal Account')}</span>
+                                    <span class="block text-[10px] text-accord-muted truncate">${escapeHeaderHtml(profile?.handle || 'Personal Profile')}</span>
+                                </span>
+                            </span>
+                            ${!isSwitched ? '<i class="fa-solid fa-circle-check text-accord-blue text-xs shrink-0"></i>' : ''}
+                        </button>
+                        ${managedRows.map(m => {
+                            const mp = m.profile;
+                            const isCurrent = isSwitched && String(activeProfileId) === String(m.pageId);
+                            const mInitial = (mp.full_name || 'P').charAt(0).toUpperCase();
+                            return `
+                                <button type="button" onclick="switchAccordProfile('${escapeHeaderHtml(m.pageId)}')" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-xl text-left transition-colors ${isCurrent ? 'bg-blue-50 border border-blue-200/80' : 'hover:bg-white border border-transparent'}">
+                                    <span class="flex items-center gap-2 min-w-0">
+                                        <span class="w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center overflow-hidden shrink-0">
+                                            ${mp.avatar_url ? `<img src="${escapeHeaderHtml(mp.avatar_url)}" class="w-full h-full object-cover" alt="">` : escapeHeaderHtml(mInitial)}
+                                        </span>
+                                        <span class="min-w-0">
+                                            <span class="block text-[11px] font-bold text-accord-slate truncate">${escapeHeaderHtml(mp.full_name || 'Verified Page')}</span>
+                                            <span class="block text-[10px] text-accord-blue truncate">${escapeHeaderHtml(mp.handle || 'Verified Page')}</span>
+                                        </span>
+                                    </span>
+                                    ${isCurrent ? '<i class="fa-solid fa-circle-check text-accord-blue text-xs shrink-0"></i>' : ''}
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            ` : '';
+
+            const contextLinksHtml = isSwitched ? `
+                <a href="user.html?id=${encodeURIComponent(activeProfileId)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-id-badge text-accord-blue w-4"></i>
+                    <span>Page Public Profile</span>
+                </a>
+                ${activePermissions.can_edit_profile ? `
+                <a href="user.html?id=${encodeURIComponent(activeProfileId)}&edit=1" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-regular fa-pen-to-square text-accord-blue w-4"></i>
+                    <span>Edit Page Profile</span>
+                </a>` : ''}
+                ${(activePermissions.can_post_books || activePermissions.can_withdraw_funds) ? `
+                <a href="author.html?page=${encodeURIComponent(activeProfileId)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
+                    <span>Page Books &amp; Earnings</span>
+                </a>` : ''}
+                ${activePermissions.can_promote ? `
+                <a href="promote.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-bullhorn text-accord-blue w-4 text-center"></i>
+                    <span>Promote Page Content</span>
+                </a>` : ''}
+                <button type="button" onclick="switchAccordProfile('${escapeHeaderHtml(user.id)}')" class="w-full flex items-center space-x-3 px-4 py-2.5 text-xs font-bold text-accord-blue hover:bg-blue-50 transition-colors text-left">
+                    <i class="fa-solid fa-arrow-right-arrow-left w-4"></i>
+                    <span>Switch Back to Personal</span>
+                </button>
+                ${adminLinkHtml}
+            ` : `
+                <a href="user.html?id=${encodeURIComponent(user.id)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-id-badge text-accord-blue w-4"></i>
+                    <span>My Public Profile</span>
+                </a>
+                <a href="messages.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-regular fa-paper-plane text-accord-blue w-4"></i>
+                    <span>Messages</span>
+                </a>
+                <a href="profile.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-regular fa-user text-accord-blue w-4"></i>
+                    <span>Edit Profile</span>
+                </a>
+                <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
+                    <span>My Author Page</span>
+                </a>
+                <a href="promote.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-bullhorn text-accord-blue w-4 text-center"></i>
+                    <span>Promote / Advertise</span>
+                </a>
+                <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
+                    <span>Saved Collections</span>
+                </a>
+                ${adminLinkHtml}
+            `;
 
             authArea.innerHTML = `
                 <!-- Messages Link -->
@@ -258,43 +545,21 @@ async function initGlobalHeaderAuth() {
                         <span class="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
                             ${avatarContent}
                         </span>
+                        ${switchedMiniBadgeHtml}
                         <span id="profile-verified-badge" title="Verified Ministry / Minister" aria-label="Verified Ministry / Minister" class="${isVerifiedMinistry ? '' : 'hidden'} absolute -bottom-0.5 -right-0.5 w-5 h-5 z-10 pointer-events-none select-none drop-shadow-sm">
                             ${getVerifiedCheckmarkSvg()}
                         </span>
                     </button>
 
-                    <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
                         <div class="px-4 py-3 border-b border-slate-100">
-                            <p class="text-xs font-bold text-accord-slate truncate">${escapeHeaderHtml(profile?.full_name || email)}</p>
-                            ${profile?.handle ? `<p class="text-[11px] font-semibold text-accord-blue truncate">${escapeHeaderHtml(profile.handle)}</p>` : ''}
+                            <p class="text-xs font-bold text-accord-slate truncate">${escapeHeaderHtml(activeProfile?.full_name || email)}</p>
+                            ${activeProfile?.handle ? `<p class="text-[11px] font-semibold text-accord-blue truncate">${escapeHeaderHtml(activeProfile.handle)}</p>` : ''}
                             <p class="text-[10px] text-accord-muted truncate">${roleLabel}</p>
                         </div>
+                        ${switcherSectionHtml}
                         <div class="py-1">
-                            <a href="user.html?id=${encodeURIComponent(user.id)}" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-id-badge text-accord-blue w-4"></i>
-                                <span>My Public Profile</span>
-                            </a>
-                            <a href="messages.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-regular fa-paper-plane text-accord-blue w-4"></i>
-                                <span>Messages</span>
-                            </a>
-                            <a href="profile.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-regular fa-user text-accord-blue w-4"></i>
-                                <span>Edit Profile</span>
-                            </a>
-                            <a href="author.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
-                                <span>My Author Page</span>
-                            </a>
-                            <a href="promote.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-bullhorn text-accord-blue w-4 text-center"></i>
-                                <span>Promote / Advertise</span>
-                            </a>
-                            <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
-                                <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
-                                <span>Saved Collections</span>
-                            </a>
-                            ${adminLinkHtml}
+                            ${contextLinksHtml}
                         </div>
                         <div class="border-t border-slate-100 pt-1">
                             <button type="button" onclick="handleGlobalSignOut()" class="w-full flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors text-left">
@@ -322,6 +587,7 @@ async function initGlobalHeaderAuth() {
         collectAudienceGeoSignal(user);
     } catch (err) {
         console.error('Header auth check error:', err);
+        if (_accordContextReadyResolve) _accordContextReadyResolve(globalActiveContext);
     }
 }
 

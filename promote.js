@@ -69,32 +69,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadPromoteChoices() {
     promotablePageIds = [];
     promotablePagesById = {};
-    try {
-        const { data: adminRows } = await supabaseClient
-            .from('page_admins')
-            .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
-            .eq('admin_user_id', promoUser.id);
-        (adminRows || []).forEach(r => {
-            const prof = r.profiles;
-            const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
-            const p = r.permissions && typeof r.permissions === 'object' ? r.permissions : {};
-            if (isVerified && Boolean(p.can_promote)) {
-                const pid = String(r.page_id);
-                promotablePageIds.push(pid);
-                promotablePagesById[pid] = prof;
-            }
-        });
-    } catch {
-        promotablePageIds = [];
-        promotablePagesById = {};
+    const ctx = typeof window.waitForAccordActiveContext === 'function'
+        ? await window.waitForAccordActiveContext()
+        : null;
+
+    if (ctx?.isSwitched) {
+        if (ctx.permissions?.can_promote && ctx.activeProfile) {
+            promotablePageIds = [String(ctx.activeProfileId)];
+            promotablePagesById[String(ctx.activeProfileId)] = ctx.activeProfile;
+        }
+    } else {
+        try {
+            const { data: adminRows } = await supabaseClient
+                .from('page_admins')
+                .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
+                .eq('admin_user_id', promoUser.id);
+            (adminRows || []).forEach(r => {
+                const prof = r.profiles;
+                const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+                const p = r.permissions && typeof r.permissions === 'object' ? r.permissions : {};
+                if (isVerified && Boolean(p.can_promote)) {
+                    const pid = String(r.page_id);
+                    promotablePageIds.push(pid);
+                    promotablePagesById[pid] = prof;
+                }
+            });
+        } catch {
+            promotablePageIds = [];
+            promotablePagesById = {};
+        }
     }
 
-    const allowedAuthorIds = [String(promoUser.id), ...promotablePageIds];
+    const allowedAuthorIds = ctx?.isSwitched
+        ? (ctx.permissions?.can_promote ? [String(ctx.activeProfileId)] : [])
+        : [String(promoUser.id)];
 
-    const [postsRes, booksRes] = await Promise.all([
-        supabaseClient.from('feed_posts').select('id, title, body, author_id').in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(80),
-        supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(120)
-    ]);
+    const payBtn = document.getElementById('promo-pay-btn');
+    if (ctx?.isSwitched && !ctx.permissions?.can_promote) {
+        if (payBtn) payBtn.disabled = true;
+        showToast(`You do not have Promote permission for ${ctx.activeProfile?.full_name || 'this page'}.`, true);
+    }
+
+    const [postsRes, booksRes] = allowedAuthorIds.length === 0
+        ? [{ data: [] }, { data: [] }]
+        : await Promise.all([
+            supabaseClient.from('feed_posts').select('id, title, body, author_id').in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(80),
+            supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(120)
+        ]);
 
     myPostsCache = postsRes.data || [];
     booksCache = (booksRes.data || []).filter(b => !String(b.title || '').startsWith('__ACCORD_'));
@@ -230,7 +251,7 @@ async function handlePromotionSubmit(e) {
     window.launchAccordPaystackCheckout({
         email: promoUser.email,
         amount: budget_amount,
-        currency: 'USD',
+        currency: 'GHS',
         metadata: { type: 'paid_promotion', promo_type: promoType, user_id: promoUser.id },
         onVerified: async (tx) => {
             const { error } = await supabaseClient.from('promotions').insert([{
@@ -250,7 +271,7 @@ async function handlePromotionSubmit(e) {
                 target_countries: targetCountries,
                 duration_days,
                 budget_amount,
-                currency: tx.currency || 'USD',
+                currency: tx.currency || 'GHS',
                 payment_provider: 'paystack',
                 payment_reference: tx.reference,
                 payment_status: 'paid',

@@ -114,6 +114,9 @@ async function initFeedSession() {
         if (mobileAuthLabel) mobileAuthLabel.textContent = 'Sign In / Create Account';
     }
 
+    if (typeof window.waitForAccordActiveContext === 'function') {
+        await window.waitForAccordActiveContext();
+    }
     syncPostAsPageSelector();
     syncFeedAccountUI();
 }
@@ -746,13 +749,24 @@ async function submitInlineComment(e, postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!text || !post) return;
 
-    const authorName = currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Member';
+    const authorName = (typeof window.getAccordActiveContext === 'function' && window.getAccordActiveContext()?.isSwitched)
+        ? (() => {
+            const ctx = window.getAccordActiveContext();
+            return ctx.activeProfile?.full_name || 'Verified Page';
+        })()
+        : (currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Member');
+    const activeCtx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (activeCtx?.isSwitched && !activeCtx.permissions?.can_post) {
+        showToast('You do not have permission to comment on behalf of this verified page.', true);
+        return;
+    }
+    const commentAuthorId = activeCtx?.isSwitched ? activeCtx.activeProfileId : currentUser.id;
     input.value = '';
 
     const { error } = await supabaseClient.from('post_comments').insert([{
         post_id: post.id,
         user_id: currentUser.id,
-        author_id: currentUser.id,
+        author_id: commentAuthorId,
         author_name: authorName,
         comment_text: text
     }]);
@@ -954,26 +968,26 @@ function syncPostAsPageSelector() {
     const sel = document.getElementById('post-as-page-select');
     if (!group || !sel) return;
 
-    if (!currentUser || managedVerifiedPages.length === 0) {
+    const ctx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (!currentUser || !ctx?.isSwitched) {
         group.classList.add('hidden');
         sel.innerHTML = '';
         return;
     }
 
-    const selfName = currentProfile?.full_name || currentUser.email?.split('@')[0] || 'My Account';
-    const options = [
-        `<option value="">Myself (${escapeHtml(selfName)})</option>`,
-        ...managedVerifiedPages.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.full_name || 'Verified Page')} (Verified Page)</option>`)
-    ];
-    sel.innerHTML = options.join('');
+    const pageName = ctx.activeProfile?.full_name || 'Verified Page';
+    sel.innerHTML = `<option value="${escapeHtml(ctx.activeProfileId)}">${escapeHtml(pageName)} (Active Profile)</option>`;
+    sel.value = ctx.activeProfileId;
+    sel.disabled = true;
     group.classList.remove('hidden');
 }
 
 function getSelectedPostingPage() {
-    const sel = document.getElementById('post-as-page-select');
-    const pageId = sel?.value || '';
-    if (!pageId) return null;
-    return managedVerifiedPages.find(p => String(p.id) === String(pageId)) || null;
+    const ctx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (ctx?.isSwitched) {
+        return ctx.permissions?.can_post ? ctx.activeProfile : null;
+    }
+    return null;
 }
 
 function togglePostTypeFields() {

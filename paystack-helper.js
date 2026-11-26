@@ -38,7 +38,7 @@
     window.launchAccordPaystackCheckout = async function ({
         email,
         amount,
-        currency = 'USD',
+        currency,
         metadata = {},
         onVerified,
         onError,
@@ -57,12 +57,13 @@
             return;
         }
 
+        const resolvedCurrency = String(currency || cfg.currency || 'GHS').toUpperCase();
         const reference = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const handler = window.PaystackPop.setup({
             key: cfg.publicKey,
             email: email || 'member@accordarchives.com',
             amount: Math.max(100, Math.round(Number(amount || 0) * 100)),
-            currency: String(currency || 'USD').toUpperCase(),
+            currency: resolvedCurrency,
             ref: reference,
             metadata,
             callback: async function (response) {

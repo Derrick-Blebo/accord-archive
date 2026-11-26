@@ -837,7 +837,7 @@ async function initiateBookPurchase(bookId) {
     window.launchAccordPaystackCheckout({
         email: currentUser.email,
         amount: Number(book.price) || 0,
-        currency: 'USD',
+        currency: 'GHS',
         metadata: { type: 'book_purchase', book_id: Number(book.id), user_id: currentUser.id },
         onVerified: async (tx) => {
             const { error } = await supabaseClient.from('user_purchases').insert([{
@@ -846,7 +846,7 @@ async function initiateBookPurchase(bookId) {
                 amount_paid: Number(book.price) || 0,
                 payment_reference: tx.reference,
                 payment_provider: 'paystack',
-                currency: tx.currency || 'USD'
+                currency: tx.currency || 'GHS'
             }]);
 
             if (!error) {

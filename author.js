@@ -70,10 +70,15 @@ async function loadManagedAuthorPages() {
         managedAuthorPages = [];
     }
 
+    const ctx = typeof window.waitForAccordActiveContext === 'function'
+        ? await window.waitForAccordActiveContext()
+        : null;
     const params = new URLSearchParams(window.location.search);
     const reqPage = params.get('page');
     if (reqPage && managedAuthorPages.some(e => String(e.page.id) === String(reqPage))) {
         activeAuthorPageId = reqPage;
+    } else if (ctx?.isSwitched && managedAuthorPages.some(e => String(e.page.id) === String(ctx.activeProfileId))) {
+        activeAuthorPageId = ctx.activeProfileId;
     }
     syncAuthorContextSwitcher();
 }

@@ -13,7 +13,8 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
         return res.status(200).json({
             configured: Boolean(publicKey && secretKey),
-            publicKey: publicKey || null
+            publicKey: publicKey || null,
+            currency: process.env.PAYSTACK_CURRENCY || 'GHS'
         });
     }
 
