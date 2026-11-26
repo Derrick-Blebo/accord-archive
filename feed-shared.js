@@ -309,127 +309,6 @@ function getSharedVideoThumbnailUrl(url) {
     return '';
 }
 
-function getSharedAudioEmbedInfo(url) {
-    if (!url) return null;
-    const raw = String(url).trim();
-    if (!raw) return null;
-
-    let parsed;
-    try {
-        parsed = new URL(raw);
-    } catch (_) {
-        return null;
-    }
-
-    const host = parsed.hostname.toLowerCase();
-    const path = parsed.pathname.replace(/\/+$/, '');
-
-    // Spotify: https://open.spotify.com/(intl-xx/)?(track|episode|show|album|playlist)/ID
-    if (host === 'open.spotify.com' || host === 'play.spotify.com') {
-        const match = path.match(/^\/(?:embed\/)?(?:intl-[a-z-]+\/)?(track|episode|show|album|playlist)\/([a-zA-Z0-9]+)/i);
-        if (match) {
-            const type = match[1].toLowerCase();
-            const id = match[2];
-            const height = (type === 'track' || type === 'episode') ? 152 : 352;
-            return {
-                provider: 'spotify',
-                embedUrl: `https://open.spotify.com/embed/${type}/${id}?utm_source=generator`,
-                height
-            };
-        }
-    }
-
-    // Audiomack: https://audiomack.com/artist/(song|album|playlist)/slug
-    if (host === 'audiomack.com' || host === 'www.audiomack.com') {
-        if (path.startsWith('/embed/')) {
-            const isSong = path.startsWith('/embed/song/');
-            return {
-                provider: 'audiomack',
-                embedUrl: `https://audiomack.com${path}`,
-                height: isSong ? 252 : 400
-            };
-        }
-        const match = path.match(/^\/([^/]+)\/(song|album|playlist)\/([^/]+)$/i);
-        if (match) {
-            const artist = match[1];
-            const type = match[2].toLowerCase();
-            const slug = match[3];
-            return {
-                provider: 'audiomack',
-                embedUrl: `https://audiomack.com/embed/${type}/${artist}/${slug}`,
-                height: type === 'song' ? 252 : 400
-            };
-        }
-    }
-
-    // Apple Music: https://music.apple.com/{storefront}/{type}/...
-    if (host === 'music.apple.com' || host === 'embed.music.apple.com') {
-        const isTrack = parsed.searchParams.has('i') || /\/song\//i.test(path);
-        const embedUrl = `https://embed.music.apple.com${path}${parsed.search}`;
-        return {
-            provider: 'applemusic',
-            embedUrl,
-            height: isTrack ? 175 : 450
-        };
-    }
-
-    // SoundCloud
-    if (host === 'soundcloud.com' || host === 'www.soundcloud.com' || host === 'm.soundcloud.com') {
-        return {
-            provider: 'soundcloud',
-            embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(raw)}&color=%231D4ED8&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false`,
-            height: 166
-        };
-    }
-
-    return null;
-}
-
-function getSharedAudioEmbedHtml(url, wrapperClass = 'mx-4 mb-3') {
-    if (!url) return '';
-    const embedInfo = getSharedAudioEmbedInfo(url);
-    if (embedInfo) {
-        const sandboxAttr = embedInfo.provider === 'applemusic'
-            ? ' sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"'
-            : '';
-        return `
-            <div class="${wrapperClass} rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
-                <iframe
-                    src="${escapeShareHtml(embedInfo.embedUrl)}"
-                    width="100%"
-                    height="${embedInfo.height}"
-                    frameborder="0"
-                    scrolling="no"
-                    loading="lazy"
-                    allow="autoplay *; clipboard-write; encrypted-media *; fullscreen *; picture-in-picture"
-                    ${sandboxAttr}
-                    class="w-full block border-0"></iframe>
-            </div>
-        `;
-    }
-
-    const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(url);
-    if (isDirectAudio) {
-        return `
-            <div class="${wrapperClass} bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <audio controls src="${escapeShareHtml(url)}" class="w-full"></audio>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="${wrapperClass} bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5">
-            <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                <i class="fa-solid fa-circle-play text-lg"></i>
-            </div>
-            <div class="flex-grow min-w-0">
-                <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
-                <a href="${escapeShareHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</a>
-            </div>
-        </div>
-    `;
-}
-
 function extractSharedBookId(text) {
     if (!text) return null;
     const m = String(text).match(/(?:book\.html\?(?:[^#\s]*&)?(?:id|book)=|[?&]book=)(\d+)/i);
@@ -592,7 +471,20 @@ function createSharedFeedCardElement(post, options = {}) {
             </div>
         `;
     } else if (post.post_type === 'audio' && post.media_url) {
-        mediaHtml = getSharedAudioEmbedHtml(post.media_url, 'mx-4 mb-3');
+        const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
+        mediaHtml = isDirectAudio
+            ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                   <audio controls src="${escapeShareHtml(post.media_url)}" class="w-full"></audio>
+               </div>`
+            : `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5 transition-colors">
+                   <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
+                       <i class="fa-solid fa-circle-play text-lg"></i>
+                   </div>
+                   <div class="flex-grow min-w-0">
+                       <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
+                       <span class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</span>
+                   </div>
+               </a>`;
     }
 
     const bodyText = String(post.body || '');

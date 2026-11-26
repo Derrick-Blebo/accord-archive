@@ -24,11 +24,20 @@ export default async function handler(req, res) {
     const modeMismatch = publicValid && secretValid && getPaystackKeyMode(publicKey) !== getPaystackKeyMode(secretKey);
 
     if (req.method === 'GET') {
+        const configError = modeMismatch
+            ? 'Paystack public and secret keys are from different modes (test vs live).'
+            : (!publicValid && !secretValid)
+                ? 'Paystack is not configured yet. Please add PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY in your Vercel environment variables.'
+                : !publicValid
+                    ? 'Paystack public key is missing or invalid in Vercel environment variables (must start with pk_test_ or pk_live_).'
+                    : !secretValid
+                        ? 'Paystack secret key is missing or invalid in Vercel environment variables (must start with sk_test_ or sk_live_).'
+                        : null;
         return res.status(200).json({
             configured: Boolean(publicValid && secretValid && !modeMismatch),
             publicKey: publicValid ? publicKey : null,
             currency: sanitizeEnvKey(process.env.PAYSTACK_CURRENCY) || 'GHS',
-            ...(modeMismatch ? { error: 'Paystack public and secret keys are from different modes (test vs live).' } : {})
+            ...(configError ? { error: configError } : {})
         });
     }
 

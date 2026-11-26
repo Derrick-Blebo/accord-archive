@@ -332,24 +332,20 @@ function renderMinistryPosts() {
                 </div>
             `;
         } else if (post.post_type === 'audio' && post.media_url) {
-            if (typeof getSharedAudioEmbedHtml === 'function') {
-                mediaHtml = getSharedAudioEmbedHtml(post.media_url, '');
-            } else {
-                const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
-                mediaHtml = isDirectAudio
-                    ? `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                           <audio controls src="${escapeHtml(post.media_url)}" class="w-full"></audio>
-                       </div>`
-                    : `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center space-x-4">
-                           <div class="w-12 h-12 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                               <i class="fa-solid fa-circle-play text-xl"></i>
-                           </div>
-                           <div class="flex-grow min-w-0">
-                               <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
-                               <a href="${escapeHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</a>
-                           </div>
-                       </div>`;
-            }
+            const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
+            mediaHtml = isDirectAudio
+                ? `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                       <audio controls src="${escapeHtml(post.media_url)}" class="w-full"></audio>
+                   </div>`
+                : `<a href="${escapeHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl p-4 flex items-center space-x-4 transition-colors">
+                       <div class="w-12 h-12 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
+                           <i class="fa-solid fa-circle-play text-xl"></i>
+                       </div>
+                       <div class="flex-grow min-w-0">
+                           <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
+                           <span class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</span>
+                       </div>
+                   </a>`;
         }
 
         card.innerHTML = `

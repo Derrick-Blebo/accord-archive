@@ -28,8 +28,11 @@
         try {
             const resp = await fetch('/api/paystack-verify');
             if (resp.ok) {
-                _paystackConfigCache = await resp.json();
-                return _paystackConfigCache;
+                const data = await resp.json();
+                if (data?.configured && data?.publicKey) {
+                    _paystackConfigCache = data;
+                }
+                return data;
             }
         } catch (_) {}
         return { configured: false, publicKey: null };
@@ -46,7 +49,7 @@
     }) {
         const cfg = await getPaystackConfig();
         if (!cfg?.configured || !cfg?.publicKey) {
-            const msg = 'Paystack is not configured yet. Please add PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY in your Vercel environment variables.';
+            const msg = cfg?.error || 'Paystack is not configured yet. Please add PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY in your Vercel environment variables.';
             if (typeof onError === 'function') onError(msg);
             return;
         }
