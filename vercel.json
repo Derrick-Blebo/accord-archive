@@ -1,7 +1,17 @@
 {
+  "functions": {
+    "api/preview.js": {
+      "includeFiles": "{index,book,forum,post,testimony,ministry}.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/",
+      "has": [{ "type": "query", "key": "book" }],
+      "destination": "/api/preview?page=index"
+    },
+    {
+      "source": "/index.html",
       "has": [{ "type": "query", "key": "book" }],
       "destination": "/api/preview?page=index"
     },
@@ -19,6 +29,21 @@
       "source": "/book.html",
       "has": [{ "type": "query", "key": "id" }],
       "destination": "/api/preview?page=book"
+    },
+    {
+      "source": "/post.html",
+      "has": [{ "type": "query", "key": "id" }],
+      "destination": "/api/preview?page=post"
+    },
+    {
+      "source": "/testimony.html",
+      "has": [{ "type": "query", "key": "id" }],
+      "destination": "/api/preview?page=testimony"
+    },
+    {
+      "source": "/ministry.html",
+      "has": [{ "type": "query", "key": "id" }],
+      "destination": "/api/preview?page=ministry"
     }
   ]
 }
