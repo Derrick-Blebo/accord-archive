@@ -186,7 +186,7 @@ async function initGlobalHeaderAuth() {
             try {
                 const { data, error } = await client
                     .from('profiles')
-                    .select('id, full_name, handle, account_type, upgrade_status')
+                    .select('id, full_name, handle, account_type, upgrade_status, terms_accepted_at, warning_count, country')
                     .eq('id', user.id)
                     .maybeSingle();
                 if (!error) profile = data || null;
@@ -286,6 +286,10 @@ async function initGlobalHeaderAuth() {
                                 <i class="fa-solid fa-feather-pointed text-accord-gold w-4 text-center"></i>
                                 <span>My Author Page</span>
                             </a>
+                            <a href="promote.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                                <i class="fa-solid fa-bullhorn text-accord-blue w-4 text-center"></i>
+                                <span>Promote / Advertise</span>
+                            </a>
                             <a href="saved.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                                 <i class="fa-solid fa-bookmark text-accord-gold w-4"></i>
                                 <span>Saved Collections</span>
@@ -304,14 +308,18 @@ async function initGlobalHeaderAuth() {
 
             if (profile && !profile.handle && !isSignInPage) {
                 promptMissingHandleOnboarding(user, profile);
+            } else if (profile && !profile.terms_accepted_at && !isSignInPage) {
+                promptTermsAcceptanceOnboarding(user);
             }
 
             await Promise.all([
                 loadGlobalNotifications(),
                 loadGlobalUnreadChatCount()
             ]);
+            checkUnreadPolicyWarnings();
             initGlobalRealtimeSubscriptions();
         }
+        collectAudienceGeoSignal(user);
     } catch (err) {
         console.error('Header auth check error:', err);
     }
@@ -412,6 +420,9 @@ function getNotificationIconMeta(type) {
             return { icon: 'fa-comment-dots', bgClass: 'bg-rose-50 text-rose-500' };
         case 'new_message':
             return { icon: 'fa-paper-plane', bgClass: 'bg-indigo-50 text-indigo-600' };
+        case 'content_warning':
+        case 'verification_revoked':
+            return { icon: 'fa-triangle-exclamation', bgClass: 'bg-red-100 text-red-600' };
         default:
             return { icon: 'fa-bell', bgClass: 'bg-slate-100 text-accord-slate' };
     }
@@ -731,4 +742,148 @@ function updateGlobalBookmarks() {
         if (badge) badge.textContent = saved.length;
         if (mobileBadge) mobileBadge.textContent = saved.length;
     } catch (e) {}
+}
+
+function promptTermsAcceptanceOnboarding(user) {
+    if (!user || document.getElementById('accord-terms-onboarding-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'accord-terms-onboarding-modal';
+    modal.className = 'fixed inset-0 z-[70] bg-accord-slate/75 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-4">
+            <div class="space-y-1">
+                <span class="inline-block px-2.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue text-[10px] font-bold uppercase tracking-wider">Compliance Update</span>
+                <h2 class="text-xl font-bold text-accord-slate">Accept Terms &amp; Community Guidelines</h2>
+                <p class="text-xs text-accord-muted leading-relaxed">To continue using your Accord Archive account, please review and accept our updated Terms of Service and Privacy Policy.</p>
+            </div>
+            <label class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer text-xs text-accord-slate leading-relaxed">
+                <input type="checkbox" id="onboarding-terms-check" class="mt-0.5 rounded border-slate-300 text-accord-blue">
+                <span>I agree to the <a href="terms.html" target="_blank" class="text-accord-blue font-bold hover:underline">Terms of Service</a> (including rules on language, inappropriate content, violence, and copyright) and <a href="privacy.html" target="_blank" class="text-accord-blue font-bold hover:underline">Privacy Policy</a>.</span>
+            </label>
+            <p id="onboarding-terms-err" class="hidden text-[11px] font-semibold text-red-600"></p>
+            <button type="button" id="onboarding-terms-submit" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
+                Accept &amp; Continue
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('onboarding-terms-submit')?.addEventListener('click', async () => {
+        const checked = document.getElementById('onboarding-terms-check')?.checked;
+        const errEl = document.getElementById('onboarding-terms-err');
+        const btn = document.getElementById('onboarding-terms-submit');
+        if (!checked) {
+            if (errEl) {
+                errEl.textContent = 'Please check the box to accept the Terms of Service and Privacy Policy.';
+                errEl.classList.remove('hidden');
+            }
+            return;
+        }
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+        }
+        const { error } = await window.supabaseClient
+            .from('profiles')
+            .update({ terms_accepted_at: new Date().toISOString(), terms_version: '2026-11' })
+            .eq('id', user.id);
+        if (error) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Accept & Continue'; }
+            if (errEl) { errEl.textContent = error.message; errEl.classList.remove('hidden'); }
+            return;
+        }
+        modal.remove();
+    });
+}
+
+function checkUnreadPolicyWarnings() {
+    if (!globalHeaderUser || !Array.isArray(globalNotifications)) return;
+    const warningNotif = globalNotifications.find(n => !n.is_read && n.type === 'content_warning');
+    if (!warningNotif || document.getElementById('accord-policy-warning-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'accord-policy-warning-modal';
+    modal.className = 'fixed inset-0 z-[75] bg-accord-slate/75 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-4 border-2 border-red-200">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                </div>
+                <div class="space-y-1">
+                    <span class="inline-block px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[10px] font-extrabold uppercase tracking-wider">Policy Warning</span>
+                    <h3 class="text-base font-bold text-accord-slate">${escapeHeaderHtml(warningNotif.title)}</h3>
+                </div>
+            </div>
+            <p class="text-xs text-slate-700 leading-relaxed bg-red-50/60 border border-red-100 rounded-xl p-3.5">${escapeHeaderHtml(warningNotif.message)}</p>
+            <p class="text-[11px] text-accord-muted">Repeated violations of our <a href="terms.html" class="text-accord-blue font-bold hover:underline">Terms of Service</a> may result in account suspension.</p>
+            <button type="button" id="ack-policy-warning-btn" class="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm transition-all">
+                I Understand
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('ack-policy-warning-btn')?.addEventListener('click', async () => {
+        warningNotif.is_read = true;
+        renderGlobalNotifications();
+        modal.remove();
+        await window.supabaseClient
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', warningNotif.id)
+            .eq('user_id', globalHeaderUser.id);
+    });
+}
+
+async function collectAudienceGeoSignal(user) {
+    try {
+        let geo = null;
+        const cached = sessionStorage.getItem('accord_geo');
+        if (cached) {
+            geo = JSON.parse(cached);
+        } else {
+            const resp = await fetch('/api/geo');
+            if (resp.ok) {
+                geo = await resp.json();
+                sessionStorage.setItem('accord_geo', JSON.stringify(geo));
+            }
+        }
+        if (!geo) return;
+        window.accordUserGeo = geo;
+
+        const client = window.supabaseClient;
+        if (!client) return;
+
+        if (user?.id && !sessionStorage.getItem('accord_geo_profile_synced')) {
+            sessionStorage.setItem('accord_geo_profile_synced', '1');
+            client.from('profiles').update({
+                country: geo.country || 'GLOBAL',
+                region: geo.region || null,
+                city: geo.city || null,
+                location_updated_at: new Date().toISOString()
+            }).eq('id', user.id).then(() => {});
+        }
+
+        const pageName = window.location.pathname.split('/').pop() || 'index.html';
+        const signalKey = `accord_sig_${pageName}`;
+        if (!sessionStorage.getItem(signalKey)) {
+            sessionStorage.setItem(signalKey, '1');
+            let sessKey = localStorage.getItem('accord_session_key');
+            if (!sessKey) {
+                sessKey = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+                localStorage.setItem('accord_session_key', sessKey);
+            }
+            const deviceType = window.innerWidth < 768 ? 'mobile' : 'desktop';
+            client.from('user_audience_signals').insert([{
+                user_id: user?.id || null,
+                session_key: sessKey,
+                country: geo.country || 'GLOBAL',
+                region: geo.region || null,
+                city: geo.city || null,
+                page: pageName,
+                device_type: deviceType
+            }]).then(() => {});
+        }
+    } catch (_) {}
 }

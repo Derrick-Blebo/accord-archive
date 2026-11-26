@@ -532,6 +532,44 @@
                 </div>
             </section>
 
+            <!-- Section 2C: Paid Promotions & Centralized Ads Approval -->
+            <section id="promotions-admin-section" class="space-y-5 pt-6 border-t border-slate-200">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Paid Promotions &amp; Centralized Ads</h2>
+                        <p class="text-xs text-accord-muted mt-1">Review and approve paid promotions (posts, books, and banners) across Library, Feed, and Music, plus audience location insights.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="pending-promotions-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">0 Pending</span>
+                        <button type="button" onclick="loadSuperadminPromotions()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
+                            <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="audience-geo-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+                <div id="superadmin-promotions-list" class="space-y-3">
+                    <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading promotions...</p>
+                </div>
+            </section>
+
+            <!-- Section 2D: Author Sales Withdrawals (Paystack Payouts) -->
+            <section id="author-withdrawals-admin-section" class="space-y-5 pt-6 border-t border-slate-200">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Author Sales Withdrawals (Paystack Payouts)</h2>
+                        <p class="text-xs text-accord-muted mt-1">Disburse author book royalties via Paystack Transfer or mark completed manually.</p>
+                    </div>
+                    <button type="button" onclick="loadSuperadminWithdrawals()" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
+                        <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+                <div id="superadmin-withdrawals-list" class="space-y-3">
+                    <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading withdrawal requests...</p>
+                </div>
+            </section>
+
         </main>
 
         

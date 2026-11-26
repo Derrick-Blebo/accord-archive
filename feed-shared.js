@@ -369,10 +369,14 @@ function createSharedFeedCardElement(post, options = {}) {
         myAvatarInitial = 'U',
         authorHandle = '',
         reposterHandle = '',
+        currentUserId = null,
         expandFullBody = false,
         openCommentsByDefault = false,
         showOpenFullPostLink = true
     } = options;
+
+    const resolvedViewerId = currentUserId || window.currentFeedUserId || null;
+    const isOwner = Boolean(resolvedViewerId && post.author_id && String(resolvedViewerId) === String(post.author_id));
 
     const card = document.createElement('article');
     card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
@@ -474,6 +478,7 @@ function createSharedFeedCardElement(post, options = {}) {
                     </div>
                     <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
                         <span>${dateFormatted}</span>
+                        ${post.edited_at ? `<span class="text-[10px] text-slate-400 italic">(edited)</span>` : ''}
                         <span>·</span>
                         <span class="inline-flex items-center gap-1 font-semibold ${typeMeta.textColor}">
                             <i class="fa-solid ${typeMeta.icon} text-[10px]"></i>
@@ -494,6 +499,15 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
                         <span>Open Full Post</span>
                     </a>` : ''}
+                    ${isOwner ? `
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
+                        <span>Edit Post</span>
+                    </button>
+                    <a href="promote.html?post=${encodeURIComponent(post.id)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-gold hover:bg-amber-50/70 flex items-center gap-2.5">
+                        <i class="fa-solid fa-bullhorn w-3.5 text-center"></i>
+                        <span>Promote Post</span>
+                    </a>` : ''}
                     <button type="button" onclick="closeAllFeedPostMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                         <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
                         <span>Send to Chat</span>
@@ -502,10 +516,15 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
                         <span>Copy Link / Share</span>
                     </button>
+                    ${isOwner ? `
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleDeletePostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                        <i class="fa-regular fa-trash-can w-3.5 text-center"></i>
+                        <span>Delete Post</span>
+                    </button>` : `
                     <button type="button" onclick="closeAllFeedPostMenus(); openReportModal('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
                         <i class="fa-regular fa-flag w-3.5 text-center"></i>
                         <span>Flag Post</span>
-                    </button>
+                    </button>`}
                 </div>
             </div>
         </div>
@@ -555,10 +574,22 @@ function createSharedFeedCardElement(post, options = {}) {
                 <span>Repost</span>
             </button>
 
-            <button type="button" onclick="handleShareClick('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
-                <i class="fa-solid fa-share text-sm"></i>
-                <span>Share</span>
-            </button>
+            <div class="relative">
+                <button type="button" onclick="toggleSharedPostShareMenu(event, '${post.id}')" class="w-full py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                    <i class="fa-solid fa-share text-sm"></i>
+                    <span>Share</span>
+                </button>
+                <div id="feed-share-menu-${post.id}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 bottom-11 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-accord-lightBlue/60 flex items-center gap-2.5">
+                        <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                        <span>Send to Chat</span>
+                    </button>
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                        <span>Copy Link / Share</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Facebook-Style Inline Comment Section -->
@@ -585,4 +616,146 @@ function createSharedFeedCardElement(post, options = {}) {
     `;
 
     return card;
+}
+
+function toggleSharedPostShareMenu(e, postId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`feed-share-menu-${postId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    if (typeof closeAllFeedPostMenus === 'function') closeAllFeedPostMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+// ==========================================
+// REUSABLE EDIT & DELETE POST HELPERS
+// ==========================================
+
+let _editPostTarget = null;
+let _editPostCallback = null;
+
+function ensureEditPostModalDom() {
+    if (document.getElementById('accord-edit-post-modal')) return;
+    const wrapper = document.createElement('div');
+    wrapper.id = 'accord-edit-post-modal';
+    wrapper.className = 'fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4';
+    wrapper.innerHTML = `
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-accord-slate text-base">Edit Post</h3>
+                <button type="button" onclick="closeSharedEditPostModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <form id="accord-edit-post-form" onsubmit="submitSharedEditPost(event)" class="space-y-3.5">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Title</label>
+                    <input type="text" id="accord-edit-post-title" required maxlength="180" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div id="accord-edit-post-media-wrap" class="hidden">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Media URL</label>
+                    <input type="url" id="accord-edit-post-media" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Content</label>
+                    <textarea id="accord-edit-post-body" rows="5" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeSharedEditPostModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="accord-edit-post-save" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    `;
+    wrapper.addEventListener('click', closeSharedEditPostModal);
+    document.body.appendChild(wrapper);
+}
+
+function openSharedEditPostModal(post, onSaved) {
+    if (!post) return;
+    ensureEditPostModalDom();
+    _editPostTarget = post;
+    _editPostCallback = typeof onSaved === 'function' ? onSaved : null;
+
+    document.getElementById('accord-edit-post-title').value = post.title || '';
+    document.getElementById('accord-edit-post-body').value = post.body || '';
+    const mediaWrap = document.getElementById('accord-edit-post-media-wrap');
+    const mediaInput = document.getElementById('accord-edit-post-media');
+    const needsMedia = post.post_type === 'video' || post.post_type === 'audio';
+    mediaWrap?.classList.toggle('hidden', !needsMedia);
+    if (mediaInput) {
+        mediaInput.required = needsMedia;
+        mediaInput.value = post.media_url || '';
+    }
+
+    const modal = document.getElementById('accord-edit-post-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeSharedEditPostModal() {
+    const modal = document.getElementById('accord-edit-post-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+    _editPostTarget = null;
+    _editPostCallback = null;
+}
+
+async function submitSharedEditPost(e) {
+    e.preventDefault();
+    const client = window.supabaseClient;
+    if (!client || !_editPostTarget) return;
+
+    const title = document.getElementById('accord-edit-post-title').value.trim();
+    const body = document.getElementById('accord-edit-post-body').value.trim();
+    const needsMedia = _editPostTarget.post_type === 'video' || _editPostTarget.post_type === 'audio';
+    const media_url = needsMedia ? (document.getElementById('accord-edit-post-media').value.trim() || null) : _editPostTarget.media_url;
+    const btn = document.getElementById('accord-edit-post-save');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    const edited_at = new Date().toISOString();
+    const { data, error } = await client
+        .from('feed_posts')
+        .update({ title, body, media_url, edited_at })
+        .eq('id', _editPostTarget.id)
+        .select()
+        .single();
+
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+    }
+
+    if (error) {
+        if (typeof showToast === 'function') showToast(`Could not update post: ${error.message}`, true);
+        return;
+    }
+
+    const cb = _editPostCallback;
+    closeSharedEditPostModal();
+    if (typeof showToast === 'function') showToast('Post updated.');
+    if (cb) cb(data);
+}
+
+async function executeSharedDeletePost(postId, onDeleted) {
+    const client = window.supabaseClient;
+    if (!client || !postId) return;
+    if (!confirm('Delete this post permanently? This cannot be undone.')) return;
+
+    const { error } = await client
+        .from('feed_posts')
+        .delete()
+        .eq('id', postId);
+
+    if (error) {
+        if (typeof showToast === 'function') showToast(`Could not delete post: ${error.message}`, true);
+        return;
+    }
+
+    if (typeof showToast === 'function') showToast('Post deleted.');
+    if (typeof onDeleted === 'function') onDeleted(postId);
 }

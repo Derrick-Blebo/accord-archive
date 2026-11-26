@@ -109,6 +109,8 @@ function unlockSuperadminDashboard(user) {
 
     fetchEcosystemMetrics();
     loadMinistryUpgradeRequests();
+    loadSuperadminPromotions();
+    loadSuperadminWithdrawals();
 }
 
 async function handleSuperadminLogout() {
@@ -815,4 +817,183 @@ function exportRolesToExcel() {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Accord_Admin_Access');
     XLSX.writeFile(workbook, 'Accord_Admin_Access_Registry.xlsx');
     showToast('Exported Admin Access Registry to Excel!');
+}
+
+// ==========================================
+// PAID PROMOTIONS, AUDIENCE GEO & PAYSTACK PAYOUTS
+// ==========================================
+
+async function loadSuperadminPromotions() {
+    const listEl = document.getElementById('superadmin-promotions-list');
+    const geoEl = document.getElementById('audience-geo-summary');
+    const badgeEl = document.getElementById('pending-promotions-badge');
+    if (!listEl) return;
+
+    const [promosRes, signalsRes] = await Promise.all([
+        supabaseClient.from('promotions').select('*').order('created_at', { ascending: false }).limit(60),
+        supabaseClient.from('user_audience_signals').select('country, device_type').order('created_at', { ascending: false }).limit(500)
+    ]);
+
+    if (geoEl && !signalsRes.error && Array.isArray(signalsRes.data)) {
+        const counts = {};
+        signalsRes.data.forEach(s => {
+            const c = s.country || 'GLOBAL';
+            counts[c] = (counts[c] || 0) + 1;
+        });
+        const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        geoEl.innerHTML = top.map(([country, count]) => `
+            <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Audience Region</p>
+                <p class="text-base font-extrabold text-accord-slate mt-0.5">${escapeHtml(country)}</p>
+                <p class="text-[11px] text-accord-blue font-semibold">${count} sessions</p>
+            </div>
+        `).join('');
+    }
+
+    if (promosRes.error) {
+        listEl.innerHTML = `<p class="text-xs text-red-600 py-6 text-center bg-white border border-slate-200 rounded-2xl">Could not load promotions: ${escapeHtml(promosRes.error.message)}</p>`;
+        return;
+    }
+
+    const promos = promosRes.data || [];
+    const pendingCount = promos.filter(p => p.status === 'pending_approval').length;
+    if (badgeEl) badgeEl.textContent = `${pendingCount} Pending`;
+
+    if (promos.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">No paid promotion requests yet.</p>`;
+        return;
+    }
+
+    listEl.innerHTML = promos.map(p => {
+        const badgeClass = p.status === 'approved'
+            ? 'bg-emerald-50 text-emerald-700'
+            : p.status === 'pending_approval'
+                ? 'bg-amber-50 text-amber-700'
+                : 'bg-red-50 text-red-600';
+
+        return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                <div class="space-y-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeHtml(p.status.replace('_', ' '))}</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeHtml(p.promo_type)}</span>
+                        <span class="text-[11px] font-semibold text-accord-muted">Placement: ${escapeHtml((p.placements || ['all']).join(', '))}</span>
+                        <span class="text-[11px] font-bold text-accord-slate">${escapeHtml(p.currency || 'USD')} ${Number(p.budget_amount || 0).toFixed(2)} (${p.duration_days}d)</span>
+                    </div>
+                    <h3 class="text-sm font-bold text-accord-slate">${escapeHtml(p.title)}</h3>
+                    <p class="text-[11px] text-accord-muted">By ${escapeHtml(p.advertiser_name || 'Member')} (${escapeHtml(p.advertiser_email || '')}) • Ref: ${escapeHtml(p.payment_reference || 'N/A')}</p>
+                    <p class="text-[11px] text-slate-600">Views: <strong>${p.impressions_count || 0}</strong> • Clicks: <strong>${p.clicks_count || 0}</strong></p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    ${p.status !== 'approved' ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'approved', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Approve &amp; Go Live</button>` : `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'paused', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">Pause</button>`}
+                    ${p.status !== 'rejected' ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'rejected', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold">Reject</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function reviewSuperadminPromotion(promoId, newStatus, durationDays = 7) {
+    const now = new Date();
+    const ends = new Date(now.getTime() + Number(durationDays || 7) * 86400000);
+    const updates = {
+        status: newStatus,
+        reviewed_at: now.toISOString()
+    };
+    if (newStatus === 'approved') {
+        updates.starts_at = now.toISOString();
+        updates.ends_at = ends.toISOString();
+    }
+
+    const { error } = await supabaseClient.from('promotions').update(updates).eq('id', promoId);
+    if (error) {
+        showToast(`Could not update promotion: ${error.message}`, true);
+        return;
+    }
+    showToast(`Promotion marked as ${newStatus}.`);
+    loadSuperadminPromotions();
+}
+
+async function loadSuperadminWithdrawals() {
+    const listEl = document.getElementById('superadmin-withdrawals-list');
+    if (!listEl) return;
+
+    const { data, error } = await supabaseClient
+        .from('author_withdrawals')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(60);
+
+    if (error || !data || data.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">${error ? escapeHtml(error.message) : 'No author withdrawal requests yet.'}</p>`;
+        return;
+    }
+
+    listEl.innerHTML = data.map(w => {
+        const isPending = w.status === 'pending';
+        const pillClass = w.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : w.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700';
+        return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                <div class="space-y-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${pillClass}">${escapeHtml(w.status)}</span>
+                        <span class="text-sm font-extrabold text-accord-slate">USD ${Number(w.amount || 0).toFixed(2)}</span>
+                    </div>
+                    <p class="text-xs font-bold text-accord-slate">${escapeHtml(w.author_name || 'Author')} (${escapeHtml(w.author_email || '')})</p>
+                    <p class="text-[11px] text-accord-muted">${escapeHtml(w.payout_method || '')} • ${escapeHtml(w.payout_details || '')}</p>
+                    ${w.paystack_transfer_reference ? `<p class="text-[11px] text-emerald-700 font-mono">Paystack Ref: ${escapeHtml(w.paystack_transfer_reference)}</p>` : ''}
+                </div>
+                ${isPending ? `
+                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <button type="button" onclick="triggerPaystackAuthorPayout('${w.id}')" class="px-3.5 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold">Pay via Paystack</button>
+                    <button type="button" onclick="updateWithdrawalStatus('${w.id}', 'paid')" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Mark Paid</button>
+                    <button type="button" onclick="updateWithdrawalStatus('${w.id}', 'rejected')" class="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold">Reject</button>
+                </div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+async function triggerPaystackAuthorPayout(withdrawalId) {
+    const { data: w } = await supabaseClient.from('author_withdrawals').select('*').eq('id', withdrawalId).maybeSingle();
+    if (!w) return;
+
+    const resp = await fetch('/api/paystack-payout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            withdrawalId: w.id,
+            amount: w.amount,
+            currency: 'GHS',
+            recipientType: (w.payout_method || '').toLowerCase().includes('mobile') ? 'mobile_money' : 'nuban',
+            accountName: w.account_name || w.author_name,
+            accountNumber: w.account_number || '',
+            bankCode: w.bank_code || ''
+        })
+    });
+    const resData = await resp.json();
+    if (!resp.ok || !resData.success) {
+        showToast(resData.error || 'Paystack payout failed.', true);
+        return;
+    }
+
+    await supabaseClient.from('author_withdrawals').update({
+        status: 'paid',
+        paystack_recipient_code: resData.recipient_code,
+        paystack_transfer_code: resData.transfer_code,
+        paystack_transfer_reference: resData.reference
+    }).eq('id', w.id);
+
+    showToast('Paystack payout initiated and withdrawal marked paid!');
+    loadSuperadminWithdrawals();
+}
+
+async function updateWithdrawalStatus(withdrawalId, newStatus) {
+    const { error } = await supabaseClient.from('author_withdrawals').update({ status: newStatus }).eq('id', withdrawalId);
+    if (error) {
+        showToast(`Could not update withdrawal: ${error.message}`, true);
+        return;
+    }
+    showToast(`Withdrawal marked ${newStatus}.`);
+    loadSuperadminWithdrawals();
 }

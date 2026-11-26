@@ -587,7 +587,11 @@ async function handleWithdrawSubmit(e) {
     e.preventDefault();
     const amount = parseFloat(document.getElementById('withdraw-amount').value);
     const payoutMethod = document.getElementById('withdraw-method').value;
-    const payoutDetails = document.getElementById('withdraw-details').value.trim();
+    const bankCode = document.getElementById('withdraw-bank-code')?.value.trim() || '';
+    const accountNumber = document.getElementById('withdraw-account-number')?.value.trim() || '';
+    const accountName = document.getElementById('withdraw-account-name')?.value.trim() || '';
+    const extraNotes = document.getElementById('withdraw-details')?.value.trim() || '';
+    const payoutDetails = `${accountName} (${bankCode} - ${accountNumber})${extraNotes ? ' • ' + extraNotes : ''}`;
     const btn = document.getElementById('withdraw-submit-btn');
 
     if (isNaN(amount) || amount <= 0) {
@@ -596,6 +600,10 @@ async function handleWithdrawSubmit(e) {
     }
     if (amount > availableBalance) {
         showToast('Amount exceeds your available earnings balance.', true);
+        return;
+    }
+    if (!bankCode || !accountNumber || !accountName) {
+        showToast('Please enter your bank/MoMo code, account number, and account holder name.', true);
         return;
     }
 
@@ -615,6 +623,9 @@ async function handleWithdrawSubmit(e) {
             amount,
             payout_method: payoutMethod,
             payout_details: payoutDetails,
+            bank_code: bankCode,
+            account_number: accountNumber,
+            account_name: accountName,
             status: 'pending'
         }]);
 

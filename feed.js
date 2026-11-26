@@ -326,7 +326,7 @@ function setupFeedViewObserver() {
     });
 }
 
-function renderFeedStream() {
+async function renderFeedStream() {
     const streamContainer = document.getElementById('feed-stream');
     if (!streamContainer) return;
 
@@ -351,9 +351,21 @@ function renderFeedStream() {
     }
 
     streamContainer.innerHTML = '';
-    visibleItems.forEach(item => {
+    const sponsoredCards = typeof window.getAccordSponsoredFeedCards === 'function'
+        ? await window.getAccordSponsoredFeedCards()
+        : [];
+    let adIdx = 0;
+
+    visibleItems.forEach((item, idx) => {
         streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
+        if ((idx + 1) % 4 === 0 && adIdx < sponsoredCards.length && typeof window.createAccordSponsoredCardElement === 'function') {
+            streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[adIdx++]));
+        }
     });
+    if (adIdx === 0 && sponsoredCards.length > 0 && typeof window.createAccordSponsoredCardElement === 'function') {
+        streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[0]));
+    }
+    window.observeAccordAds?.();
     hydrateFeedBookLinkPreviews();
     setupFeedViewObserver();
 }
@@ -623,7 +635,8 @@ function renderFeedCard(post, repost = null) {
         commentsCount: commentCountsByPost[String(post.id)] || 0,
         myAvatarInitial,
         authorHandle: post.author_id ? (authorHandlesById[String(post.author_id)] || '') : '',
-        reposterHandle: repost?.profiles?.handle || ''
+        reposterHandle: repost?.profiles?.handle || '',
+        currentUserId: currentUser?.id || null
     });
 }
 
@@ -740,6 +753,26 @@ function handleSendPostToChat(postId) {
         url: getFeedPostDetailUrl(post),
         author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
         post_type: post.post_type
+    });
+}
+
+function handleEditPostClick(postId) {
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    if (!post || typeof openSharedEditPostModal !== 'function') return;
+    openSharedEditPostModal(post, (updated) => {
+        if (!updated) return;
+        const idx = allFeedPosts.findIndex(p => String(p.id) === String(postId));
+        if (idx !== -1) allFeedPosts[idx] = updated;
+        renderFeedStream();
+    });
+}
+
+function handleDeletePostClick(postId) {
+    if (typeof executeSharedDeletePost !== 'function') return;
+    executeSharedDeletePost(postId, () => {
+        allFeedPosts = allFeedPosts.filter(p => String(p.id) !== String(postId));
+        allReposts = allReposts.filter(r => String(r.post_id) !== String(postId));
+        renderFeedStream();
     });
 }
 

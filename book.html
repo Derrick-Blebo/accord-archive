@@ -222,6 +222,10 @@
                             <i class="fa-solid fa-share-nodes"></i>
                             <span>Share</span>
                         </button>
+                        <button type="button" onclick="promoteCurrentBook()" class="px-4 py-3.5 rounded-2xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-accord-gold text-xs font-bold transition-all inline-flex items-center space-x-1.5">
+                            <i class="fa-solid fa-bullhorn"></i>
+                            <span>Promote</span>
+                        </button>
                         <button type="button" onclick="openCopyrightReportModal()" class="px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-accord-muted text-xs font-bold transition-all inline-flex items-center space-x-1.5" title="Report Copyright Infringement">
                             <i class="fa-solid fa-flag"></i>
                             <span>Report Copyright</span>
@@ -237,28 +241,34 @@
             </div>
         </article>
 
-        <!-- Comments Section -->
-        <section id="book-comments-section" class="hidden bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-            <div class="flex items-center justify-between gap-4">
+        <!-- Centralized Ad Banner Slot -->
+        <div id="accord-ad-banner-slot" class="hidden"></div>
+
+        <!-- Comments Section (Facebook-Style) -->
+        <section id="book-comments-section" class="hidden bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                 <div>
-                    <h2 class="serif-heading text-xl font-bold text-accord-slate">Reader Reflections &amp; Comments</h2>
-                    <p id="comments-count-label" class="text-xs text-accord-muted mt-0.5">0 comments</p>
+                    <h2 class="text-base sm:text-lg font-bold text-accord-slate">Comments</h2>
+                    <p id="comments-count-label" class="text-xs text-slate-500 mt-0.5">0 comments</p>
                 </div>
+                <p id="comment-auth-hint" class="text-xs text-accord-muted"></p>
             </div>
 
-            <!-- Comment Form -->
-            <form id="book-comment-form" onsubmit="handleCommentSubmit(event)" class="space-y-3">
-                <textarea id="book-comment-input" rows="3" maxlength="1000" placeholder="Share a reflection, takeaway, or question about this publication..." class="w-full rounded-2xl border border-slate-200 bg-accord-bg px-4 py-3 text-sm text-accord-slate placeholder-slate-400 focus:outline-none focus:border-accord-blue focus:bg-white transition-all resize-none"></textarea>
-                <div class="flex items-center justify-between gap-3">
-                    <p id="comment-auth-hint" class="text-xs text-accord-muted"></p>
-                    <button id="book-comment-submit" type="submit" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm transition-all">
-                        Post Comment
-                    </button>
+            <!-- Facebook-Style Pill Comment Composer -->
+            <div class="flex items-center gap-2.5">
+                <div id="book-comment-avatar" class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
+                    U
                 </div>
-            </form>
+                <form id="book-comment-form" onsubmit="handleCommentSubmit(event)" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="book-comment-input" maxlength="1000" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                    <button id="book-comment-submit" type="submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Post comment">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
 
             <!-- Comments List -->
-            <div id="book-comments-list" class="space-y-3 pt-2 border-t border-slate-100"></div>
+            <div id="book-comments-list" class="space-y-2.5 pt-1"></div>
         </section>
 
     </main>
@@ -308,6 +318,12 @@
                         <a href="signin.html?mode=forgot" class="text-[11px] font-semibold text-accord-blue hover:underline">Forgot password?</a>
                     </div>
                     <input id="auth-password" type="password" required minlength="6" class="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue" placeholder="••••••••" />
+                </div>
+                <div id="auth-terms-field" class="hidden rounded-xl bg-slate-50 border border-slate-200 p-3">
+                    <label class="flex items-start gap-2 cursor-pointer text-[11px] text-accord-slate leading-relaxed">
+                        <input type="checkbox" id="auth-terms-checkbox" class="mt-0.5 rounded border-slate-300 text-accord-blue focus:ring-accord-blue">
+                        <span>I agree to the <a href="terms.html" target="_blank" class="text-accord-blue font-bold hover:underline">Terms of Service</a> and <a href="privacy.html" target="_blank" class="text-accord-blue font-bold hover:underline">Privacy Policy</a>.</span>
+                    </label>
                 </div>
                 <button id="auth-submit-btn" type="submit" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all">
                     Sign In
@@ -368,6 +384,8 @@
     </div>
 
     <script src="feed-shared.js?v=2"></script>
+    <script src="paystack-helper.js"></script>
+    <script src="ads.js"></script>
     <script src="book.js?v=4"></script>
 </body>
 </html>

@@ -23,13 +23,15 @@ async function generateGoogleNoncePair() {
     return { rawNonce, hashedNonce };
 }
 
-async function ensureUserProfileRow(client, user, overrideFullName = '', overrideHandle = '') {
+const ACCORD_TERMS_VERSION = '2026-11';
+
+async function ensureUserProfileRow(client, user, overrideFullName = '', overrideHandle = '', termsAccepted = false) {
     if (!client || !user?.id) return null;
 
     try {
         const { data: existing, error: selectErr } = await client
             .from('profiles')
-            .select('id, full_name, handle, account_type, upgrade_status')
+            .select('id, full_name, handle, account_type, upgrade_status, terms_accepted_at, terms_version')
             .eq('id', user.id)
             .maybeSingle();
 
@@ -38,11 +40,22 @@ async function ensureUserProfileRow(client, user, overrideFullName = '', overrid
             ? '@' + String(rawHandle).trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '')
             : '';
         const validHandle = /^@[a-z0-9_]{3,30}$/.test(cleanHandle) ? cleanHandle : null;
+        const acceptedAt = (termsAccepted || user.user_metadata?.terms_accepted_at)
+            ? (user.user_metadata?.terms_accepted_at || new Date().toISOString())
+            : null;
 
         if (selectErr || existing) {
-            if (existing && !existing.handle && validHandle) {
-                await client.from('profiles').update({ handle: validHandle }).eq('id', user.id);
-                existing.handle = validHandle;
+            if (existing) {
+                const updates = {};
+                if (!existing.handle && validHandle) updates.handle = validHandle;
+                if (!existing.terms_accepted_at && acceptedAt) {
+                    updates.terms_accepted_at = acceptedAt;
+                    updates.terms_version = ACCORD_TERMS_VERSION;
+                }
+                if (Object.keys(updates).length > 0) {
+                    await client.from('profiles').update(updates).eq('id', user.id);
+                    Object.assign(existing, updates);
+                }
             }
             return existing || null;
         }
@@ -61,13 +74,14 @@ async function ensureUserProfileRow(client, user, overrideFullName = '', overrid
             full_name: resolvedName,
             handle: validHandle,
             account_type: 'normal_user',
-            upgrade_status: 'none'
+            upgrade_status: 'none',
+            ...(acceptedAt ? { terms_accepted_at: acceptedAt, terms_version: ACCORD_TERMS_VERSION } : {})
         };
 
         const { data: inserted, error: insertErr } = await client
             .from('profiles')
             .insert([newProfile])
-            .select('id, full_name, handle, account_type, upgrade_status')
+            .select('id, full_name, handle, account_type, upgrade_status, terms_accepted_at, terms_version')
             .maybeSingle();
 
         if (insertErr) {

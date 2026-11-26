@@ -65,6 +65,8 @@ async function syncUserState() {
         if (navLabel) navLabel.innerText = fullName;
         if (mobileLabel) mobileLabel.innerText = `Account (${fullName})`;
         if (commentHint) commentHint.innerText = `Commenting as ${fullName}`;
+        const avatarEl = document.getElementById('book-comment-avatar');
+        if (avatarEl) avatarEl.innerText = fullName.charAt(0).toUpperCase();
 
         const [profileRes, bookmarksRes, testimonyBookmarksRes, purchasesRes] = await Promise.all([
             supabaseClient.from('profiles').select('id, full_name, account_type, upgrade_status').eq('id', currentUser.id).maybeSingle(),
@@ -356,29 +358,36 @@ async function loadComments() {
     countEl.innerText = `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}`;
 
     if (comments.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-accord-muted py-4 text-center">No comments yet. Be the first to share a reflection.</p>`;
+        listEl.innerHTML = `<p class="text-xs text-slate-400 py-2">No comments yet. Be the first to comment!</p>`;
         return;
     }
 
     listEl.innerHTML = comments.map(c => {
         const isOwner = currentUser && currentUser.id === c.user_id;
-        const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const name = c.author_name || 'Member';
+        const timeStr = typeof formatSharedFeedTimeAgo === 'function'
+            ? formatSharedFeedTimeAgo(c.created_at)
+            : (c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
         const isVerifiedRole = c.author_role === 'Ministry / Minister' || c.author_role === 'Admin';
-        const roleBadge = isVerifiedRole
-            ? `<span class="bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-full">${escapeHTML(c.author_role)}</span>`
-            : `<span class="bg-slate-100 text-accord-muted text-[10px] font-semibold px-2 py-0.5 rounded-full">${escapeHTML(c.author_role || 'Member')}</span>`;
 
         return `
-            <div class="rounded-2xl border border-slate-200/80 bg-accord-bg p-4 space-y-2">
-                <div class="flex items-center justify-between gap-2">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-xs font-bold text-accord-slate">${escapeHTML(c.author_name)}</span>
-                        ${roleBadge}
-                        <span class="text-[11px] text-accord-muted">${dateStr}</span>
-                    </div>
-                    ${isOwner ? `<button type="button" onclick="deleteComment('${c.id}')" class="text-[11px] font-semibold text-slate-400 hover:text-rose-600 transition-colors" title="Delete comment"><i class="fa-regular fa-trash-can"></i></button>` : ''}
+            <div class="flex items-start gap-2">
+                <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                    ${escapeHTML(name.charAt(0).toUpperCase())}
                 </div>
-                <p class="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">${escapeHTML(c.body)}</p>
+                <div class="min-w-0 flex-1">
+                    <div class="inline-block bg-[#F0F2F5] rounded-2xl px-3.5 py-2 max-w-full">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-xs font-bold text-slate-900">${escapeHTML(name)}</span>
+                            ${isVerifiedRole ? '<i class="fa-solid fa-circle-check text-accord-blue text-[10px]" title="Verified Ministry / Minister"></i>' : ''}
+                        </div>
+                        <p class="text-xs sm:text-[13px] text-slate-800 whitespace-pre-wrap break-words leading-snug mt-0.5">${escapeHTML(c.body)}</p>
+                    </div>
+                    <div class="px-2 mt-0.5 flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+                        <span>${timeStr}</span>
+                        ${isOwner ? `<button type="button" onclick="deleteComment('${c.id}')" class="hover:text-rose-600 transition-colors">Delete</button>` : ''}
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
@@ -412,7 +421,6 @@ async function handleCommentSubmit(e) {
 
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerText = 'Posting...';
     }
 
     const { error } = await supabaseClient.from('book_comments').insert([{
@@ -425,7 +433,6 @@ async function handleCommentSubmit(e) {
 
     if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerText = 'Post Comment';
     }
 
     if (error) {
@@ -499,19 +506,42 @@ async function initiateBookPurchase() {
         return;
     }
 
-    const { error } = await supabaseClient.from('user_purchases').insert([{
-        user_id: currentUser.id,
-        book_id: Number(currentBook.id),
-        amount_paid: Number(currentBook.price) || 0
-    }]);
-
-    if (!error) {
-        purchasedBookIds.push(String(currentBook.id));
-        showToast(`Unlocked "${currentBook.title}"! You can now read or download it.`);
-        renderBookDetails();
-    } else {
-        showToast(`Purchase notice: ${error.message}`);
+    if (typeof window.launchAccordPaystackCheckout !== 'function') {
+        showToast('Payment module is still loading. Please try again.');
+        return;
     }
+
+    window.launchAccordPaystackCheckout({
+        email: currentUser.email,
+        amount: Number(currentBook.price) || 0,
+        currency: 'USD',
+        metadata: { type: 'book_purchase', book_id: Number(currentBook.id), user_id: currentUser.id },
+        onVerified: async (tx) => {
+            const { error } = await supabaseClient.from('user_purchases').insert([{
+                user_id: currentUser.id,
+                book_id: Number(currentBook.id),
+                amount_paid: Number(currentBook.price) || 0,
+                payment_reference: tx.reference,
+                payment_provider: 'paystack',
+                currency: tx.currency || 'USD'
+            }]);
+
+            if (!error) {
+                purchasedBookIds.push(String(currentBook.id));
+                showToast(`Payment verified! "${currentBook.title}" is now unlocked.`);
+                renderBookDetails();
+            } else {
+                showToast(`Purchase notice: ${error.message}`);
+            }
+        },
+        onError: (msg) => showToast(msg),
+        onCancel: () => showToast('Checkout canceled.')
+    });
+}
+
+function promoteCurrentBook() {
+    if (!currentBook) return;
+    window.location.href = `promote.html?book=${encodeURIComponent(currentBook.id)}`;
 }
 
 function sendCurrentBookToChat() {
@@ -647,6 +677,9 @@ function switchAuthMode(mode) {
     document.getElementById('auth-name-field')?.classList.toggle('hidden', !isSignup);
     const nameInput = document.getElementById('auth-name');
     if (nameInput) nameInput.required = isSignup;
+    document.getElementById('auth-terms-field')?.classList.toggle('hidden', !isSignup);
+    const termsCheckbox = document.getElementById('auth-terms-checkbox');
+    if (termsCheckbox) termsCheckbox.required = isSignup;
     const submitBtn = document.getElementById('auth-submit-btn');
     if (submitBtn) submitBtn.innerText = isSignup ? 'Create Free Account' : 'Sign In';
 
@@ -694,11 +727,19 @@ async function handleAuthSubmit(e) {
     }
 
     if (authMode === 'signup') {
+        if (!document.getElementById('auth-terms-checkbox')?.checked) {
+            showToast('You must accept the Terms of Service & Privacy Policy.');
+            return;
+        }
         const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
-                data: { full_name: fullName },
+                data: {
+                    full_name: fullName,
+                    terms_accepted_at: new Date().toISOString(),
+                    terms_version: '2026-11'
+                },
                 emailRedirectTo: `${window.location.origin}/signin.html`
             }
         });
@@ -708,7 +749,7 @@ async function handleAuthSubmit(e) {
             switchAuthMode('signin');
         } else {
             if (data?.session) {
-                await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName);
+                await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName, '', true);
             }
             showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
             closeAuthModal();

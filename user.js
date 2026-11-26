@@ -445,7 +445,8 @@ function renderProfileStream() {
             commentsCount: commentCountsByPost[String(p.id)] || 0,
             myAvatarInitial,
             authorHandle: p.author_id ? (authorHandlesById[String(p.author_id)] || '') : '',
-            reposterHandle: item.repost?.reposter_handle || ''
+            reposterHandle: item.repost?.reposter_handle || '',
+            currentUserId: viewerUser?.id || null
         });
         stream.appendChild(card);
     });
@@ -664,6 +665,17 @@ function handleSendPostToChat(postId) {
         author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
         post_type: post.post_type
     });
+}
+
+function handleEditPostClick(postId) {
+    const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
+    if (!post || typeof openSharedEditPostModal !== 'function') return;
+    openSharedEditPostModal(post, () => loadUnifiedProfile());
+}
+
+function handleDeletePostClick(postId) {
+    if (typeof executeSharedDeletePost !== 'function') return;
+    executeSharedDeletePost(postId, () => loadUnifiedProfile());
 }
 
 function openReportModal(postId) {

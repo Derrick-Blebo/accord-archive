@@ -292,6 +292,7 @@
                 commentsCount: commentsList.length,
                 myAvatarInitial,
                 authorHandle,
+                currentUserId: currentUser?.id || null,
                 expandFullBody: true,
                 openCommentsByDefault: true,
                 showOpenFullPostLink: false
@@ -344,6 +345,23 @@
                 url: getPostShareUrl(currentPost.id),
                 author_name: currentPost.is_anonymous ? 'Anonymous' : (currentPost.author_name || 'Member'),
                 post_type: currentPost.post_type
+            });
+        }
+
+        function handleEditPostClick() {
+            if (!currentPost || typeof openSharedEditPostModal !== 'function') return;
+            openSharedEditPostModal(currentPost, (updated) => {
+                if (updated) {
+                    currentPost = updated;
+                    renderSinglePost();
+                }
+            });
+        }
+
+        function handleDeletePostClick() {
+            if (!currentPost || typeof executeSharedDeletePost !== 'function') return;
+            executeSharedDeletePost(currentPost.id, () => {
+                setTimeout(() => { window.location.href = 'feed.html'; }, 600);
             });
         }
 

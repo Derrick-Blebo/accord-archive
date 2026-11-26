@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paid Promotions &amp; Advertising — Accord Archive</title>
+    <meta name="description" content="Promote your ministry posts, books, and banners across Accord Archive." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF6E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
+
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed.</span>
+    </div>
+
+    <div id="accord-header"></div>
+    <script src="header.js?v=5"></script>
+
+    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="space-y-1.5">
+                <span class="inline-block bg-accord-goldLight text-accord-gold text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Accord Ads &amp; Promotions</span>
+                <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Promote Posts, Books &amp; Banners</h1>
+                <p class="text-xs sm:text-sm text-accord-muted">Reach readers across the Digital Library, Fellowship Feed, and Music. All paid promotions are verified via Paystack and reviewed by an Admin before going live.</p>
+            </div>
+        </div>
+
+        <!-- Auth Notice if signed out -->
+        <div id="promo-auth-required" class="hidden bg-white border border-slate-200 rounded-3xl p-10 text-center space-y-4">
+            <i class="fa-solid fa-bullhorn text-3xl text-accord-blue"></i>
+            <h2 class="text-lg font-bold text-accord-slate">Sign in to Submit a Promotion</h2>
+            <p class="text-xs text-accord-muted max-w-md mx-auto">Create or sign in to your Accord account to promote your posts, books, or ministry banners and track impressions and clicks.</p>
+            <a href="signin.html?next=promote.html" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md">Sign In / Create Account</a>
+        </div>
+
+        <div id="promo-workspace" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- Submission Form -->
+            <section class="lg:col-span-7 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
+                <h2 class="text-base font-bold text-accord-slate">Create Paid Promotion</h2>
+
+                <form id="promote-form" onsubmit="handlePromotionSubmit(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Promotion Type *</label>
+                            <select id="promo-type" onchange="handlePromoTypeChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                <option value="post">Promoted Feed Post</option>
+                                <option value="book">Promoted Library Book</option>
+                                <option value="banner">Display Ad Banner</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Duration &amp; Package *</label>
+                            <select id="promo-package" onchange="updatePromoPriceDisplay()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                <option value="7:10">7 Days — USD 10.00</option>
+                                <option value="14:18">14 Days — USD 18.00</option>
+                                <option value="30:35">30 Days — USD 35.00</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="promo-post-select-wrap">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Select Your Post</label>
+                        <select id="promo-post-id" onchange="prefillFromSelectedPost()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="">-- Choose one of your posts --</option>
+                        </select>
+                    </div>
+
+                    <div id="promo-book-select-wrap" class="hidden">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Select Book to Promote</label>
+                        <select id="promo-book-id" onchange="prefillFromSelectedBook()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="">-- Choose a library book --</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Headline / Title *</label>
+                        <input type="text" id="promo-title" required maxlength="140" placeholder="Catchy headline for your promotion" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Ad Copy</label>
+                        <textarea id="promo-body" rows="3" maxlength="320" placeholder="Short summary shown to readers..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                    </div>
+
+                    <div id="promo-banner-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Desktop Banner URL (1920×640)</label>
+                            <input type="url" id="promo-desktop-img" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Mobile Banner URL (1080×1080)</label>
+                            <input type="url" id="promo-mobile-img" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL *</label>
+                            <input type="text" id="promo-cta-url" required placeholder="https://... or book.html?id=..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Label</label>
+                            <input type="text" id="promo-cta-text" value="Learn More" maxlength="30" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Placement *</label>
+                            <select id="promo-placement" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                <option value="all">All Main Pages (Library, Feed, Music)</option>
+                                <option value="library">Digital Library Only</option>
+                                <option value="feed">Fellowship Feed Only</option>
+                                <option value="music">Music Page Only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Target Country (Optional)</label>
+                            <input type="text" id="promo-target-country" placeholder="e.g. GH, NG, US (leave blank for Global)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Promotion Fee</p>
+                            <p id="promo-price-display" class="text-lg font-extrabold text-accord-slate">USD 10.00</p>
+                        </div>
+                        <button type="submit" id="promo-pay-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                            <i class="fa-solid fa-credit-card"></i>
+                            <span>Pay with Paystack &amp; Submit</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- My Promotions List -->
+            <section class="lg:col-span-5 bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-base font-bold text-accord-slate">My Promotions</h2>
+                    <button type="button" onclick="loadMyPromotions()" class="text-xs font-bold text-accord-blue hover:underline">Refresh</button>
+                </div>
+                <div id="my-promotions-list" class="space-y-3">
+                    <p class="text-xs text-accord-muted py-6 text-center">Loading your campaigns...</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="accord-footer"></div>
+    <script src="footer.js"></script>
+    <script src="paystack-helper.js"></script>
+    <script src="promote.js"></script>
+</body>
+</html>

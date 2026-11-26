@@ -829,19 +829,37 @@ async function initiateBookPurchase(bookId) {
     const book = allBooks.find(b => Number(b.id) === Number(bookId));
     if (!book) return;
 
-    const { error } = await supabaseClient.from('user_purchases').insert([{
-        user_id: currentUser.id,
-        book_id: Number(book.id),
-        amount_paid: Number(book.price) || 0
-    }]);
-
-    if (!error) {
-        purchasedBookIds.push(Number(book.id));
-        showToast(`Unlocked "${book.title}"! You can now read or download it.`);
-        renderBooks();
-    } else {
-        showToast(`Purchase notice: ${error.message}`);
+    if (typeof window.launchAccordPaystackCheckout !== 'function') {
+        showToast("Payment module is still loading. Please try again.");
+        return;
     }
+
+    window.launchAccordPaystackCheckout({
+        email: currentUser.email,
+        amount: Number(book.price) || 0,
+        currency: 'USD',
+        metadata: { type: 'book_purchase', book_id: Number(book.id), user_id: currentUser.id },
+        onVerified: async (tx) => {
+            const { error } = await supabaseClient.from('user_purchases').insert([{
+                user_id: currentUser.id,
+                book_id: Number(book.id),
+                amount_paid: Number(book.price) || 0,
+                payment_reference: tx.reference,
+                payment_provider: 'paystack',
+                currency: tx.currency || 'USD'
+            }]);
+
+            if (!error) {
+                purchasedBookIds.push(Number(book.id));
+                showToast(`Payment verified! "${book.title}" is now unlocked.`);
+                renderBooks();
+            } else {
+                showToast(`Purchase notice: ${error.message}`);
+            }
+        },
+        onError: (msg) => showToast(msg),
+        onCancel: () => showToast("Checkout canceled.")
+    });
 }
 
 async function shareBookLink(bookId, title) {
@@ -993,6 +1011,9 @@ function switchAuthMode(mode) {
     document.getElementById('auth-name-field')?.classList.toggle('hidden', !isSignup);
     const nameInput = document.getElementById('auth-name');
     if (nameInput) nameInput.required = isSignup;
+    document.getElementById('auth-terms-field')?.classList.toggle('hidden', !isSignup);
+    const termsCheckbox = document.getElementById('auth-terms-checkbox');
+    if (termsCheckbox) termsCheckbox.required = isSignup;
     const submitBtn = document.getElementById('auth-submit-btn');
     if (submitBtn) submitBtn.innerText = isSignup ? 'Create Free Account' : 'Sign In';
 
@@ -1040,11 +1061,19 @@ async function handleAuthSubmit(e) {
     }
 
     if (authMode === 'signup') {
+        if (!document.getElementById('auth-terms-checkbox')?.checked) {
+            showToast('You must accept the Terms of Service & Privacy Policy.');
+            return;
+        }
         const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
-                data: { full_name: fullName },
+                data: {
+                    full_name: fullName,
+                    terms_accepted_at: new Date().toISOString(),
+                    terms_version: '2026-11'
+                },
                 emailRedirectTo: `${window.location.origin}/signin.html`
             }
         });
@@ -1054,7 +1083,7 @@ async function handleAuthSubmit(e) {
             switchAuthMode('signin');
         } else {
             if (data?.session) {
-                await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName);
+                await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName, '', true);
             }
             showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
             closeAuthModal();

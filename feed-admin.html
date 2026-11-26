@@ -169,8 +169,54 @@
         <!-- Admin Tabs -->
         <div class="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-2">
             <button type="button" onclick="setAdminTab('pending')" id="tab-pending" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm">Pending Submissions</button>
-            <button type="button" onclick="setAdminTab('reports')" id="tab-reports" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Flagged Spam Reports</button>
+            <button type="button" onclick="setAdminTab('reports')" id="tab-reports" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Flagged Post Reports</button>
+            <button type="button" onclick="setAdminTab('warnings')" id="tab-warnings" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Violation History</button>
             <button type="button" onclick="setAdminTab('published')" id="tab-published" class="admin-tab-btn px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200">Active Live Posts</button>
+        </div>
+
+        <!-- Takedown & Warn Author Modal -->
+        <div id="takedown-warn-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h3 class="font-bold text-red-600 text-base flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Take Down &amp; Warn Author</span>
+                        </h3>
+                        <p class="text-[11px] text-accord-muted">Permanently deletes the flagged post and records a policy warning.</p>
+                    </div>
+                    <button type="button" onclick="closeTakedownWarnModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <form onsubmit="submitTakedownWarn(event)" class="space-y-3.5">
+                    <input type="hidden" id="td-post-id">
+                    <input type="hidden" id="td-report-id">
+                    <div class="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800">
+                        <p class="font-bold truncate" id="td-post-title"></p>
+                        <p class="text-[11px] mt-0.5" id="td-post-author"></p>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Violation Category *</label>
+                        <select id="td-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="Abusive / Profane Language">Abusive / Profane Language</option>
+                            <option value="Inappropriate / Explicit Content">Inappropriate / Explicit Content</option>
+                            <option value="Violence / Harassment / Threats">Violence / Harassment / Threats</option>
+                            <option value="Copyright Infringement">Copyright Infringement</option>
+                            <option value="Spam / Misleading Content">Spam / Misleading Content</option>
+                            <option value="Other Terms Violation">Other Terms Violation</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Warning Message to Author *</label>
+                        <textarea id="td-note" rows="3" required placeholder="Explain the infringement so the user understands what violated our Terms..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                    </div>
+                    <div class="flex items-center justify-end gap-2 pt-2">
+                        <button type="button" onclick="closeTakedownWarnModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                        <button type="submit" id="td-submit-btn" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm">Permanently Delete &amp; Warn</button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Admin Table / List Container -->
@@ -245,16 +291,64 @@
                     container.appendChild(renderSermonAdminCard(item));
                 });
             } else if (currentAdminTab === 'reports') {
-                const { data, error } = await supabaseClient.from('post_reports').select('*, sermons(*)').order('created_at', { ascending: false });
+                const { data: reports, error } = await supabaseClient
+                    .from('post_reports')
+                    .select('*')
+                    .order('created_at', { ascending: false });
 
-                if (error || !data || data.length === 0) {
-                    container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center text-xs text-accord-muted">No spam reports flagged.</div>`;
+                if (error || !reports || reports.length === 0) {
+                    container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center text-xs text-accord-muted">No flagged post reports found.</div>`;
+                    return;
+                }
+
+                const postIds = [...new Set(reports.map(r => r.post_id).filter(Boolean))];
+                let postsById = {};
+                if (postIds.length > 0) {
+                    const { data: feedPosts } = await supabaseClient
+                        .from('feed_posts')
+                        .select('id, title, body, author_id, author_name, post_type, created_at')
+                        .in('id', postIds);
+                    (feedPosts || []).forEach(p => { postsById[String(p.id)] = p; });
+                }
+
+                container.innerHTML = '';
+                reports.forEach(report => {
+                    container.appendChild(renderReportAdminCard(report, postsById[String(report.post_id)] || null));
+                });
+            } else if (currentAdminTab === 'warnings') {
+                const { data: warnings, error } = await supabaseClient
+                    .from('user_warnings')
+                    .select('*, profiles:user_id(full_name, email, warning_count)')
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                if (error || !warnings || warnings.length === 0) {
+                    container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-12 text-center text-xs text-accord-muted">No policy violations recorded yet.</div>`;
                     return;
                 }
 
                 container.innerHTML = '';
-                data.forEach(report => {
-                    container.appendChild(renderReportAdminCard(report));
+                warnings.forEach(w => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white border border-amber-200 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm';
+                    const uName = w.profiles?.full_name || 'Unknown User';
+                    const uEmail = w.profiles?.email || '';
+                    const totalCount = w.profiles?.warning_count ?? 1;
+                    const dateStr = w.created_at ? new Date(w.created_at).toLocaleString() : '';
+                    card.innerHTML = `
+                        <div class="space-y-1 min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="bg-red-100 text-red-700 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">${escapeHtml(w.category || 'Violation')}</span>
+                                <span class="bg-slate-100 text-accord-slate text-[10px] font-bold px-2.5 py-0.5 rounded-full">Total User Warnings: ${totalCount}</span>
+                                <span class="text-[11px] text-accord-muted">${dateStr}</span>
+                            </div>
+                            <h3 class="font-bold text-accord-slate text-sm">${escapeHtml(uName)} ${uEmail ? `<span class="text-xs font-normal text-accord-muted">(${escapeHtml(uEmail)})</span>` : ''}</h3>
+                            <p class="text-xs text-accord-slate font-semibold">Deleted Post: "${escapeHtml(w.post_title || 'Untitled')}"</p>
+                            ${w.post_excerpt ? `<p class="text-[11px] text-accord-muted italic">"${escapeHtml(w.post_excerpt)}"</p>` : ''}
+                            <p class="text-xs text-red-700">Moderator Note: ${escapeHtml(w.reason)}</p>
+                        </div>
+                    `;
+                    container.appendChild(card);
                 });
             }
         }
@@ -281,22 +375,86 @@
             return card;
         }
 
-        function renderReportAdminCard(report) {
-            const post = report.sermons;
+        function renderReportAdminCard(report, post) {
+            const isResolved = report.status === 'resolved_taken_down';
             const card = document.createElement('div');
-            card.className = 'bg-white border border-red-200 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm';
+            card.className = `bg-white border ${isResolved ? 'border-slate-200 opacity-75' : 'border-red-200'} rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm`;
+            const postTitle = post?.title || 'Post Already Removed';
+            const postAuthor = post?.author_name || 'Unknown / Anonymous';
+            const postExcerpt = post?.body ? post.body.slice(0, 140) : '';
+
             card.innerHTML = `
-                <div class="space-y-1">
-                    <span class="bg-red-100 text-red-600 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">Flagged Report</span>
-                    <h3 class="font-bold text-accord-slate text-sm">${post ? escapeHtml(post.title) : 'Post Removed'}</h3>
-                    <p class="text-xs text-red-700 font-medium">Reason: "${escapeHtml(report.reason)}"</p>
+                <div class="space-y-1.5 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="${isResolved ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-600'} text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full">
+                            ${isResolved ? 'Taken Down &amp; Warned' : 'Flagged Report'}
+                        </span>
+                        <span class="text-[11px] text-accord-muted">${report.created_at ? new Date(report.created_at).toLocaleString() : ''}</span>
+                    </div>
+                    <h3 class="font-bold text-accord-slate text-sm">${escapeHtml(postTitle)}</h3>
+                    <p class="text-[11px] text-accord-muted">Author: ${escapeHtml(postAuthor)}</p>
+                    ${postExcerpt ? `<p class="text-xs text-slate-600 line-clamp-2">${escapeHtml(postExcerpt)}</p>` : ''}
+                    <p class="text-xs text-red-700 font-medium">Reason: "${escapeHtml(report.reason || '')}" ${report.details ? `— ${escapeHtml(report.details)}` : ''}</p>
+                    ${report.moderator_note ? `<p class="text-[11px] text-emerald-700 font-medium">Action Note: ${escapeHtml(report.moderator_note)}</p>` : ''}
                 </div>
                 <div class="flex items-center space-x-2 shrink-0">
-                    ${post ? `<button onclick="deletePost('${post.id}')" class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold">Remove Flagged Post</button>` : ''}
-                    <button onclick="dismissReport('${report.id}')" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">Dismiss Report</button>
+                    ${post && !isResolved ? `<button type="button" onclick="openTakedownWarnModal('${post.id}', '${report.id}', '${escapeHtml(postTitle).replace(/'/g, "\\'")}', '${escapeHtml(postAuthor).replace(/'/g, "\\'")}')" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold">Take Down &amp; Warn</button>` : ''}
+                    <button type="button" onclick="dismissReport('${report.id}')" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">${isResolved ? 'Clear' : 'Dismiss Report'}</button>
                 </div>
             `;
             return card;
+        }
+
+        function openTakedownWarnModal(postId, reportId, postTitle, postAuthor) {
+            document.getElementById('td-post-id').value = postId;
+            document.getElementById('td-report-id').value = reportId || '';
+            document.getElementById('td-post-title').textContent = postTitle || 'Untitled Post';
+            document.getElementById('td-post-author').textContent = `Author: ${postAuthor || 'Member'}`;
+            document.getElementById('td-note').value = '';
+            const modal = document.getElementById('takedown-warn-modal');
+            modal?.classList.remove('hidden');
+            modal?.classList.add('flex');
+        }
+
+        function closeTakedownWarnModal() {
+            const modal = document.getElementById('takedown-warn-modal');
+            modal?.classList.add('hidden');
+            modal?.classList.remove('flex');
+        }
+
+        async function submitTakedownWarn(e) {
+            e.preventDefault();
+            const postId = document.getElementById('td-post-id').value;
+            const reportId = document.getElementById('td-report-id').value || null;
+            const category = document.getElementById('td-category').value;
+            const note = document.getElementById('td-note').value.trim();
+            const btn = document.getElementById('td-submit-btn');
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Processing Takedown...';
+            }
+
+            const { data, error } = await supabaseClient.rpc('admin_takedown_flagged_post', {
+                target_post_id: postId,
+                target_report_id: reportId,
+                violation_category: category,
+                moderator_note: note
+            });
+
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Permanently Delete & Warn';
+            }
+
+            if (error) {
+                showToast(`Takedown failed: ${error.message}`, true);
+                return;
+            }
+
+            closeTakedownWarnModal();
+            showToast(`Post permanently deleted. Warning #${data?.warning_count || 1} issued to author.`);
+            loadAdminData();
         }
 
         async function updatePostStatus(id, newStatus) {
