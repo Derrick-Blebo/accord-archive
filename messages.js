@@ -13,6 +13,7 @@ let chatRealtimeChannel = null;
 let attachTab = 'books';
 let attachBooksCache = [];
 let attachPostsCache = [];
+let replyToMessage = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof supabaseClient === 'undefined') return;
@@ -164,6 +165,8 @@ function renderConversationsList() {
 
 async function openConversation(convId) {
     activeConvId = convId;
+    window.activeAccordConvId = convId;
+    cancelReplyMessage();
     const conv = conversations.find(c => c.id === convId);
 
     // Responsive mobile switch
@@ -204,6 +207,7 @@ async function openConversation(convId) {
 }
 
 function closeMobileThread() {
+    window.activeAccordConvId = null;
     document.getElementById('chat-sidebar')?.classList.remove('hidden');
     const threadPane = document.getElementById('chat-thread-pane');
     threadPane?.classList.add('hidden');
@@ -216,6 +220,10 @@ async function markConversationRead(convId) {
         .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', convId)
         .eq('user_id', chatUser.id);
+
+    if (typeof window.markMessageNotificationsRead === 'function') {
+        await window.markMessageNotificationsRead(convId);
+    }
 
     if (typeof window.refreshGlobalChatBadge === 'function') {
         window.refreshGlobalChatBadge();
@@ -281,12 +289,34 @@ function renderMessagesStream() {
             `;
         }
 
+        let replyQuoteHtml = '';
+        const replyMeta = msg.attachment_meta?.reply_to;
+        if (replyMeta) {
+            const quotedId = escapeChatHtml(replyMeta.id || '');
+            replyQuoteHtml = `
+                <button type="button" onclick="scrollToMessage('${quotedId}')" class="w-full text-left rounded-xl px-2.5 py-1.5 border-l-4 transition-colors ${isMine ? 'bg-white/15 border-white/70 text-white hover:bg-white/25' : 'bg-slate-100 border-accord-blue text-accord-slate hover:bg-slate-200/70'}">
+                    <p class="text-[10px] font-bold opacity-90 truncate">${escapeChatHtml(replyMeta.sender_name || 'Member')}</p>
+                    <p class="text-[11px] opacity-80 truncate">${escapeChatHtml(replyMeta.preview || '')}</p>
+                </button>
+            `;
+        }
+
+        const replyBtnHtml = `
+            <button type="button" onclick="setReplyToMessage('${msg.id}')" class="w-7 h-7 rounded-full text-slate-400 hover:text-accord-blue hover:bg-slate-200/70 flex items-center justify-center opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0" title="Reply to message" aria-label="Reply to message">
+                <i class="fa-solid fa-reply text-[11px]"></i>
+            </button>
+        `;
+
         return `
-            <div class="flex flex-col ${isMine ? 'items-end' : 'items-start'}">
+            <div data-msg-id="${msg.id}" class="group flex flex-col ${isMine ? 'items-end' : 'items-start'} transition-all duration-300 rounded-2xl">
                 ${!isMine && conv?.is_group ? `<span class="text-[10px] font-bold text-accord-muted ml-2 mb-0.5">${escapeChatHtml(senderName)}</span>` : ''}
-                <div class="max-w-[82%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 space-y-2 shadow-sm ${isMine ? 'bg-accord-blue text-white rounded-br-sm' : 'bg-white text-accord-slate border border-slate-200 rounded-bl-sm'}">
-                    ${cardHtml}
-                    ${msg.body ? `<p class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">${escapeChatHtml(msg.body)}</p>` : ''}
+                <div class="flex items-center gap-1.5 max-w-full ${isMine ? 'flex-row-reverse' : 'flex-row'}">
+                    <div class="max-w-[82%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 space-y-2 shadow-sm ${isMine ? 'bg-accord-blue text-white rounded-br-sm' : 'bg-white text-accord-slate border border-slate-200 rounded-bl-sm'}">
+                        ${replyQuoteHtml}
+                        ${cardHtml}
+                        ${msg.body ? `<p class="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed break-words">${escapeChatHtml(msg.body)}</p>` : ''}
+                    </div>
+                    ${replyBtnHtml}
                 </div>
                 <span class="text-[10px] text-slate-400 mt-1 px-1">${timeStr}</span>
             </div>
@@ -296,6 +326,50 @@ function renderMessagesStream() {
     stream.scrollTop = stream.scrollHeight;
 }
 
+function getMessagePreviewText(msg) {
+    if (!msg) return '';
+    if (msg.body && msg.body.trim()) return msg.body.trim();
+    if (msg.attachment_meta?.title) return msg.attachment_meta.title;
+    return 'Attachment';
+}
+
+function setReplyToMessage(msgId) {
+    const msg = activeMessages.find(m => String(m.id) === String(msgId));
+    if (!msg) return;
+    const senderName = msg.sender_id === chatUser.id ? 'You' : (msg.profiles?.full_name || 'Member');
+    const preview = getMessagePreviewText(msg).slice(0, 120);
+
+    replyToMessage = {
+        id: msg.id,
+        sender_name: senderName,
+        preview
+    };
+
+    const bar = document.getElementById('chat-reply-preview');
+    const authorEl = document.getElementById('chat-reply-author');
+    const textEl = document.getElementById('chat-reply-text');
+    if (authorEl) authorEl.textContent = `Replying to ${senderName}`;
+    if (textEl) textEl.textContent = preview;
+    bar?.classList.remove('hidden');
+    document.getElementById('chat-message-input')?.focus();
+}
+
+function cancelReplyMessage() {
+    replyToMessage = null;
+    document.getElementById('chat-reply-preview')?.classList.add('hidden');
+}
+
+function scrollToMessage(msgId) {
+    if (!msgId) return;
+    const target = document.querySelector(`[data-msg-id="${CSS.escape(String(msgId))}"]`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('ring-2', 'ring-accord-blue/50', 'bg-accord-lightBlue/40');
+    setTimeout(() => {
+        target.classList.remove('ring-2', 'ring-accord-blue/50', 'bg-accord-lightBlue/40');
+    }, 1500);
+}
+
 async function handleSendMessage(e) {
     e.preventDefault();
     if (!activeConvId || !chatUser) return;
@@ -303,17 +377,29 @@ async function handleSendMessage(e) {
     const body = input?.value.trim() || '';
     if (!body) return;
 
+    const pendingReply = replyToMessage ? { ...replyToMessage } : null;
     input.value = '';
-    const { error } = await supabaseClient.from('chat_messages').insert([{
+    cancelReplyMessage();
+
+    const payload = {
         conversation_id: activeConvId,
         sender_id: chatUser.id,
         message_type: 'text',
         body
-    }]);
+    };
+    if (pendingReply) {
+        payload.attachment_meta = { reply_to: pendingReply };
+    }
+
+    const { error } = await supabaseClient.from('chat_messages').insert([payload]);
 
     if (error) {
         showToast(`Could not send message: ${error.message}`, true);
         input.value = body;
+        if (pendingReply) {
+            replyToMessage = pendingReply;
+            document.getElementById('chat-reply-preview')?.classList.remove('hidden');
+        }
     }
 }
 

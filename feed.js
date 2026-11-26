@@ -110,12 +110,12 @@ function showToast(message, isError = false) {
 function setFeedTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.feed-tab-btn').forEach(btn => {
-        btn.className = 'feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200';
+        btn.className = 'feed-tab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all bg-white text-accord-slate hover:bg-slate-100 border border-slate-200';
     });
 
     const activeBtn = document.getElementById(`tab-${tab}`);
     if (activeBtn) {
-        activeBtn.className = 'feed-tab-btn whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm';
+        activeBtn.className = 'feed-tab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all bg-accord-blue text-white shadow-sm';
     }
 
     renderFeedStream();
@@ -126,7 +126,7 @@ async function loadFeedPosts() {
     if (!streamContainer) return;
 
     streamContainer.innerHTML = `
-        <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-12 text-center space-y-3 shadow-sm">
             <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue"></i>
             <p class="text-xs text-accord-muted font-medium">Loading fellowship feed...</p>
         </div>
@@ -140,7 +140,9 @@ async function loadFeedPosts() {
             .from('post_reposts')
             .select('id, post_id, user_id, quote_text, created_at, profiles(id, full_name, account_type, upgrade_status)')
             .order('created_at', { ascending: false })
-            .limit(120)
+            .limit(120),
+        supabaseClient.from('testimonies').select('*').eq('is_approved', true).order('created_at', { ascending: false }),
+        supabaseClient.from('testimony_comments').select('testimony_id')
     ];
 
     if (currentUser?.id) {
@@ -149,11 +151,11 @@ async function loadFeedPosts() {
         );
     }
 
-    const [postsRes, likesRes, commentsRes, repostsRes, followsRes] = await Promise.all(requests);
+    const [postsRes, likesRes, commentsRes, repostsRes, testimoniesRes, testimonyCommentsRes, followsRes] = await Promise.all(requests);
 
     if (postsRes.error) {
         streamContainer.innerHTML = `
-            <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-2">
+            <div class="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-2">
                 <p class="text-xs font-bold text-red-600">Could not load feed posts.</p>
                 <p class="text-xs text-accord-muted">${escapeHtml(postsRes.error.message)}</p>
             </div>
@@ -161,7 +163,25 @@ async function loadFeedPosts() {
         return;
     }
 
-    allFeedPosts = postsRes.data || [];
+    const feedPostRows = (postsRes.data || []).map(p => ({ ...p, _source: 'feed_posts' }));
+    const testimonyRows = (!testimoniesRes?.error && testimoniesRes?.data ? testimoniesRes.data : []).map(t => ({
+        id: `testimony_${t.id}`,
+        _rawId: t.id,
+        _source: 'testimonies',
+        post_type: 'testimony',
+        title: t.title,
+        body: t.body,
+        author_name: t.author_name || 'Anonymous',
+        author_id: null,
+        author_role: null,
+        is_anonymous: !t.author_name || t.author_name.toLowerCase() === 'anonymous',
+        media_url: null,
+        likes_count: Number(t.likes_count) || 0,
+        reposts_count: 0,
+        created_at: t.created_at
+    }));
+
+    allFeedPosts = [...feedPostRows, ...testimonyRows];
     allReposts = (!repostsRes?.error && repostsRes?.data) ? repostsRes.data : [];
     followingIds = new Set((followsRes?.data || []).map(f => String(f.following_id)));
     myRepostedPostIds = new Set(
@@ -169,11 +189,20 @@ async function loadFeedPosts() {
             ? allReposts.filter(r => r.user_id === currentUser.id).map(r => String(r.post_id))
             : []
     );
-    likedPostIds = new Set((likesRes.data || []).map(l => String(l.post_id)));
+
+    const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]');
+    likedPostIds = new Set([
+        ...(likesRes.data || []).map(l => String(l.post_id)),
+        ...amenedIds.map(id => `testimony_${id}`)
+    ]);
 
     commentCountsByPost = {};
     (commentsRes.data || []).forEach(c => {
         const key = String(c.post_id);
+        commentCountsByPost[key] = (commentCountsByPost[key] || 0) + 1;
+    });
+    (!testimonyCommentsRes?.error && testimonyCommentsRes?.data ? testimonyCommentsRes.data : []).forEach(c => {
+        const key = `testimony_${c.testimony_id}`;
         commentCountsByPost[key] = (commentCountsByPost[key] || 0) + 1;
     });
 
@@ -262,19 +291,35 @@ function getPostTypeMeta(type) {
     }
 }
 
+function formatFeedTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
+    if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d`;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getFeedPostDetailUrl(post) {
+    if (post._source === 'testimonies') {
+        return `${window.location.origin}/testimony.html?id=${encodeURIComponent(post._rawId)}`;
+    }
+    return getPostShareUrl(post.id);
+}
+
 function renderFeedCard(post, repost = null) {
     const card = document.createElement('article');
-    card.className = 'bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4 hover:shadow-md transition-shadow';
+    card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
 
-    const postUrl = getPostShareUrl(post.id);
+    const postUrl = getFeedPostDetailUrl(post);
+    const isTestimonyTable = post._source === 'testimonies';
     const isLiked = likedPostIds.has(String(post.id));
     const isReposted = myRepostedPostIds.has(String(post.id));
     const likesCount = Number(post.likes_count) || 0;
     const repostsCount = Number(post.reposts_count) || 0;
     const commentsCount = commentCountsByPost[String(post.id)] || 0;
-    const dateFormatted = post.created_at
-        ? new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '';
+    const dateFormatted = formatFeedTimeAgo(post.created_at);
 
     const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
     const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
@@ -287,37 +332,33 @@ function renderFeedCard(post, repost = null) {
         const reposterName = repost.profiles?.full_name || 'Member';
         const reposterUrl = `user.html?id=${encodeURIComponent(repost.user_id)}`;
         const quoteHtml = repost.quote_text
-            ? `<p class="text-xs italic text-accord-slate bg-slate-50 border-l-2 border-emerald-500 pl-3 py-1.5 rounded-r-lg mt-2">"${escapeHtml(repost.quote_text)}"</p>`
+            ? `<p class="text-xs italic text-slate-700 bg-slate-50 border-l-2 border-emerald-500 pl-3 py-1.5 rounded-r-lg mt-1.5">"${escapeHtml(repost.quote_text)}"</p>`
             : '';
         repostBannerHtml = `
-            <div class="pb-1">
-                <a href="${escapeHtml(reposterUrl)}" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1 hover:bg-emerald-100 transition-colors">
-                    <i class="fa-solid fa-retweet"></i>
-                    <span>${escapeHtml(reposterName)} reposted</span>
+            <div class="px-4 pt-3 pb-2 border-b border-slate-100">
+                <a href="${escapeHtml(reposterUrl)}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-emerald-700">
+                    <i class="fa-solid fa-retweet text-emerald-600"></i>
+                    <span><strong class="text-slate-900">${escapeHtml(reposterName)}</strong> reposted</span>
                 </a>
                 ${quoteHtml}
             </div>
         `;
     }
 
-    const roleBadge = isVerifiedAuthor
-        ? `<span class="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-accord-gold border border-amber-200"><i class="fa-solid fa-circle-check text-[9px]"></i>Ministry / Minister</span>`
-        : '';
-
     const avatarInner = `
-        <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-xs shrink-0">
+        <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
             <span>${escapeHtml(displayAuthor.charAt(0).toUpperCase())}</span>
             ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
         </div>
     `;
 
     const authorAvatarHtml = authorProfileUrl
-        ? `<a href="${escapeHtml(authorProfileUrl)}" class="shrink-0 hover:opacity-90 transition-opacity" title="View ${escapeHtml(displayAuthor)}">${avatarInner}</a>`
+        ? `<a href="${escapeHtml(authorProfileUrl)}" class="shrink-0 hover:opacity-90 transition-opacity">${avatarInner}</a>`
         : avatarInner;
 
     const authorNameHtml = authorProfileUrl
-        ? `<a href="${escapeHtml(authorProfileUrl)}" class="text-xs font-bold text-accord-slate hover:text-accord-blue hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
-        : `<h4 class="text-xs font-bold text-accord-slate truncate">${escapeHtml(displayAuthor)}</h4>`;
+        ? `<a href="${escapeHtml(authorProfileUrl)}" class="text-[14px] font-bold text-slate-900 hover:underline truncate">${escapeHtml(displayAuthor)}</a>`
+        : `<span class="text-[14px] font-bold text-slate-900 truncate">${escapeHtml(displayAuthor)}</span>`;
 
     const typeMeta = getPostTypeMeta(post.post_type);
     let mediaHtml = '';
@@ -325,19 +366,19 @@ function renderFeedCard(post, repost = null) {
     if (post.post_type === 'video' && post.media_url) {
         const embedUrl = getYouTubeEmbedUrl(post.media_url);
         mediaHtml = `
-            <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-900 shadow-inner">
+            <div class="relative w-full aspect-video bg-black">
                 <iframe src="${escapeHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
             </div>
         `;
     } else if (post.post_type === 'audio' && post.media_url) {
         const isDirectAudio = /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(post.media_url);
         mediaHtml = isDirectAudio
-            ? `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+            ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
                    <audio controls src="${escapeHtml(post.media_url)}" class="w-full"></audio>
                </div>`
-            : `<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center space-x-4">
-                   <div class="w-12 h-12 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                       <i class="fa-solid fa-podcast text-xl"></i>
+            : `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5">
+                   <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
+                       <i class="fa-solid fa-podcast text-lg"></i>
                    </div>
                    <div class="flex-grow min-w-0">
                        <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
@@ -346,86 +387,288 @@ function renderFeedCard(post, repost = null) {
                </div>`;
     }
 
-    const shareBtnLabel = isMobileShareContext() ? 'Share' : 'Copy Link';
-    const shareBtnIcon = isMobileShareContext() ? 'fa-share-nodes' : 'fa-link';
+    const bodyText = String(post.body || '');
+    const isLongBody = bodyText.length > 260;
+    const shortBody = isLongBody ? bodyText.slice(0, 260).trim() + '...' : bodyText;
+
+    const myAvatarInitial = (currentProfile?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase();
 
     card.innerHTML = `
         ${repostBannerHtml}
-        <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center space-x-3 min-w-0">
+
+        <!-- Facebook-Style Card Header -->
+        <div class="px-4 pt-3.5 pb-2 flex items-start justify-between gap-3">
+            <div class="flex items-center space-x-2.5 min-w-0">
                 ${authorAvatarHtml}
                 <div class="min-w-0">
-                    <div class="flex items-center flex-wrap">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                         ${authorNameHtml}
-                        ${roleBadge}
+                        ${isVerifiedAuthor ? '<i class="fa-solid fa-circle-check text-accord-blue text-xs" title="Verified Ministry / Minister"></i>' : ''}
                     </div>
-                    <p class="text-[10px] text-accord-muted">${dateFormatted}</p>
+                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span>${dateFormatted}</span>
+                        <span>·</span>
+                        <span class="inline-flex items-center gap-1 font-semibold ${post.post_type === 'testimony' ? 'text-rose-600' : post.post_type === 'video' ? 'text-accord-blue' : post.post_type === 'audio' ? 'text-accord-gold' : 'text-emerald-600'}">
+                            <i class="fa-solid ${typeMeta.icon} text-[10px]"></i>
+                            <span>${typeMeta.label}</span>
+                        </span>
+                    </div>
                 </div>
             </div>
-            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${typeMeta.badgeClass}">
-                <i class="fa-solid ${typeMeta.icon} mr-1"></i>${typeMeta.label}
-            </span>
+
+            <!-- 3-Dots More Menu -->
+            <div class="relative shrink-0">
+                <button type="button" onclick="toggleFeedPostMenu(event, '${post.id}')" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors" aria-label="Post options">
+                    <i class="fa-solid fa-ellipsis text-sm"></i>
+                </button>
+                <div id="feed-post-menu-${post.id}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 top-9 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                    <a href="${escapeHtml(postUrl)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
+                        <span>Open Full Post</span>
+                    </a>
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                        <span>Send to Chat</span>
+                    </button>
+                    <button type="button" onclick="closeAllFeedPostMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                        <span>Copy Link / Share</span>
+                    </button>
+                    ${!isTestimonyTable ? `
+                    <button type="button" onclick="closeAllFeedPostMenus(); openReportModal('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                        <i class="fa-regular fa-flag w-3.5 text-center"></i>
+                        <span>Flag Post</span>
+                    </button>` : ''}
+                </div>
+            </div>
         </div>
 
-        <div class="space-y-2">
-            <a href="${escapeHtml(postUrl)}" class="block group">
-                <h3 class="serif-heading text-lg sm:text-xl font-bold text-accord-slate group-hover:text-accord-blue transition-colors">
-                    ${escapeHtml(post.title)}
-                </h3>
-            </a>
-            <p class="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap line-clamp-4">
-                ${escapeHtml(post.body)}
-            </p>
-            <a href="${escapeHtml(postUrl)}" class="inline-flex items-center space-x-1 text-xs font-bold text-accord-blue hover:underline">
-                <span>Open Post & Comments</span>
-                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-            </a>
+        <!-- Post Content -->
+        <div class="px-4 pb-3 space-y-1.5">
+            ${post.title ? `<a href="${escapeHtml(postUrl)}" class="block text-[15px] font-bold text-slate-900 hover:text-accord-blue leading-snug">${escapeHtml(post.title)}</a>` : ''}
+            <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeHtml(shortBody)}</p>
+            ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
         </div>
 
         ${mediaHtml}
 
-        <!-- Post Actions Bar: Like, Comments, Repost, Send to Chat, Share Link, Flag -->
-        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div class="flex flex-wrap items-center gap-2">
-                <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${post.id}" class="px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${isLiked ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}">
-                    <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
-                    <span id="like-count-${post.id}">${likesCount}</span>
-                </button>
-
-                <a href="${escapeHtml(postUrl)}#comments-section" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200 font-bold transition-all flex items-center space-x-1.5">
-                    <i class="fa-regular fa-comment"></i>
-                    <span>${commentsCount}</span>
-                </a>
-
-                <button type="button" onclick="handleRepostClick('${post.id}')" class="px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${isReposted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 hover:bg-emerald-50 text-accord-slate hover:text-emerald-700 border border-slate-200'}" title="Repost to your followers">
-                    <i class="fa-solid fa-retweet"></i>
-                    <span>${repostsCount}</span>
-                </button>
-
-                <button type="button" onclick="handleSendPostToChat('${post.id}')" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold transition-all flex items-center space-x-1.5" title="Send to Chat">
-                    <i class="fa-regular fa-paper-plane"></i>
-                    <span class="hidden sm:inline">Send</span>
-                </button>
-
-                <button type="button" onclick="handleShareClick('${post.id}')" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 font-bold transition-all flex items-center space-x-1.5">
-                    <i class="fa-solid ${shareBtnIcon}"></i>
-                    <span>${shareBtnLabel}</span>
-                </button>
+        <!-- Engagement Summary Row (Facebook Style) -->
+        <div class="px-4 py-2 flex items-center justify-between text-xs text-slate-500">
+            <div class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px]">
+                    <i class="fa-solid fa-heart"></i>
+                </span>
+                <span id="like-count-${post.id}">${likesCount}</span>
             </div>
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="toggleInlineComments('${post.id}')" class="hover:underline">
+                    <span id="comment-count-${post.id}">${commentsCount}</span> ${commentsCount === 1 ? 'comment' : 'comments'}
+                </button>
+                ${!isTestimonyTable ? `<span>${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>` : ''}
+            </div>
+        </div>
 
-            <button type="button" onclick="openReportModal('${post.id}')" class="px-3 py-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 font-semibold transition-all flex items-center space-x-1.5" title="Report / Flag Post">
-                <i class="fa-regular fa-flag"></i>
-                <span>Flag</span>
+        <!-- Facebook-Style Action Bar -->
+        <div class="mx-4 border-t border-slate-200/80 py-1 grid ${isTestimonyTable ? 'grid-cols-3' : 'grid-cols-4'} gap-1">
+            <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isLiked ? 'text-rose-600' : 'text-slate-600'}">
+                <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm"></i>
+                <span>Like</span>
             </button>
+
+            <button type="button" onclick="toggleInlineComments('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                <i class="fa-regular fa-comment text-sm"></i>
+                <span>Comment</span>
+            </button>
+
+            ${!isTestimonyTable ? `
+            <button type="button" onclick="handleRepostClick('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isReposted ? 'text-emerald-600' : 'text-slate-600'}">
+                <i class="fa-solid fa-retweet text-sm"></i>
+                <span>Repost</span>
+            </button>` : ''}
+
+            <button type="button" onclick="handleShareClick('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                <i class="fa-solid fa-share text-sm"></i>
+                <span>Share</span>
+            </button>
+        </div>
+
+        <!-- Facebook-Style Inline Comment Section -->
+        <div id="inline-comments-${post.id}" class="hidden border-t border-slate-200/80 px-4 py-3 space-y-3 bg-white rounded-b-xl sm:rounded-b-2xl">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
+                    ${escapeHtml(myAvatarInitial)}
+                </div>
+                <form onsubmit="submitInlineComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="inline-comment-input-${post.id}" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                    <button type="submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+            <div id="inline-comments-list-${post.id}" class="space-y-2.5">
+                <p class="text-xs text-slate-400 text-center py-2">Loading comments...</p>
+            </div>
+            <div class="pt-1">
+                <a href="${escapeHtml(postUrl)}#comments-section" class="text-xs font-semibold text-slate-500 hover:underline">Open full post &amp; all comments →</a>
+            </div>
         </div>
     `;
 
     return card;
 }
 
+function closeAllFeedPostMenus() {
+    document.querySelectorAll('.feed-post-menu').forEach(el => el.classList.add('hidden'));
+}
+
+function toggleFeedPostMenu(e, postId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`feed-post-menu-${postId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    closeAllFeedPostMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+window.addEventListener('click', closeAllFeedPostMenus);
+
+function toggleExpandPostBody(postId) {
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    const bodyEl = document.getElementById(`post-body-${postId}`);
+    const btnEl = document.getElementById(`post-see-more-${postId}`);
+    if (!post || !bodyEl || !btnEl) return;
+
+    const expanded = btnEl.dataset.expanded === 'true';
+    if (expanded) {
+        bodyEl.textContent = String(post.body || '').slice(0, 260).trim() + '...';
+        btnEl.textContent = 'See more';
+        btnEl.dataset.expanded = 'false';
+    } else {
+        bodyEl.textContent = post.body || '';
+        btnEl.textContent = 'See less';
+        btnEl.dataset.expanded = 'true';
+    }
+}
+
+async function toggleInlineComments(postId) {
+    const container = document.getElementById(`inline-comments-${postId}`);
+    if (!container) return;
+    const willOpen = container.classList.contains('hidden');
+    container.classList.toggle('hidden');
+    if (willOpen) {
+        await loadInlineComments(postId);
+        document.getElementById(`inline-comment-input-${postId}`)?.focus();
+    }
+}
+
+async function loadInlineComments(postId) {
+    const listEl = document.getElementById(`inline-comments-list-${postId}`);
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    if (!listEl || !post) return;
+
+    let comments = [];
+    if (post._source === 'testimonies') {
+        const { data } = await supabaseClient
+            .from('testimony_comments')
+            .select('id, author_name, comment_text, created_at')
+            .eq('testimony_id', post._rawId)
+            .order('created_at', { ascending: true })
+            .limit(30);
+        comments = (data || []).map(c => ({
+            author_name: c.author_name || 'Member',
+            text: c.comment_text,
+            created_at: c.created_at
+        }));
+    } else {
+        const { data } = await supabaseClient
+            .from('post_comments')
+            .select('id, author_name, comment_text, created_at')
+            .eq('post_id', post.id)
+            .order('created_at', { ascending: true })
+            .limit(30);
+        comments = (data || []).map(c => ({
+            author_name: c.author_name || 'Member',
+            text: c.comment_text,
+            created_at: c.created_at
+        }));
+    }
+
+    if (comments.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-slate-400 py-1">No comments yet. Be the first to comment!</p>`;
+        return;
+    }
+
+    listEl.innerHTML = comments.map(c => `
+        <div class="flex items-start gap-2">
+            <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                ${escapeHtml((c.author_name || 'M').charAt(0).toUpperCase())}
+            </div>
+            <div class="min-w-0 flex-1">
+                <div class="inline-block bg-[#F0F2F5] rounded-2xl px-3.5 py-2 max-w-full">
+                    <p class="text-xs font-bold text-slate-900">${escapeHtml(c.author_name)}</p>
+                    <p class="text-xs sm:text-[13px] text-slate-800 whitespace-pre-wrap break-words leading-snug mt-0.5">${escapeHtml(c.text)}</p>
+                </div>
+                <div class="px-2 mt-0.5 text-[11px] font-semibold text-slate-500">
+                    ${formatFeedTimeAgo(c.created_at)}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function submitInlineComment(e, postId) {
+    e.preventDefault();
+    const input = document.getElementById(`inline-comment-input-${postId}`);
+    const text = input?.value.trim() || '';
+    const post = allFeedPosts.find(p => String(p.id) === String(postId));
+    if (!text || !post) return;
+
+    const authorName = currentProfile?.full_name || currentUser?.email?.split('@')[0] || 'Guest Member';
+    input.value = '';
+
+    let error = null;
+    if (post._source === 'testimonies') {
+        const res = await supabaseClient.from('testimony_comments').insert([{
+            testimony_id: post._rawId,
+            author_name: authorName,
+            comment_text: text
+        }]);
+        error = res.error;
+    } else {
+        const res = await supabaseClient.from('post_comments').insert([{
+            post_id: post.id,
+            author_id: currentUser?.id || null,
+            author_name: authorName,
+            comment_text: text
+        }]);
+        error = res.error;
+    }
+
+    if (error) {
+        showToast(`Could not post comment: ${error.message}`, true);
+        input.value = text;
+        return;
+    }
+
+    commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
+    const countEl = document.getElementById(`comment-count-${postId}`);
+    if (countEl) countEl.textContent = commentCountsByPost[String(postId)];
+    await loadInlineComments(postId);
+}
+
 function handleShareClick(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
-    if (post) shareOrCopyPost(post);
+    if (!post) return;
+    if (post._source === 'testimonies') {
+        const shareUrl = getFeedPostDetailUrl(post);
+        if (isMobileShareContext() && navigator.share) {
+            navigator.share({ title: post.title, url: shareUrl }).catch(() => {});
+        } else {
+            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied to clipboard!'));
+        }
+        return;
+    }
+    shareOrCopyPost(post);
 }
 
 function handleSendPostToChat(postId) {
@@ -433,10 +676,10 @@ function handleSendPostToChat(postId) {
     if (!post || typeof openShareToChatModal !== 'function') return;
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
-        id: post.id,
+        id: post._source === 'testimonies' ? post._rawId : post.id,
         title: post.title,
         subtitle: (post.body || '').slice(0, 110),
-        url: getPostShareUrl(post.id),
+        url: getFeedPostDetailUrl(post),
         author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
         post_type: post.post_type
     });
@@ -513,32 +756,50 @@ async function togglePostLike(postId) {
     const alreadyLiked = likedPostIds.has(String(postId));
     let nextCount = Number(post.likes_count) || 0;
 
-    if (alreadyLiked) {
-        await supabaseClient.from('post_likes').delete().eq('post_id', postId).eq('voter_key', voterKey);
-        likedPostIds.delete(String(postId));
-        nextCount = Math.max(0, nextCount - 1);
-    } else {
-        const { error } = await supabaseClient.from('post_likes').insert([{ post_id: postId, voter_key: voterKey }]);
-        if (error) {
-            showToast('Could not record like.', true);
-            return;
+    if (post._source === 'testimonies') {
+        const amenedIds = JSON.parse(localStorage.getItem('accord_amened_ids') || '[]').map(Number);
+        const rawId = Number(post._rawId);
+        if (alreadyLiked) {
+            likedPostIds.delete(String(postId));
+            nextCount = Math.max(0, nextCount - 1);
+            localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds.filter(id => id !== rawId)));
+        } else {
+            likedPostIds.add(String(postId));
+            nextCount += 1;
+            if (!amenedIds.includes(rawId)) {
+                amenedIds.push(rawId);
+                localStorage.setItem('accord_amened_ids', JSON.stringify(amenedIds));
+            }
         }
-        likedPostIds.add(String(postId));
-        nextCount += 1;
+        post.likes_count = nextCount;
+        await supabaseClient.from('testimonies').update({ likes_count: nextCount }).eq('id', post._rawId);
+    } else {
+        if (alreadyLiked) {
+            await supabaseClient.from('post_likes').delete().eq('post_id', postId).eq('voter_key', voterKey);
+            likedPostIds.delete(String(postId));
+            nextCount = Math.max(0, nextCount - 1);
+        } else {
+            const { error } = await supabaseClient.from('post_likes').insert([{ post_id: postId, voter_key: voterKey }]);
+            if (error) {
+                showToast('Could not record like.', true);
+                return;
+            }
+            likedPostIds.add(String(postId));
+            nextCount += 1;
+        }
+        post.likes_count = nextCount;
+        await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
     }
-
-    post.likes_count = nextCount;
-    await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
 
     const countEl = document.getElementById(`like-count-${postId}`);
     const btnEl = document.getElementById(`like-btn-${postId}`);
     if (countEl) countEl.textContent = nextCount;
     if (btnEl) {
         btnEl.className = !alreadyLiked
-            ? 'px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 bg-rose-50 text-rose-600 border border-rose-200'
-            : 'px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200';
+            ? 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-rose-600'
+            : 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-slate-600';
         const icon = btnEl.querySelector('i');
-        if (icon) icon.className = !alreadyLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+        if (icon) icon.className = !alreadyLiked ? 'fa-solid fa-heart text-sm' : 'fa-regular fa-heart text-sm';
     }
 }
 

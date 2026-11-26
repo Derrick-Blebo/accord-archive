@@ -345,13 +345,19 @@
 
             listEl.innerHTML = comments.map(c => {
                 const d = c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                const name = c.author_name || 'Member';
                 return `
-                    <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-1">
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="font-bold text-accord-slate">${escapeHtml(c.author_name || 'Member')}</span>
-                            <span class="text-accord-muted">${d}</span>
+                    <div class="flex items-start gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                            ${escapeHtml(name.charAt(0).toUpperCase())}
                         </div>
-                        <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(c.comment_text)}</p>
+                        <div class="min-w-0 flex-1">
+                            <div class="inline-block bg-[#F0F2F5] rounded-2xl px-3.5 py-2 max-w-full">
+                                <p class="text-xs font-bold text-slate-900">${escapeHtml(name)}</p>
+                                <p class="text-xs sm:text-[13px] text-slate-800 leading-snug whitespace-pre-wrap break-words mt-0.5">${escapeHtml(c.comment_text)}</p>
+                            </div>
+                            <div class="px-2 mt-0.5 text-[11px] font-semibold text-slate-500">${d}</div>
+                        </div>
                     </div>
                 `;
             }).join('');

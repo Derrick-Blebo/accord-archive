@@ -38,20 +38,20 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
 
     headerContainer.innerHTML = `
         <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <!-- 3-Column Grid ensuring center nav remains perfectly locked regardless of auth state -->
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 grid grid-cols-[minmax(200px,1fr)_auto_minmax(200px,1fr)] items-center gap-4">
+            <!-- Responsive Header: Flex on mobile, 3-Column Grid on md+ -->
+            <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between md:grid md:grid-cols-[minmax(200px,1fr)_auto_minmax(200px,1fr)] gap-2 sm:gap-4">
                 
                 <!-- Left: Brand Logo -->
-                <a href="index.html" class="flex items-center space-x-3 group justify-self-start">
-                    <div class="w-11 h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-                        <span class="font-bold text-xl tracking-tighter">Ac</span>
+                <a href="index.html" class="flex items-center space-x-2.5 sm:space-x-3 group justify-self-start min-w-0">
+                    <div class="w-9 h-9 sm:w-11 sm:h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+                        <span class="font-bold text-lg sm:text-xl tracking-tighter">Ac</span>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <div class="flex items-center">
-                            <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
-                            <span class="text-2xl font-extrabold tracking-tight text-accord-slate" style="position:relative;">rd<span style="position:absolute; top:-4px; right:0px; width:14px; height:3px; background-color:#F5A623; border-radius:2px;"></span></span>
+                            <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                            <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-accord-slate" style="position:relative;">rd<span style="position:absolute; top:-4px; right:0px; width:14px; height:3px; background-color:#F5A623; border-radius:2px;"></span></span>
                         </div>
-                        <p class="text-[10px] uppercase tracking-widest font-bold text-accord-blue">Official Archive & Library</p>
+                        <p class="text-[9px] sm:text-[10px] uppercase tracking-wider sm:tracking-widest font-bold text-accord-blue truncate">Official Archive & Library</p>
                     </div>
                 </a>
 
@@ -68,12 +68,12 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                 </nav>
 
                 <!-- Right: Notifications, Auth / Profile Dropdown & Mobile Toggle -->
-                <div class="flex items-center space-x-3 justify-self-end">
-                    <div id="auth-area" class="flex items-center space-x-3 min-w-[140px] justify-end">
+                <div class="flex items-center space-x-1.5 sm:space-x-3 justify-self-end shrink-0">
+                    <div id="auth-area" class="flex items-center space-x-1.5 sm:space-x-3 md:min-w-[140px] justify-end">
                         <!-- Dynamically injected -->
                     </div>
-                    <button type="button" onclick="toggleGlobalMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue" aria-label="Toggle Menu">
-                        <i class="fa-solid fa-bars text-xl"></i>
+                    <button type="button" onclick="toggleGlobalMobileMenu()" class="md:hidden p-2 text-accord-slate hover:text-accord-blue shrink-0" aria-label="Toggle Menu">
+                        <i class="fa-solid fa-bars text-lg sm:text-xl"></i>
                     </button>
                 </div>
             </div>
@@ -218,19 +218,19 @@ async function initGlobalHeaderAuth() {
 
             authArea.innerHTML = `
                 <!-- Messages Link -->
-                <a href="messages.html" class="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all" aria-label="Messages" title="Messages">
-                    <i class="fa-regular fa-paper-plane text-sm"></i>
+                <a href="messages.html" class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all" aria-label="Messages" title="Messages">
+                    <i class="fa-regular fa-paper-plane text-xs sm:text-sm"></i>
                     <span id="chat-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-accord-blue text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">0</span>
                 </a>
 
                 <!-- Notification Bell Dropdown -->
                 <div class="relative">
-                    <button type="button" onclick="toggleNotificationsDropdown(event)" class="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all focus:outline-none cursor-pointer" aria-label="Notifications" title="Notifications">
-                        <i class="fa-regular fa-bell text-base"></i>
+                    <button type="button" onclick="toggleNotificationsDropdown(event)" class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-50 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200 flex items-center justify-center transition-all focus:outline-none cursor-pointer" aria-label="Notifications" title="Notifications">
+                        <i class="fa-regular fa-bell text-sm sm:text-base"></i>
                         <span id="notif-unread-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">0</span>
                     </button>
 
-                    <div id="notifications-dropdown" onclick="event.stopPropagation()" class="hidden absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+                    <div id="notifications-dropdown" onclick="event.stopPropagation()" class="hidden fixed left-3 right-3 top-16 sm:top-auto sm:left-auto sm:right-0 sm:absolute sm:mt-3 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
                         <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                             <span class="text-xs font-bold text-accord-slate">Notifications</span>
                             <button type="button" id="mark-all-read-btn" onclick="markAllNotificationsRead()" class="text-[11px] font-bold text-accord-blue hover:underline">
@@ -245,7 +245,7 @@ async function initGlobalHeaderAuth() {
 
                 <!-- Profile Avatar Dropdown -->
                 <div class="relative">
-                    <button type="button" onclick="toggleProfileDropdown(event)" class="relative w-11 h-11 rounded-full bg-accord-blue ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer" aria-label="Account menu">
+                    <button type="button" onclick="toggleProfileDropdown(event)" class="relative w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-accord-blue ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer" aria-label="Account menu">
                         <span class="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
                             ${avatarContent}
                         </span>
@@ -445,6 +445,37 @@ async function loadGlobalUnreadChatCount() {
     } catch (_) {}
 }
 window.refreshGlobalChatBadge = loadGlobalUnreadChatCount;
+window.refreshGlobalNotifications = loadGlobalNotifications;
+
+window.markMessageNotificationsRead = async function (convId) {
+    const client = window.supabaseClient;
+    if (!client || !globalHeaderUser || !convId) return;
+
+    const targetUrl = `messages.html?c=${convId}`;
+    let changed = false;
+    globalNotifications = globalNotifications.map(n => {
+        if (!n.is_read && n.type === 'new_message' && n.link_url === targetUrl) {
+            changed = true;
+            return { ...n, is_read: true };
+        }
+        return n;
+    });
+    if (changed) {
+        renderGlobalNotifications();
+    }
+
+    await client
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', globalHeaderUser.id)
+        .eq('type', 'new_message')
+        .eq('is_read', false)
+        .eq('link_url', targetUrl);
+
+    if (!changed) {
+        await loadGlobalNotifications();
+    }
+};
 
 function initGlobalRealtimeSubscriptions() {
     const client = window.supabaseClient;
@@ -467,7 +498,13 @@ function initGlobalRealtimeSubscriptions() {
             },
             (payload) => {
                 if (payload?.new) {
-                    globalNotifications = [payload.new, ...globalNotifications.filter(n => n.id !== payload.new.id)].slice(0, 30);
+                    const notif = payload.new;
+                    const activeConv = window.activeAccordConvId;
+                    if (activeConv && notif.type === 'new_message' && notif.link_url === `messages.html?c=${activeConv}`) {
+                        notif.is_read = true;
+                        client.from('notifications').update({ is_read: true }).eq('id', notif.id).eq('user_id', globalHeaderUser.id);
+                    }
+                    globalNotifications = [notif, ...globalNotifications.filter(n => n.id !== notif.id)].slice(0, 30);
                     renderGlobalNotifications();
                 }
             }

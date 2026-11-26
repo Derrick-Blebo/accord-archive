@@ -487,22 +487,51 @@ function buildBookCardElement(book) {
                 ${priceLine}
             </div>
 
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 relative">
                 ${primaryActionButton}
-                <button type="button" onclick="toggleBookmark('${safeTitle}')" class="w-9 h-9 shrink-0 border ${isBookmarked ? 'text-accord-gold border-accord-gold bg-amber-50' : 'text-slate-400 hover:text-accord-gold border-slate-200 hover:border-accord-gold bg-slate-50'} rounded-xl flex items-center justify-center transition-all" title="${isBookmarked ? 'Remove from Saved' : 'Save Book'}">
-                    <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[11px]"></i>
-                </button>
-                <button type="button" onclick="sendBookToChat(${book.id})" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Send Book to Chat">
-                    <i class="fa-regular fa-paper-plane text-[11px]"></i>
-                </button>
-                <button type="button" onclick="shareBookLink(${book.id}, '${safeTitle}')" class="w-9 h-9 shrink-0 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="Share Book">
-                    <i class="fa-solid fa-share-nodes text-[11px]"></i>
-                </button>
+                <div class="relative shrink-0">
+                    <button type="button" onclick="toggleBookCardMenu(event, '${book.id}')" class="w-9 h-9 border border-slate-200 hover:border-accord-blue bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-accord-blue rounded-xl flex items-center justify-center transition-all" title="More options" aria-label="More options">
+                        <i class="fa-solid fa-ellipsis-vertical text-xs"></i>
+                    </button>
+                    <div id="book-menu-${book.id}" onclick="event.stopPropagation()" class="book-card-menu hidden absolute right-0 bottom-11 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30">
+                        <button type="button" onclick="closeAllBookCardMenus(); toggleBookmark('${safeTitle}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold flex items-center gap-2.5 hover:bg-slate-50 transition-colors ${isBookmarked ? 'text-accord-gold' : 'text-accord-slate'}">
+                            <i class="${isBookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark w-3.5 text-center"></i>
+                            <span>${isBookmarked ? 'Saved' : 'Save Book'}</span>
+                        </button>
+                        <button type="button" onclick="closeAllBookCardMenus(); sendBookToChat(${book.id})" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-slate flex items-center gap-2.5 hover:bg-slate-50 transition-colors">
+                            <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                            <span>Send to Chat</span>
+                        </button>
+                        <button type="button" onclick="closeAllBookCardMenus(); shareBookLink(${book.id}, '${safeTitle}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-slate flex items-center gap-2.5 hover:bg-slate-50 transition-colors">
+                            <i class="fa-solid fa-share-nodes w-3.5 text-center text-emerald-600"></i>
+                            <span>Share Book</span>
+                        </button>
+                        <button type="button" onclick="closeAllBookCardMenus(); openBookModal(${book.id})" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-slate flex items-center gap-2.5 hover:bg-slate-50 transition-colors border-t border-slate-100 mt-1 pt-2">
+                            <i class="fa-solid fa-circle-info w-3.5 text-center text-slate-400"></i>
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `;
     return card;
 }
+
+function closeAllBookCardMenus() {
+    document.querySelectorAll('.book-card-menu').forEach(el => el.classList.add('hidden'));
+}
+
+function toggleBookCardMenu(e, bookId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`book-menu-${bookId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    closeAllBookCardMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+window.addEventListener('click', closeAllBookCardMenus);
 
 function sendBookToChat(bookId) {
     const book = (typeof allBooks !== 'undefined' ? allBooks : []).find(b => String(b.id) === String(bookId));
