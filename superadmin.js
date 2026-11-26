@@ -176,7 +176,7 @@ function renderMinistryUpgradeRequests() {
         const actionsHtml = status === 'pending'
             ? `<button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
                <button type="button" onclick="rejectMinistryUpgrade('${req.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>`
-            : `<span class="text-[11px] text-accord-muted">${req.account_type === 'ministry_minister' ? 'Ministry / Minister' : 'Normal User'}</span>`;
+            : `<span class="text-[11px] text-accord-muted">${(req.account_type === 'ministry_minister' || status === 'approved') ? 'Ministry / Minister' : 'Normal User'}</span>`;
 
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0';

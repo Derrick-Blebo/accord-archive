@@ -14,11 +14,11 @@
       "source": "/forum.html",
       "has": [{ "type": "query", "key": "event" }],
       "destination": "/api/preview?page=forum"
-    },    
+    },
     {
       "source": "/book.html",
       "has": [{ "type": "query", "key": "id" }],
       "destination": "/api/preview?page=book"
-    },
+    }
   ]
 }
