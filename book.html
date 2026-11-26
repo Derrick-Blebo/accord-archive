@@ -76,66 +76,9 @@
 </head>
 <body class="bg-accord-bg text-accord-slate min-h-screen flex flex-col">
 
-    <!-- Unified Header -->
-    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-            <a href="index.html" class="flex items-center space-x-2.5 group shrink-0">
-                <div class="w-9 h-9 rounded-xl bg-accord-blue text-white flex items-center justify-center shadow-sm shadow-blue-500/20">
-                    <i class="fa-solid fa-book-open text-sm"></i>
-                </div>
-                <span class="serif-heading text-xl font-bold tracking-tight text-accord-slate">
-                    Acco<span class="logo-rd-bar">rd</span>
-                </span>
-            </a>
-
-            <nav class="hidden md:flex items-center space-x-1">
-                <a href="index.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-accord-blue bg-accord-lightBlue">Digital Library</a>
-                <a href="feed.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-accord-muted hover:text-accord-slate hover:bg-slate-100 transition-all">Feed</a>
-                <a href="music.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-accord-muted hover:text-accord-slate hover:bg-slate-100 transition-all">Music</a>
-                <a href="saved.html" class="px-3.5 py-2 rounded-xl text-xs font-bold text-accord-muted hover:text-accord-slate hover:bg-slate-100 transition-all flex items-center space-x-1.5">
-                    <span>Saved</span>
-                    <span id="bookmark-badge" class="bg-accord-goldLight text-accord-gold text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">0</span>
-                </a>
-            </nav>
-
-            <div class="flex items-center space-x-2">
-                <button type="button" onclick="handleAuthNavClick()" class="hidden sm:inline-flex items-center space-x-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all">
-                    <i class="fa-regular fa-user"></i>
-                    <span id="auth-nav-label">Sign In</span>
-                    <span id="book-profile-verified-badge" title="Verified Ministry / Minister" aria-label="Verified Ministry / Minister" class="hidden w-4 h-4 shrink-0">
-                        <svg viewBox="0 0 24 24" class="w-full h-full block" aria-hidden="true" focusable="false">
-                            <path d="M12.00 2.80 Q15.13 0.31 16.60 4.03 Q20.56 3.44 19.97 7.40 Q23.69 8.87 21.20 12.00 Q23.69 15.13 19.97 16.60 Q20.56 20.56 16.60 19.97 Q15.13 23.69 12.00 21.20 Q8.87 23.69 7.40 19.97 Q3.44 20.56 4.03 16.60 Q0.31 15.13 2.80 12.00 Q0.31 8.87 4.03 7.40 Q3.44 3.44 7.40 4.03 Q8.87 0.31 12.00 2.80 Z" fill="#1D9BF0" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round" paint-order="stroke" />
-                            <path d="M8.5 12.3l2.3 2.3 4.8-5.1" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                    </span>
-                </button>
-                <button type="button" onclick="toggleMobileMenu()" class="md:hidden w-10 h-10 rounded-xl border border-slate-200 text-accord-slate flex items-center justify-center hover:bg-slate-50" aria-label="Toggle Menu">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Mobile Menu -->
-        <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-1.5">
-            <a href="index.html" class="block px-3.5 py-2.5 rounded-xl text-xs font-bold text-accord-blue bg-accord-lightBlue">Digital Library</a>
-            <a href="feed.html" class="block px-3.5 py-2.5 rounded-xl text-xs font-bold text-accord-slate hover:bg-slate-100">Feed</a>
-            <a href="music.html" class="block px-3.5 py-2.5 rounded-xl text-xs font-bold text-accord-slate hover:bg-slate-100">Music</a>
-            <a href="saved.html" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-accord-slate hover:bg-slate-100">
-                <span>Saved</span>
-                <span id="mobile-bookmark-count" class="bg-accord-goldLight text-accord-gold text-[10px] font-extrabold px-2 py-0.5 rounded-full">0</span>
-            </a>
-            <button type="button" onclick="handleAuthNavClick()" class="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-white bg-accord-blue flex items-center gap-1.5">
-                <i class="fa-regular fa-user"></i>
-                <span id="mobile-auth-label">Sign In / Create Account</span>
-                <span id="mobile-book-profile-verified-badge" title="Verified Ministry / Minister" aria-label="Verified Ministry / Minister" class="hidden w-4 h-4 shrink-0">
-                    <svg viewBox="0 0 24 24" class="w-full h-full block" aria-hidden="true" focusable="false">
-                        <path d="M12.00 2.80 Q15.13 0.31 16.60 4.03 Q20.56 3.44 19.97 7.40 Q23.69 8.87 21.20 12.00 Q23.69 15.13 19.97 16.60 Q20.56 20.56 16.60 19.97 Q15.13 23.69 12.00 21.20 Q8.87 23.69 7.40 19.97 Q3.44 20.56 4.03 16.60 Q0.31 15.13 2.80 12.00 Q0.31 8.87 4.03 7.40 Q3.44 3.44 7.40 4.03 Q8.87 0.31 12.00 2.80 Z" fill="#1D9BF0" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round" paint-order="stroke" />
-                        <path d="M8.5 12.3l2.3 2.3 4.8-5.1" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                </span>
-            </button>
-        </div>
-    </header>
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js?v=4"></script>
 
     <!-- Main Content -->
     <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

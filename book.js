@@ -114,6 +114,9 @@ function updateSavedBadge() {
     const mobileCount = document.getElementById('mobile-bookmark-count');
     if (badge) badge.innerText = totalCount;
     if (mobileCount) mobileCount.innerText = totalCount;
+    if (typeof window.updateGlobalBookmarks === 'function') {
+        window.updateGlobalBookmarks();
+    }
 }
 
 function handleAuthNavClick() {
@@ -511,32 +514,36 @@ async function initiateBookPurchase() {
         return;
     }
 
-    window.launchAccordPaystackCheckout({
-        email: currentUser.email,
-        amount: Number(currentBook.price) || 0,
-        currency: 'GHS',
-        metadata: { type: 'book_purchase', book_id: Number(currentBook.id), user_id: currentUser.id },
-        onVerified: async (tx) => {
-            const { error } = await supabaseClient.from('user_purchases').insert([{
-                user_id: currentUser.id,
-                book_id: Number(currentBook.id),
-                amount_paid: Number(currentBook.price) || 0,
-                payment_reference: tx.reference,
-                payment_provider: 'paystack',
-                currency: tx.currency || 'GHS'
-            }]);
+    try {
+        await window.launchAccordPaystackCheckout({
+            email: currentUser.email,
+            amount: Number(currentBook.price) || 0,
+            currency: 'GHS',
+            metadata: { type: 'book_purchase', book_id: Number(currentBook.id), user_id: currentUser.id },
+            onVerified: async (tx) => {
+                const { error } = await supabaseClient.from('user_purchases').insert([{
+                    user_id: currentUser.id,
+                    book_id: Number(currentBook.id),
+                    amount_paid: Number(currentBook.price) || 0,
+                    payment_reference: tx.reference,
+                    payment_provider: 'paystack',
+                    currency: tx.currency || 'GHS'
+                }]);
 
-            if (!error) {
-                purchasedBookIds.push(String(currentBook.id));
-                showToast(`Payment verified! "${currentBook.title}" is now unlocked.`);
-                renderBookDetails();
-            } else {
-                showToast(`Purchase notice: ${error.message}`);
-            }
-        },
-        onError: (msg) => showToast(msg),
-        onCancel: () => showToast('Checkout canceled.')
-    });
+                if (!error) {
+                    purchasedBookIds.push(String(currentBook.id));
+                    showToast(`Payment verified! "${currentBook.title}" is now unlocked.`);
+                    renderBookDetails();
+                } else {
+                    showToast(`Purchase notice: ${error.message}`);
+                }
+            },
+            onError: (msg) => showToast(msg),
+            onCancel: () => showToast('Checkout canceled.')
+        });
+    } catch (err) {
+        showToast(err?.message || 'Unable to start checkout. Please try again.');
+    }
 }
 
 function promoteCurrentBook() {

@@ -59,35 +59,43 @@
 
         const resolvedCurrency = String(currency || cfg.currency || 'GHS').toUpperCase();
         const reference = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const handler = window.PaystackPop.setup({
-            key: cfg.publicKey,
-            email: email || 'member@accordarchives.com',
-            amount: Math.max(100, Math.round(Number(amount || 0) * 100)),
-            currency: resolvedCurrency,
-            ref: reference,
-            metadata,
-            callback: async function (response) {
-                try {
-                    const verifyResp = await fetch('/api/paystack-verify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ reference: response.reference })
-                    });
-                    const result = await verifyResp.json();
-                    if (!verifyResp.ok || !result.verified) {
-                        if (typeof onError === 'function') onError(result.error || 'Payment verification failed.');
-                        return;
-                    }
-                    if (typeof onVerified === 'function') onVerified(result);
-                } catch (err) {
-                    if (typeof onError === 'function') onError(err.message || 'Verification network error.');
+        try {
+            const handler = window.PaystackPop.setup({
+                key: cfg.publicKey,
+                email: email || 'member@accordarchives.com',
+                amount: Math.max(100, Math.round(Number(amount || 0) * 100)),
+                currency: resolvedCurrency,
+                ref: reference,
+                metadata,
+                callback: function (response) {
+                    (async () => {
+                        try {
+                            const verifyResp = await fetch('/api/paystack-verify', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ reference: response.reference })
+                            });
+                            const result = await verifyResp.json();
+                            if (!verifyResp.ok || !result.verified) {
+                                if (typeof onError === 'function') onError(result.error || 'Payment verification failed.');
+                                return;
+                            }
+                            if (typeof onVerified === 'function') onVerified(result);
+                        } catch (err) {
+                            if (typeof onError === 'function') onError(err.message || 'Verification network error.');
+                        }
+                    })();
+                },
+                onClose: function () {
+                    if (typeof onCancel === 'function') onCancel();
                 }
-            },
-            onClose: function () {
-                if (typeof onCancel === 'function') onCancel();
-            }
-        });
+            });
 
-        handler.openIframe();
+            handler.openIframe();
+        } catch (err) {
+            if (typeof onError === 'function') {
+                onError(err?.message || 'Unable to launch Paystack checkout.');
+            }
+        }
     };
 })();
