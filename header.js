@@ -142,24 +142,32 @@ async function initGlobalHeaderAuth() {
         const mobileAuthArea = document.getElementById('mobile-auth-area');
         if (!authArea) return;
 
-        const adminEmails = ['rickblebs1@gmail.com'];
-        const isAdmin = user && adminEmails.includes(user.email);
+        const adminEmails = ['accordmedia1@gmail.com', 'rickblebs1@gmail.com'];
+        const userEmailLower = (user?.email || '').toLowerCase();
+        const isAdmin = Boolean(user && adminEmails.includes(userEmailLower));
+        const isSuperadmin = userEmailLower === 'accordmedia1@gmail.com';
+
+        const pageName = window.location.pathname.split('/').pop() || 'index.html';
+        const currentPage = pageName + window.location.search;
+        const isSignInPage = pageName.toLowerCase().includes('signin');
+        const loginUrl = isSignInPage ? 'signin.html' : `signin.html?next=${encodeURIComponent(currentPage)}`;
+        const signupUrl = isSignInPage ? 'signin.html?mode=signup' : `signin.html?mode=signup&next=${encodeURIComponent(currentPage)}`;
 
         if (!user) {
             globalHeaderProfile = null;
             authArea.innerHTML = `
-                <a href="signin.html" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
+                <a href="${loginUrl}" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
                     Log in
                 </a>
-                <a href="signin.html" class="inline-flex items-center space-x-1.5 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                <a href="${signupUrl}" class="inline-flex items-center space-x-1.5 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
                     <span>Sign up</span>
                 </a>
             `;
             if (mobileAuthArea) {
                 mobileAuthArea.innerHTML = `
                     <div class="flex items-center space-x-3 pt-2">
-                        <a href="signin.html" class="flex-1 text-center py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-accord-slate">Log in</a>
-                        <a href="signin.html" class="flex-1 text-center py-2.5 rounded-xl bg-accord-blue text-white text-xs font-semibold shadow-sm">Sign up</a>
+                        <a href="${loginUrl}" class="flex-1 text-center py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-accord-slate">Log in</a>
+                        <a href="${signupUrl}" class="flex-1 text-center py-2.5 rounded-xl bg-accord-blue text-white text-xs font-semibold shadow-sm">Sign up</a>
                     </div>
                 `;
             }
@@ -192,11 +200,19 @@ async function initGlobalHeaderAuth() {
                 ? (isVerifiedMinistry ? 'Administrator · Verified Ministry' : 'Administrator')
                 : (isVerifiedMinistry ? 'Verified Ministry / Minister' : 'Authenticated Member');
 
+            const superadminLinkHtml = isSuperadmin ? `
+                <a href="Superadmin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                    <i class="fa-solid fa-crown text-accord-gold w-4"></i>
+                    <span>Superadmin Portal</span>
+                </a>
+            ` : '';
+
             const adminLinkHtml = isAdmin ? `
                 <a href="feed-admin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                     <i class="fa-solid fa-shield-halved text-emerald-600 w-4"></i>
                     <span>Admin Moderation</span>
                 </a>
+                ${superadminLinkHtml}
             ` : '';
 
             authArea.innerHTML = `
@@ -266,6 +282,7 @@ async function initGlobalHeaderAuth() {
                     <div class="space-y-2">
                         <a href="profile.html" class="block text-base font-medium text-accord-slate">Edit Profile</a>
                         ${isAdmin ? '<a href="feed-admin.html" class="block text-base font-medium text-accord-slate">Admin Moderation</a>' : ''}
+                        ${isSuperadmin ? '<a href="Superadmin.html" class="block text-base font-medium text-accord-slate">Superadmin Portal</a>' : ''}
                         <button onclick="handleGlobalSignOut()" class="text-base font-medium text-red-600 text-left">Log out</button>
                     </div>
                 `;

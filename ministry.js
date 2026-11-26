@@ -53,7 +53,7 @@ function handleAuthNavClick() {
     if (currentUser) {
         window.location.href = 'profile.html';
     } else {
-        window.location.href = 'signin.html';
+        window.location.href = `signin.html?next=${encodeURIComponent('ministry.html' + window.location.search)}`;
     }
 }
 
@@ -201,7 +201,7 @@ function renderFollowButton() {
 async function toggleFollowMinistry() {
     if (!currentUser) {
         showToast('Please sign in to follow this ministry.', true);
-        setTimeout(() => { window.location.href = 'signin.html'; }, 900);
+        setTimeout(() => { window.location.href = `signin.html?next=${encodeURIComponent('ministry.html' + window.location.search)}`; }, 900);
         return;
     }
 

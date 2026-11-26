@@ -1,7 +1,8 @@
 // 1. Initialize Supabase
 const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabaseClient;
 
 const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 const HIDDEN_CONFIG_TITLES = [
@@ -918,6 +919,20 @@ function openAuthModal() {
     const modal = document.getElementById('auth-modal');
     modal?.classList.remove('hidden');
     modal?.classList.add('flex');
+
+    if (!currentUser && typeof window.mountAccordGoogleSignIn === 'function') {
+        window.mountAccordGoogleSignIn({
+            containerId: 'google-gsi-container',
+            fallbackBtnId: 'google-fallback-btn',
+            fallbackLinkId: 'google-fallback-link',
+            redirectTo: `${window.location.origin}/index.html`,
+            onSuccess: () => {
+                closeAuthModal();
+                showToast('Signed in with Google!');
+            },
+            onError: (msg) => showToast(msg || 'Google sign-in failed.')
+        });
+    }
 }
 
 function closeAuthModal() {
@@ -950,9 +965,13 @@ function switchAuthMode(mode) {
 }
 
 async function handleGoogleSignIn() {
+    if (typeof window.triggerAccordGoogleOAuthFallback === 'function') {
+        await window.triggerAccordGoogleOAuthFallback(`${window.location.origin}/index.html`, (msg) => showToast(msg));
+        return;
+    }
     const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: window.location.origin, queryParams: { prompt: 'select_account' } }
     });
     if (error) showToast(error.message);
 }
@@ -964,6 +983,11 @@ async function handleAuthSubmit(e) {
     const fullName = document.getElementById('auth-name')?.value.trim() || '';
     const submitBtn = document.getElementById('auth-submit-btn');
 
+    if (password.length < 6) {
+        showToast('Password must be at least 6 characters.');
+        return;
+    }
+
     if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerText = 'Please wait...';
@@ -973,17 +997,27 @@ async function handleAuthSubmit(e) {
         const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
-            options: { data: { full_name: fullName } }
+            options: {
+                data: { full_name: fullName },
+                emailRedirectTo: `${window.location.origin}/signin.html`
+            }
         });
         if (error) showToast(error.message);
-        else {
+        else if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+            showToast('An account with this email already exists. Please sign in instead.');
+            switchAuthMode('signin');
+        } else {
+            if (data?.session) {
+                await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName);
+            }
             showToast(data.session ? `Welcome to Accord, ${fullName || 'Reader'}!` : 'Account created! Check your email to confirm.');
             closeAuthModal();
         }
     } else {
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) showToast(error.message);
         else {
+            await window.ensureUserProfileRow?.(supabaseClient, data?.user);
             showToast('Signed in successfully!');
             closeAuthModal();
         }

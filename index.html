@@ -99,6 +99,7 @@
 
     <!-- Supabase Client SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth-google.js?v=1"></script>
     <script defer src="/_vercel/insights/script.js"></script>
 </head>
 
@@ -114,7 +115,7 @@
 
     <!-- Global Header Container -->
     <div id="accord-header"></div>
-    <script src="header.js?v=3"></script>
+    <script src="header.js?v=4"></script>
 
     <!-- Main Content -->
     <main class="flex-grow">
@@ -400,11 +401,19 @@
             <div class="p-6 space-y-5">
                 <!-- Signed-Out Forms -->
                 <div id="auth-forms-container" class="space-y-4">
-                    <button type="button" onclick="handleGoogleSignIn()"
-                        class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
-                        <i class="fa-brands fa-google text-red-500"></i>
-                        <span>Continue with Google</span>
-                    </button>
+                    <div class="space-y-2">
+                        <div id="google-gsi-container" class="hidden w-full flex justify-center min-h-[42px]"></div>
+                        <button id="google-fallback-btn" type="button" onclick="handleGoogleSignIn()"
+                            class="w-full bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 font-bold py-3 rounded-xl shadow-sm transition-all text-sm flex items-center justify-center space-x-2.5">
+                            <i class="fa-brands fa-google text-red-500"></i>
+                            <span>Continue with Google</span>
+                        </button>
+                        <div class="text-center">
+                            <button id="google-fallback-link" type="button" class="hidden text-[11px] font-medium text-accord-muted hover:text-accord-blue underline">
+                                Having trouble? Use redirect sign-in
+                            </button>
+                        </div>
+                    </div>
 
                     <div class="relative flex items-center py-1">
                         <div class="flex-grow border-t border-slate-200"></div>
@@ -437,9 +446,12 @@
                                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                         </div>
                         <div>
-                            <label
-                                class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Password</label>
-                            <input type="password" id="auth-password" required placeholder="••••••••"
+                            <div class="flex items-center justify-between mb-1">
+                                <label
+                                    class="block text-xs font-bold uppercase tracking-wider text-accord-slate">Password</label>
+                                <a href="signin.html?mode=forgot" class="text-[11px] font-semibold text-accord-blue hover:underline">Forgot password?</a>
+                            </div>
+                            <input type="password" id="auth-password" required minlength="6" placeholder="••••••••"
                                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accord-blue">
                         </div>
                         <button type="submit" id="auth-submit-btn"
@@ -491,7 +503,7 @@
     <!-- Global Footer Script -->
     <script src="footer.js"></script>
 
-    <script src="index.js?v=8"></script>
+    <script src="index.js?v=9"></script>
 </body>
 
 </html>

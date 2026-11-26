@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In & Sign Up — Accord Archive</title>
+    <title>Sign In &amp; Sign Up — Accord Archive</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -28,8 +28,9 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase Client SDK -->
+    <!-- Supabase Client SDK & Branded Google Helper -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth-google.js?v=1"></script>
     <style>body { font-family: 'Inter', sans-serif; }</style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
@@ -43,7 +44,7 @@
     <!-- Main Container -->
     <main class="flex-grow flex items-center justify-center px-4 py-12">
         <div class="bg-white border border-slate-200/90 rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
-            
+
             <!-- Logo Header -->
             <div class="text-center space-y-2">
                 <a href="index.html" class="inline-flex items-center space-x-3 group">
@@ -51,42 +52,106 @@
                         <span class="font-bold text-xl tracking-tighter">Ac</span>
                     </div>
                 </a>
-                <h1 class="text-xl font-bold text-accord-slate">Welcome to Accord Archive</h1>
-                <p class="text-xs text-accord-muted">Access your saved collections, feed posts, and community library.</p>
+                <h1 id="auth-heading" class="text-xl font-bold text-accord-slate">Welcome to Accord Archive</h1>
+                <p id="auth-subheading" class="text-xs text-accord-muted">Access your saved collections, feed posts, and community library.</p>
             </div>
 
-            <!-- Google Sign-In Button -->
-            <button type="button" onclick="handleGoogleSignIn()" class="w-full py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-accord-slate text-xs font-bold transition-all flex items-center justify-center space-x-3 shadow-sm">
-                <i class="fa-brands fa-google text-red-500 text-sm"></i>
-                <span>Continue with Google</span>
-            </button>
+            <!-- Persistent Inline Alert Box -->
+            <div id="auth-alert" class="hidden rounded-2xl p-3.5 text-xs space-y-2 border"></div>
 
-            <!-- Divider -->
-            <div class="relative flex py-1 items-center">
-                <div class="flex-grow border-t border-slate-200"></div>
-                <span class="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider">Or with email</span>
-                <div class="flex-grow border-t border-slate-200"></div>
+            <!-- Google Sign-In Section (shown on Sign In / Create Account) -->
+            <div id="google-auth-section" class="space-y-4">
+                <div class="space-y-2">
+                    <div id="google-gsi-container" class="hidden w-full flex justify-center min-h-[42px]"></div>
+                    <button id="google-fallback-btn" type="button" onclick="handleGoogleSignIn()" class="w-full py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-accord-slate text-xs font-bold transition-all flex items-center justify-center space-x-3 shadow-sm">
+                        <i class="fa-brands fa-google text-red-500 text-sm"></i>
+                        <span>Continue with Google</span>
+                    </button>
+                    <div class="text-center">
+                        <button id="google-fallback-link" type="button" class="hidden text-[11px] font-medium text-accord-muted hover:text-accord-blue underline">
+                            Having trouble? Use redirect sign-in
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <div class="relative flex py-1 items-center">
+                    <div class="flex-grow border-t border-slate-200"></div>
+                    <span class="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider">Or with email</span>
+                    <div class="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <!-- Tab Switcher -->
+                <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl">
+                    <button type="button" onclick="switchAuthTab('signin')" id="tab-signin" class="py-2.5 text-xs font-bold rounded-xl transition-all bg-white text-accord-blue shadow-sm">Sign In</button>
+                    <button type="button" onclick="switchAuthTab('signup')" id="tab-signup" class="py-2.5 text-xs font-bold rounded-xl transition-all text-accord-slate hover:text-accord-blue">Create Account</button>
+                </div>
             </div>
 
-            <!-- Tab Switcher -->
-            <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl">
-                <button type="button" onclick="switchAuthTab('signin')" id="tab-signin" class="py-2.5 text-xs font-bold rounded-xl transition-all bg-white text-accord-blue shadow-sm">Sign In</button>
-                <button type="button" onclick="switchAuthTab('signup')" id="tab-signup" class="py-2.5 text-xs font-bold rounded-xl transition-all text-accord-slate hover:text-accord-blue">Create Account</button>
-            </div>
-
-            <!-- Auth Form -->
+            <!-- Standard Email Auth Form -->
             <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
-                <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
-                    <input type="email" id="auth-email" required placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                <div id="auth-name-field" class="hidden">
+                    <label for="auth-name" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Full Name</label>
+                    <input type="text" id="auth-name" autocomplete="name" placeholder="e.g., Grace Mensah" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                 </div>
                 <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Password</label>
-                    <input type="password" id="auth-password" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    <label for="auth-email" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Email Address</label>
+                    <input type="email" id="auth-email" required autocomplete="email" placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="auth-password" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Password</label>
+                        <button type="button" id="forgot-password-btn" onclick="showForgotPasswordForm()" class="text-[11px] font-semibold text-accord-blue hover:underline">
+                            Forgot password?
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <input type="password" id="auth-password" required minlength="6" autocomplete="current-password" placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <button type="button" onclick="togglePasswordVisibility('auth-password', 'auth-password-eye')" class="absolute right-3 top-1/2 -translate-y-1/2 text-accord-muted hover:text-accord-slate p-1" aria-label="Toggle password visibility">
+                            <i id="auth-password-eye" class="fa-regular fa-eye text-xs"></i>
+                        </button>
+                    </div>
+                    <p id="password-hint" class="hidden text-[11px] text-accord-muted mt-1">Minimum 6 characters.</p>
                 </div>
 
                 <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all">
                     Sign In to Account
+                </button>
+            </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgot-form" onsubmit="handleForgotPasswordSubmit(event)" class="hidden space-y-4">
+                <div>
+                    <label for="forgot-email" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Account Email</label>
+                    <input type="email" id="forgot-email" required autocomplete="email" placeholder="you@example.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <button type="submit" id="forgot-submit-btn" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all">
+                    Send Password Reset Link
+                </button>
+                <div class="text-center">
+                    <button type="button" onclick="backToSignInFromForgot()" class="text-xs font-semibold text-accord-blue hover:underline">
+                        ← Back to Sign In
+                    </button>
+                </div>
+            </form>
+
+            <!-- Password Recovery (Set New Password) Form -->
+            <form id="recovery-form" onsubmit="handlePasswordRecoverySubmit(event)" class="hidden space-y-4">
+                <div>
+                    <label for="recovery-password" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">New Password</label>
+                    <div class="relative">
+                        <input type="password" id="recovery-password" required minlength="6" autocomplete="new-password" placeholder="Minimum 6 characters" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <button type="button" onclick="togglePasswordVisibility('recovery-password', 'recovery-password-eye')" class="absolute right-3 top-1/2 -translate-y-1/2 text-accord-muted hover:text-accord-slate p-1" aria-label="Toggle password visibility">
+                            <i id="recovery-password-eye" class="fa-regular fa-eye text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="recovery-confirm" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Confirm New Password</label>
+                    <input type="password" id="recovery-confirm" required minlength="6" autocomplete="new-password" placeholder="Re-enter new password" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <button type="submit" id="recovery-submit-btn" class="w-full py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all">
+                    Update Password
                 </button>
             </form>
 
@@ -104,78 +169,355 @@
     <!-- Auth Logic Script -->
     <script>
         const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_fLbHigqm9QdhyYtip0o02A_wUzuE3vP'; // Replace with your anon key if needed
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
+        window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabaseClient;
 
         let isSignUpMode = false;
+        let isRecoveryMode = false;
+        const urlParams = new URLSearchParams(window.location.search);
+        const nextUrl = typeof window.getSafeNextUrl === 'function' ? window.getSafeNextUrl('index.html') : 'index.html';
+
+        function escapeAlertHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function showAuthAlert(message, variant = 'error', options = {}) {
+            const box = document.getElementById('auth-alert');
+            if (!box) return;
+
+            const styles = {
+                error: 'bg-red-50 border-red-200 text-red-700',
+                info: 'bg-blue-50 border-blue-200 text-accord-darkBlue',
+                success: 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            };
+
+            box.className = `rounded-2xl p-3.5 text-xs space-y-2 border ${styles[variant] || styles.error}`;
+            box.innerHTML = `<p class="font-medium leading-relaxed">${escapeAlertHtml(message)}</p>`;
+
+            if (options.resendEmail) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'inline-flex items-center gap-1.5 font-bold underline hover:opacity-80';
+                btn.textContent = 'Resend confirmation email';
+                btn.onclick = () => resendConfirmationEmail(options.resendEmail, btn);
+                box.appendChild(btn);
+            }
+
+            box.classList.remove('hidden');
+        }
+
+        function clearAuthAlert() {
+            const box = document.getElementById('auth-alert');
+            if (box) {
+                box.classList.add('hidden');
+                box.innerHTML = '';
+            }
+        }
+
+        async function resendConfirmationEmail(email, btnEl) {
+            if (!email) return;
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.textContent = 'Sending...';
+            }
+
+            const { error } = await supabaseClient.auth.resend({
+                type: 'signup',
+                email,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/signin.html`
+                }
+            });
+
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Resend confirmation email';
+            }
+
+            if (error) {
+                showAuthAlert(error.message || 'Could not resend confirmation email.', 'error');
+                return;
+            }
+            showAuthAlert(`Confirmation link sent to ${email}. Please check your inbox and spam folder.`, 'success');
+        }
+
+        function togglePasswordVisibility(inputId, eyeId) {
+            const input = document.getElementById(inputId);
+            const eye = document.getElementById(eyeId);
+            if (!input) return;
+            const reveal = input.type === 'password';
+            input.type = reveal ? 'text' : 'password';
+            if (eye) {
+                eye.className = reveal ? 'fa-regular fa-eye-slash text-xs' : 'fa-regular fa-eye text-xs';
+            }
+        }
 
         function switchAuthTab(mode) {
             isSignUpMode = (mode === 'signup');
+            clearAuthAlert();
+
+            document.getElementById('google-auth-section')?.classList.remove('hidden');
+            document.getElementById('auth-form')?.classList.remove('hidden');
+            document.getElementById('forgot-form')?.classList.add('hidden');
+            document.getElementById('recovery-form')?.classList.add('hidden');
+
+            const heading = document.getElementById('auth-heading');
+            const subheading = document.getElementById('auth-subheading');
+            if (heading) heading.textContent = isSignUpMode ? 'Create Your Accord Account' : 'Welcome to Accord Archive';
+            if (subheading) subheading.textContent = isSignUpMode
+                ? 'Save collections, comment on archives, and request ministry verification.'
+                : 'Access your saved collections, feed posts, and community library.';
+
             const signinBtn = document.getElementById('tab-signin');
             const signupBtn = document.getElementById('tab-signup');
             const submitBtn = document.getElementById('auth-submit-btn');
+            const nameField = document.getElementById('auth-name-field');
+            const nameInput = document.getElementById('auth-name');
+            const passwordInput = document.getElementById('auth-password');
+            const passwordHint = document.getElementById('password-hint');
+            const forgotBtn = document.getElementById('forgot-password-btn');
 
             if (isSignUpMode) {
                 signupBtn.className = 'py-2.5 text-xs font-bold rounded-xl transition-all bg-white text-accord-blue shadow-sm';
                 signinBtn.className = 'py-2.5 text-xs font-bold rounded-xl transition-all text-accord-slate hover:text-accord-blue';
                 submitBtn.textContent = 'Create Account';
+                nameField?.classList.remove('hidden');
+                if (nameInput) nameInput.required = true;
+                if (passwordInput) passwordInput.autocomplete = 'new-password';
+                passwordHint?.classList.remove('hidden');
+                forgotBtn?.classList.add('hidden');
             } else {
                 signinBtn.className = 'py-2.5 text-xs font-bold rounded-xl transition-all bg-white text-accord-blue shadow-sm';
                 signupBtn.className = 'py-2.5 text-xs font-bold rounded-xl transition-all text-accord-slate hover:text-accord-blue';
                 submitBtn.textContent = 'Sign In to Account';
+                nameField?.classList.add('hidden');
+                if (nameInput) nameInput.required = false;
+                if (passwordInput) passwordInput.autocomplete = 'current-password';
+                passwordHint?.classList.add('hidden');
+                forgotBtn?.classList.remove('hidden');
             }
         }
 
+        function showForgotPasswordForm() {
+            clearAuthAlert();
+            document.getElementById('google-auth-section')?.classList.add('hidden');
+            document.getElementById('auth-form')?.classList.add('hidden');
+            document.getElementById('recovery-form')?.classList.add('hidden');
+            document.getElementById('forgot-form')?.classList.remove('hidden');
+
+            const heading = document.getElementById('auth-heading');
+            const subheading = document.getElementById('auth-subheading');
+            if (heading) heading.textContent = 'Reset Your Password';
+            if (subheading) subheading.textContent = 'Enter your email and we will send you a password reset link.';
+
+            const currentEmail = document.getElementById('auth-email')?.value?.trim();
+            const forgotEmail = document.getElementById('forgot-email');
+            if (currentEmail && forgotEmail && !forgotEmail.value) {
+                forgotEmail.value = currentEmail;
+            }
+        }
+
+        function backToSignInFromForgot() {
+            switchAuthTab('signin');
+        }
+
+        function showRecoveryPasswordForm() {
+            isRecoveryMode = true;
+            clearAuthAlert();
+            document.getElementById('google-auth-section')?.classList.add('hidden');
+            document.getElementById('auth-form')?.classList.add('hidden');
+            document.getElementById('forgot-form')?.classList.add('hidden');
+            document.getElementById('recovery-form')?.classList.remove('hidden');
+
+            const heading = document.getElementById('auth-heading');
+            const subheading = document.getElementById('auth-subheading');
+            if (heading) heading.textContent = 'Set a New Password';
+            if (subheading) subheading.textContent = 'Choose a new password (minimum 6 characters) for your account.';
+        }
+
+        function getOAuthRedirectTarget() {
+            const target = nextUrl === 'index.html'
+                ? '/index.html'
+                : (nextUrl.startsWith('/') ? nextUrl : `/${nextUrl}`);
+            return `${window.location.origin}${target}`;
+        }
+
         async function handleGoogleSignIn() {
+            clearAuthAlert();
+            if (typeof window.triggerAccordGoogleOAuthFallback === 'function') {
+                await window.triggerAccordGoogleOAuthFallback(getOAuthRedirectTarget(), (msg) => {
+                    showAuthAlert(msg, 'error');
+                    showToast(msg, true);
+                });
+                return;
+            }
+
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin + '/index.html'
+                    redirectTo: getOAuthRedirectTarget(),
+                    queryParams: { prompt: 'select_account' }
                 }
             });
             if (error) {
+                showAuthAlert(error.message, 'error');
                 showToast(error.message, true);
             }
         }
 
         async function handleAuthSubmit(e) {
             e.preventDefault();
+            clearAuthAlert();
+
             const email = document.getElementById('auth-email').value.trim();
-            const password = document.getElementById('auth-password').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const fullName = document.getElementById('auth-name')?.value.trim() || '';
             const submitBtn = document.getElementById('auth-submit-btn');
+
+            if (isSignUpMode && !fullName) {
+                showAuthAlert('Please enter your full name to create an account.', 'error');
+                return;
+            }
+
+            if (password.length < 6) {
+                showAuthAlert('Password must be at least 6 characters long.', 'error');
+                return;
+            }
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Processing...';
 
             if (isSignUpMode) {
-                const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: { full_name: fullName },
+                        emailRedirectTo: `${window.location.origin}/signin.html`
+                    }
+                });
+
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Account';
+
                 if (error) {
+                    showAuthAlert(error.message, 'error');
                     showToast(error.message, true);
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Create Account';
                     return;
                 }
-                showToast('Account created successfully! You can now sign in.');
-                switchAuthTab('signin');
-                submitBtn.disabled = false;
+
+                // Supabase returns identities: [] when the email is already registered (with confirmation enabled)
+                if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+                    switchAuthTab('signin');
+                    document.getElementById('auth-email').value = email;
+                    showAuthAlert('An account with this email already exists. Please sign in or click "Forgot password?".', 'info');
+                    return;
+                }
+
+                if (data?.session) {
+                    await window.ensureUserProfileRow?.(supabaseClient, data.user, fullName);
+                    showToast(`Welcome to Accord Archive, ${fullName}!`);
+                    setTimeout(() => { window.location.href = nextUrl; }, 900);
+                    return;
+                }
+
+                showAuthAlert(
+                    `Account created! Please check ${email} (including spam) to confirm your email before signing in.`,
+                    'info',
+                    { resendEmail: email }
+                );
+                showToast('Account created! Check your email to confirm.');
             } else {
                 const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
                 if (error) {
-                    showToast(error.message, true);
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Sign In to Account';
+
+                    const msg = error.message || 'Invalid email or password.';
+                    const isUnconfirmed = /not confirmed/i.test(msg);
+                    showAuthAlert(msg, 'error', isUnconfirmed ? { resendEmail: email } : {});
+                    showToast(msg, true);
                     return;
                 }
+
+                await window.ensureUserProfileRow?.(supabaseClient, data?.user);
                 showToast('Signed in successfully! Redirecting...');
-                setTimeout(() => window.location.href = 'index.html', 1200);
+                setTimeout(() => { window.location.href = nextUrl; }, 800);
             }
+        }
+
+        async function handleForgotPasswordSubmit(e) {
+            e.preventDefault();
+            clearAuthAlert();
+
+            const email = document.getElementById('forgot-email').value.trim();
+            const btn = document.getElementById('forgot-submit-btn');
+            if (!email) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending Link...';
+
+            const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/signin.html?mode=reset`
+            });
+
+            btn.disabled = false;
+            btn.textContent = 'Send Password Reset Link';
+
+            if (error) {
+                showAuthAlert(error.message || 'Could not send reset link.', 'error');
+                return;
+            }
+
+            showAuthAlert(`Password reset instructions sent to ${email}. Check your inbox.`, 'success');
+        }
+
+        async function handlePasswordRecoverySubmit(e) {
+            e.preventDefault();
+            clearAuthAlert();
+
+            const password = document.getElementById('recovery-password').value;
+            const confirm = document.getElementById('recovery-confirm').value;
+            const btn = document.getElementById('recovery-submit-btn');
+
+            if (password.length < 6) {
+                showAuthAlert('Password must be at least 6 characters long.', 'error');
+                return;
+            }
+            if (password !== confirm) {
+                showAuthAlert('Passwords do not match. Please re-enter them.', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Updating Password...';
+
+            const { error } = await supabaseClient.auth.updateUser({ password });
+
+            btn.disabled = false;
+            btn.textContent = 'Update Password';
+
+            if (error) {
+                showAuthAlert(error.message || 'Could not update password. Your reset link may have expired.', 'error');
+                return;
+            }
+
+            showToast('Password updated! Redirecting...');
+            showAuthAlert('Your password has been updated. Redirecting you now...', 'success');
+            setTimeout(() => { window.location.href = nextUrl; }, 1100);
         }
 
         function showToast(message, isError = false) {
             const toast = document.getElementById('toast');
             const msgEl = document.getElementById('toast-message');
             const iconEl = document.getElementById('toast-icon');
-            
+
             if (!toast) return;
             msgEl.textContent = message;
             iconEl.className = isError ? 'fa-solid fa-circle-exclamation text-red-500 text-lg' : 'fa-solid fa-circle-check text-accord-gold text-lg';
@@ -183,6 +525,56 @@
             toast.classList.remove('translate-y-24', 'opacity-0');
             setTimeout(() => toast.classList.add('translate-y-24', 'opacity-0'), 3500);
         }
+
+        supabaseClient.auth.onAuthStateChange((event) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                showRecoveryPasswordForm();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const mode = urlParams.get('mode');
+            const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+            const urlError = urlParams.get('error_description') || hashParams.get('error_description');
+            const hasRecoveryHash = window.location.hash.includes('type=recovery');
+
+            if (hasRecoveryHash || mode === 'reset') {
+                showRecoveryPasswordForm();
+            } else if (mode === 'forgot') {
+                showForgotPasswordForm();
+            } else if (mode === 'signup') {
+                switchAuthTab('signup');
+            } else {
+                switchAuthTab('signin');
+            }
+
+            if (urlError) {
+                showAuthAlert(urlError, 'error');
+            }
+
+            if (typeof window.mountAccordGoogleSignIn === 'function') {
+                window.mountAccordGoogleSignIn({
+                    containerId: 'google-gsi-container',
+                    fallbackBtnId: 'google-fallback-btn',
+                    fallbackLinkId: 'google-fallback-link',
+                    redirectTo: getOAuthRedirectTarget(),
+                    onSuccess: () => {
+                        showToast('Signed in with Google! Redirecting...');
+                        setTimeout(() => { window.location.href = nextUrl; }, 700);
+                    },
+                    onError: (msg) => {
+                        showAuthAlert(msg, 'error');
+                        showToast(msg, true);
+                    }
+                });
+            }
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session?.user && !hasRecoveryHash && mode !== 'reset' && !isRecoveryMode) {
+                await window.ensureUserProfileRow?.(supabaseClient, session.user);
+                window.location.href = nextUrl;
+            }
+        });
     </script>
 </body>
 </html>

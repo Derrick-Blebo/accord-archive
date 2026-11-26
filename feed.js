@@ -77,7 +77,7 @@ function handleAuthNavClick() {
     if (currentUser) {
         window.location.href = 'profile.html';
     } else {
-        window.location.href = 'signin.html';
+        window.location.href = 'signin.html?next=feed.html';
     }
 }
 

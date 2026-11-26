@@ -44,7 +44,7 @@
 
     <!-- Global Header Container -->
     <div id="accord-header"></div>
-    <script src="header.js?v=3"></script>
+    <script src="header.js?v=4"></script>
 
     <main class="max-w-2xl mx-auto px-4 sm:px-6 py-12 flex-grow w-full space-y-8">
         <!-- Personal Details Card -->
@@ -142,7 +142,7 @@
 
     <script src="admin-core.js"></script>
     <script src="footer.js"></script>
-    <script src="profile.js"></script>
+    <script src="profile.js?v=2"></script>
     <script>
         function syncUpgradeCardUI(profile) {
             const type = profile?.account_type || 'normal_user';
@@ -212,9 +212,17 @@
                 return;
             }
 
+            const nameVal = (
+                document.getElementById('profile-name')?.value?.trim() ||
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                (user.email ? user.email.split('@')[0] : '')
+            ).trim();
+
             const payload = {
                 id: user.id,
                 email: user.email,
+                full_name: nameVal,
                 upgrade_status: 'pending',
                 upgrade_pitch: pitch,
                 upgrade_requested_at: new Date().toISOString()
@@ -236,6 +244,9 @@
             }
 
             syncUpgradeCardUI(data);
+            if (typeof applyMinistryVerificationUI === 'function') {
+                applyMinistryVerificationUI(data);
+            }
             showToast('Ministry / Minister upgrade request sent.');
         }
 

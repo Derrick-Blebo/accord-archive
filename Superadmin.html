@@ -450,9 +450,25 @@
                         <h2 class="serif-heading text-2xl font-bold text-accord-slate">Ministry / Minister Upgrade Requests</h2>
                         <p class="text-xs text-accord-muted mt-1">Review community members requesting direct feed publishing privileges for Videos, Audio, and Text Posts.</p>
                     </div>
-                    <span id="pending-upgrades-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200 self-start sm:self-auto">
-                        0 Pending
-                    </span>
+                    <div class="flex items-center gap-2 self-start sm:self-auto">
+                        <span id="pending-upgrades-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">
+                            0 Pending
+                        </span>
+                        <button type="button" onclick="loadMinistryUpgradeRequests()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 transition-colors" title="Refresh upgrade requests">
+                            <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="ministry-upgrades-rls-hint" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1">
+                    <p class="font-bold flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                        <span>Supabase RLS Policy Required for Admin Profile Updates</span>
+                    </p>
+                    <p class="text-amber-800 leading-relaxed">
+                        Your database blocked reading or updating other users' rows in <code class="font-mono font-semibold">public.profiles</code> (0 rows affected). Run <code class="font-mono font-semibold">supabase-superadmin-profiles-rls.sql</code> in the Supabase Dashboard SQL Editor, then click Refresh.
+                    </p>
                 </div>
 
                 <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
@@ -529,6 +545,6 @@
     <script src="admin-core.js?v=3"></script>
 
     <!-- Superadmin Logic -->
-    <script src="superadmin.js?v=4"></script>
+    <script src="superadmin.js?v=5"></script>
 </body>
 </html>

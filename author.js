@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session?.user) {
-        window.location.href = 'index.html';
+        window.location.href = 'signin.html?next=author.html';
         return;
     }
 

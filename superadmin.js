@@ -127,18 +127,30 @@ async function loadMinistryUpgradeRequests() {
     const tbody = document.getElementById('ministry-upgrades-tbody');
     if (!tbody) return;
 
+    const rlsHint = document.getElementById('ministry-upgrades-rls-hint');
+    if (rlsHint) rlsHint.classList.add('hidden');
+
     const { data, error } = await supabaseClient
         .from('profiles')
         .select('id, full_name, email, account_type, upgrade_status, upgrade_pitch, upgrade_requested_at')
-        .neq('upgrade_status', 'none')
+        .in('upgrade_status', ['pending', 'approved', 'rejected'])
         .order('upgrade_requested_at', { ascending: false });
 
     if (error) {
+        if (rlsHint) rlsHint.classList.remove('hidden');
         tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-red-600">Could not load upgrade requests: ${escapeSuperHtml(error.message)}</td></tr>`;
         return;
     }
 
-    ministryUpgradeRequests = data || [];
+    const statusPriority = { pending: 0, approved: 1, rejected: 2 };
+    ministryUpgradeRequests = (data || []).slice().sort((a, b) => {
+        const pa = statusPriority[a.upgrade_status] ?? 3;
+        const pb = statusPriority[b.upgrade_status] ?? 3;
+        if (pa !== pb) return pa - pb;
+        const ta = a.upgrade_requested_at ? new Date(a.upgrade_requested_at).getTime() : 0;
+        const tb = b.upgrade_requested_at ? new Date(b.upgrade_requested_at).getTime() : 0;
+        return tb - ta;
+    });
     renderMinistryUpgradeRequests();
 }
 
@@ -197,37 +209,55 @@ function renderMinistryUpgradeRequests() {
 }
 
 async function approveMinistryUpgrade(userId) {
-    const { error } = await supabaseClient
+    const rlsHint = document.getElementById('ministry-upgrades-rls-hint');
+    const { data, error } = await supabaseClient
         .from('profiles')
         .update({
             account_type: 'ministry_minister',
             upgrade_status: 'approved'
         })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select('id, account_type, upgrade_status');
 
     if (error) {
         showToast(`Could not approve upgrade: ${error.message}`);
         return;
     }
 
+    if (!data || data.length === 0) {
+        if (rlsHint) rlsHint.classList.remove('hidden');
+        showToast('Update blocked by Supabase RLS on profiles. Run supabase-superadmin-profiles-rls.sql in Supabase SQL Editor.');
+        return;
+    }
+
+    if (rlsHint) rlsHint.classList.add('hidden');
     await loadMinistryUpgradeRequests();
     showToast('Account upgraded to Ministry / Minister.');
 }
 
 async function rejectMinistryUpgrade(userId) {
-    const { error } = await supabaseClient
+    const rlsHint = document.getElementById('ministry-upgrades-rls-hint');
+    const { data, error } = await supabaseClient
         .from('profiles')
         .update({
             account_type: 'normal_user',
             upgrade_status: 'rejected'
         })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select('id, account_type, upgrade_status');
 
     if (error) {
         showToast(`Could not reject upgrade: ${error.message}`);
         return;
     }
 
+    if (!data || data.length === 0) {
+        if (rlsHint) rlsHint.classList.remove('hidden');
+        showToast('Update blocked by Supabase RLS on profiles. Run supabase-superadmin-profiles-rls.sql in Supabase SQL Editor.');
+        return;
+    }
+
+    if (rlsHint) rlsHint.classList.add('hidden');
     await loadMinistryUpgradeRequests();
     showToast('Upgrade request marked as rejected.');
 }

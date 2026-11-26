@@ -1,6 +1,7 @@
 const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabaseClient;
 
 let currentUser = null;
 let allBooks = [];
@@ -20,6 +21,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('saved-empty-state').classList.remove('hidden');
         document.getElementById('empty-state-title').innerText = 'Sign In Required';
         document.getElementById('empty-state-desc').innerText = 'Please sign in to view your saved books and testimonies across devices.';
+        const actionsEl = document.getElementById('empty-state-actions');
+        if (actionsEl) {
+            actionsEl.innerHTML = `
+                <a href="signin.html?next=saved.html" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all">Sign In</a>
+                <a href="index.html#library" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-5 py-3 rounded-xl transition-all">Browse Digital Library</a>
+            `;
+        }
         return;
     }
 

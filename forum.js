@@ -1,7 +1,8 @@
 // 1. Initialize Supabase
 const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabaseClient;
 
 const ADMIN_EMAIL = 'accordmedia1@gmail.com';
 
@@ -511,6 +512,20 @@ document.getElementById('event-flyer-input')?.addEventListener('change', functio
 function openAuthModal() {
     document.getElementById('auth-modal')?.classList.remove('hidden');
     document.getElementById('auth-modal')?.classList.add('flex');
+
+    if (typeof window.mountAccordGoogleSignIn === 'function') {
+        window.mountAccordGoogleSignIn({
+            containerId: 'google-gsi-container',
+            fallbackBtnId: 'google-fallback-btn',
+            fallbackLinkId: 'google-fallback-link',
+            redirectTo: `${window.location.origin}/forum.html`,
+            onSuccess: () => {
+                closeAuthModal();
+                showToast('Signed in with Google!');
+            },
+            onError: (msg) => showToast(msg || 'Google sign-in failed.')
+        });
+    }
 }
 
 function closeAuthModal() {
@@ -519,10 +534,15 @@ function closeAuthModal() {
 }
 
 async function handleGoogleSignIn() {
-    await supabaseClient.auth.signInWithOAuth({
+    if (typeof window.triggerAccordGoogleOAuthFallback === 'function') {
+        await window.triggerAccordGoogleOAuthFallback(`${window.location.origin}/forum.html`, (msg) => showToast(msg));
+        return;
+    }
+    const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/forum.html` }
+        options: { redirectTo: `${window.location.origin}/forum.html`, queryParams: { prompt: 'select_account' } }
     });
+    if (error) showToast(error.message);
 }
 
 function showToast(message) {
