@@ -890,7 +890,8 @@ function downloadExcelTemplate() {
             download_url: "https://example.com/great-awakening.pdf",
             cover_url: "",
             is_for_sale: "false",
-            price: "0"
+            price: "0",
+            is_downloadable: "true"
         },
         {
             title: "Accord 2023 Mag",
@@ -902,7 +903,8 @@ function downloadExcelTemplate() {
             download_url: "https://example.com/accord-2023-mag.pdf",
             cover_url: "",
             is_for_sale: "true",
-            price: "12.00"
+            price: "12.00",
+            is_downloadable: "false"
         }
     ];
 
@@ -1024,6 +1026,11 @@ async function processExcelUpload() {
         const isForSale = saleFlag === 'true' || saleFlag === '1' || saleFlag === 'yes';
         const price = isForSale ? (parseFloat(row.price) || 0) : 0;
 
+        const dlFlag = String(row.is_downloadable ?? '').trim().toLowerCase();
+        const isDownloadable = dlFlag === ''
+            ? true
+            : !(dlFlag === 'false' || dlFlag === '0' || dlFlag === 'no');
+
         const payload = {
             title,
             author: String(row.author || 'TBD').trim() || 'TBD',
@@ -1035,15 +1042,31 @@ async function processExcelUpload() {
             cover_url: String(row.cover_url || row.cover || '').trim(),
             is_for_sale: isForSale,
             price,
+            is_downloadable: isDownloadable,
             gradient: "from-blue-900 via-indigo-900 to-slate-900",
             is_visible: true,
             status: 'published'
         };
 
-        const { error } = await supabaseClient.from('books').insert([payload]);
+        const { data: insertedRow, error } = await supabaseClient.from('books').insert([payload]).select().single();
         if (!error) {
             addedCount++;
             existingTitles.add(normalizedTitle);
+            if (!isDownloadable && payload.download_url && insertedRow?.id && window.AccordProtectedReader) {
+                try {
+                    const enc = await window.AccordProtectedReader.encryptExistingBook({
+                        supabaseClient,
+                        book: insertedRow
+                    });
+                    await supabaseClient.from('books').update({
+                        encrypted_url: enc.encryptedUrl,
+                        master_file_path: enc.masterFilePath,
+                        download_url: ''
+                    }).eq('id', insertedRow.id);
+                } catch (encErr) {
+                    console.warn(`Excel row "${title}" marked non-downloadable, but auto-encryption skipped:`, encErr.message);
+                }
+            }
         }
     }
 
@@ -1334,6 +1357,8 @@ function renderCatalogTable(list) {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 mt-0.5"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Uploading PDF...</span>`;
         } else if (book.status === 'failed') {
             statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600 mt-0.5"><i class="fa-solid fa-circle-exclamation mr-1"></i> Upload Failed</span>`;
+        } else if (book.encrypted_url && book.is_downloadable === false) {
+            statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 mt-0.5"><i class="fa-solid fa-lock mr-1"></i> Encrypted • In-App Only</span>`;
         } else if (book.download_url) {
             const isExternal = !book.download_url.includes('/archive-files/');
             statusBadge = isExternal
@@ -1351,7 +1376,7 @@ function renderCatalogTable(list) {
         }
 
         const saleBadge = book.is_for_sale
-            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale • USD ${Number(book.price || 0).toFixed(2)}</span>`
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mt-0.5"><i class="fa-solid fa-tag mr-1"></i> For Sale • USD ${Number(book.price || 0).toFixed(2)}${book.is_downloadable !== false ? ' • Downloadable' : ''}</span>`
             : '';
 
         const isVisible = book.is_visible !== false;
@@ -1367,9 +1392,15 @@ function renderCatalogTable(list) {
             ? (book.download_url.includes('/archive-files/') ? book.download_url.split('?')[0] : book.download_url)
             : '';
 
+        const masterBtn = book.master_file_path
+            ? `<button onclick="downloadCompanyMasterPdf(${book.id})" class="w-8 h-8 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white transition-all inline-flex items-center justify-center" title="Download Original Master PDF (Company Vault)"><i class="fa-solid fa-vault text-xs"></i></button>`
+            : '';
+
         const viewBtn = viewUrl
             ? `<a href="${escapeHTML(viewUrl)}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="View & Read Book"><i class="fa-solid fa-book-open-reader text-xs"></i></a>`
-            : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`;
+            : (book.encrypted_url
+                ? `<button onclick="openAdminProtectedPreview(${book.id})" class="w-8 h-8 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white transition-all inline-flex items-center justify-center" title="Read Encrypted Book"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`
+                : `<button disabled class="w-8 h-8 rounded-xl bg-slate-100 text-slate-300 cursor-not-allowed inline-flex items-center justify-center" title="No PDF available"><i class="fa-solid fa-book-open-reader text-xs"></i></button>`);
 
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate flex items-center space-x-3">
@@ -1389,6 +1420,7 @@ function renderCatalogTable(list) {
             <td class="py-4 px-6 text-center text-accord-muted">${escapeHTML(book.pages || 'TBD')} p.</td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
                 ${visibilityBtn}
+                ${masterBtn}
                 ${viewBtn}
                 <button onclick="openArchiveModal('edit', ${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-accord-blue transition-all inline-flex items-center justify-center" title="Edit Archive"><i class="fa-solid fa-pen text-xs"></i></button>
                 <button onclick="promptDelete(${book.id})" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Move to Recycle Bin"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -1475,6 +1507,8 @@ function openArchiveModal(mode, id = null) {
 
     populateCategoryDropdowns();
     document.getElementById('form-is-for-sale').value = 'false';
+    const dlSelectReset = document.getElementById('form-is-downloadable');
+    if (dlSelectReset) dlSelectReset.value = 'true';
     togglePriceField();
 
     const fileNameDisplay = document.getElementById('file-name-display');
@@ -1514,6 +1548,8 @@ function openArchiveModal(mode, id = null) {
             document.getElementById('form-description').value = book.description === 'Draft in progress.' ? '' : book.description;
 
             document.getElementById('form-is-for-sale').value = book.is_for_sale ? 'true' : 'false';
+            const dlSelect = document.getElementById('form-is-downloadable');
+            if (dlSelect) dlSelect.value = book.is_downloadable === false ? 'false' : 'true';
             togglePriceField();
             if (book.is_for_sale) {
                 document.getElementById('form-price').value = Number(book.price || 0).toFixed(2);
@@ -1591,6 +1627,7 @@ async function processArchiveSave(isDraft) {
     const description = document.getElementById('form-description').value.trim() || "Draft in progress.";
     const isForSale = document.getElementById('form-is-for-sale').value === 'true';
     const price = isForSale ? (parseFloat(document.getElementById('form-price').value) || 0) : 0;
+    const isDownloadable = document.getElementById('form-is-downloadable')?.value !== 'false';
 
     closeArchiveModal();
 
@@ -1646,6 +1683,10 @@ async function processArchiveSave(isDraft) {
     renderDraftsTable();
 
     let downloadUrl = initialUrl;
+    let encryptedUrl = existingBook ? (existingBook.encrypted_url || null) : null;
+    let masterFilePath = existingBook ? (existingBook.master_file_path || null) : null;
+    let pendingKeyB64 = null;
+
     if (selectedFile) {
         try {
             const originalName = selectedFile.name || 'document.pdf';
@@ -1655,20 +1696,44 @@ async function processArchiveSave(isDraft) {
             const cleanName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, "_");
             const fileName = `${cleanName}_acc${Date.now()}${fileExtension}`;
 
-            const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                .from('archive-files')
-                .upload(fileName, selectedFile, {
-                    cacheControl: '3600',
-                    upsert: false
+            if (!isDownloadable && window.AccordProtectedReader) {
+                const protectedAssets = await window.AccordProtectedReader.uploadProtectedBookAssets({
+                    supabaseClient,
+                    file: selectedFile,
+                    bookTitle: title
                 });
+                masterFilePath = protectedAssets.masterFilePath;
+                encryptedUrl = protectedAssets.encryptedUrl;
+                pendingKeyB64 = protectedAssets.keyB64;
+                downloadUrl = '';
+            } else {
+                const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                    .from('archive-files')
+                    .upload(fileName, selectedFile, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
 
-            if (uploadError) throw uploadError;
+                if (uploadError) throw uploadError;
 
-            const { data: publicUrlData } = supabaseClient.storage
-                .from('archive-files')
-                .getPublicUrl(uploadData.path);
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('archive-files')
+                    .getPublicUrl(uploadData.path);
 
-            downloadUrl = `${publicUrlData.publicUrl}?download=${encodeURIComponent(fileName)}`;
+                downloadUrl = `${publicUrlData.publicUrl}?download=${encodeURIComponent(fileName)}`;
+
+                if (window.AccordProtectedReader) {
+                    try {
+                        masterFilePath = await window.AccordProtectedReader.uploadMasterOnly({
+                            supabaseClient,
+                            file: selectedFile,
+                            bookTitle: title
+                        });
+                    } catch (masterErr) {
+                        console.warn('Master vault backup skipped:', masterErr.message);
+                    }
+                }
+            }
         } catch (error) {
             console.error("Supabase Storage Upload Error:", error);
             const target = catalogData.find(b => b.id === tempBook.id);
@@ -1677,13 +1742,54 @@ async function processArchiveSave(isDraft) {
             showToast(`Upload failed: ${error.message}`);
             return;
         }
+    } else if (editId && existingBook) {
+        if (!isDownloadable && !encryptedUrl && (existingBook.download_url || existingBook.master_file_path) && window.AccordProtectedReader) {
+            try {
+                showToast('Encrypting book for protected in-app reading...');
+                const enc = await window.AccordProtectedReader.encryptExistingBook({
+                    supabaseClient,
+                    book: existingBook
+                });
+                encryptedUrl = enc.encryptedUrl;
+                masterFilePath = enc.masterFilePath;
+                downloadUrl = '';
+            } catch (encErr) {
+                showToast(`Encryption failed: ${encErr.message}`);
+                return;
+            }
+        } else if (isDownloadable && !downloadUrl && masterFilePath && window.AccordProtectedReader) {
+            try {
+                const signedMaster = await window.AccordProtectedReader.getMasterDownloadUrl({
+                    supabaseClient,
+                    masterFilePath,
+                    expiresInSeconds: 180
+                });
+                const masterResp = await fetch(signedMaster);
+                if (masterResp.ok) {
+                    const blob = await masterResp.blob();
+                    const fileName = `${title.replace(/[^a-zA-Z0-9._-]/g, '_')}_acc${Date.now()}.pdf`;
+                    const { data: upData, error: upErr } = await supabaseClient.storage
+                        .from('archive-files')
+                        .upload(fileName, blob, { contentType: 'application/pdf', cacheControl: '3600', upsert: false });
+                    if (!upErr && upData?.path) {
+                        const { data: pubData } = supabaseClient.storage.from('archive-files').getPublicUrl(upData.path);
+                        downloadUrl = `${pubData.publicUrl}?download=${encodeURIComponent(fileName)}`;
+                    }
+                }
+            } catch (restoreErr) {
+                console.warn('Could not restore downloadable PDF from master vault:', restoreErr.message);
+            }
+        }
     }
 
     const payload = {
         title, author, category, year, pages,
         is_for_sale: isForSale,
         price,
+        is_downloadable: isDownloadable,
         download_url: downloadUrl,
+        encrypted_url: encryptedUrl,
+        master_file_path: masterFilePath,
         cover_url: finalCoverUrl,
         description,
         gradient: existingBook ? existingBook.gradient : "from-blue-900 via-indigo-900 to-slate-900",
@@ -1692,18 +1798,32 @@ async function processArchiveSave(isDraft) {
     };
 
     let dbError = null;
+    let savedBookId = editId ? Number(editId) : null;
     if (editId) {
         const { error } = await supabaseClient.from('books').update(payload).eq('id', editId);
         dbError = error;
     } else {
-        const { error } = await supabaseClient.from('books').insert([payload]);
+        const { data: insertedBook, error } = await supabaseClient.from('books').insert([payload]).select('id').single();
         dbError = error;
+        savedBookId = insertedBook?.id || null;
     }
 
     if (dbError) {
         console.error("Supabase Save Error:", dbError);
         showToast(`Save failed: ${dbError.message}`);
         return;
+    }
+
+    if (pendingKeyB64 && savedBookId && window.AccordProtectedReader) {
+        try {
+            await window.AccordProtectedReader.saveBookEncryptionKey({
+                supabaseClient,
+                bookId: savedBookId,
+                keyB64: pendingKeyB64
+            });
+        } catch (keyErr) {
+            showToast(`Book saved, but key save failed: ${keyErr.message}`);
+        }
     }
 
     showToast(isDraft ? `Draft "${title}" saved!` : `Archive "${title}" published!`);
@@ -2040,6 +2160,9 @@ async function approveUserBookSubmission(id) {
         cover_url: submission.cover_url || '',
         is_for_sale: Boolean(submission.is_for_sale),
         price: submission.is_for_sale ? (Number(submission.price) || 0) : 0,
+        is_downloadable: submission.is_downloadable !== false,
+        encrypted_url: submission.encrypted_url || null,
+        master_file_path: submission.master_file_path || null,
         gradient: 'from-blue-900 via-indigo-900 to-slate-900',
         is_visible: true,
         status: 'published'
@@ -2714,4 +2837,37 @@ async function settleCopyrightDismiss(reportId, bookId) {
 
     await fetchAllData();
     showToast('Copyright claim dismissed and publisher rights upheld.');
+}
+
+async function downloadCompanyMasterPdf(bookId) {
+    const book = catalogData.find(b => Number(b.id) === Number(bookId));
+    if (!book?.master_file_path || !window.AccordProtectedReader) {
+        showToast('No master PDF found in company vault for this book.');
+        return;
+    }
+    try {
+        showToast('Generating secure master PDF link...');
+        const signedUrl = await window.AccordProtectedReader.getMasterDownloadUrl({
+            supabaseClient,
+            masterFilePath: book.master_file_path,
+            expiresInSeconds: 120
+        });
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+        showToast(`Master PDF error: ${err.message}`);
+    }
+}
+
+async function openAdminProtectedPreview(bookId) {
+    const book = catalogData.find(b => Number(b.id) === Number(bookId));
+    if (!book || !window.AccordProtectedReader) return;
+    try {
+        await window.AccordProtectedReader.openProtectedReaderModal({
+            supabaseClient,
+            book,
+            userEmail: 'Admin Preview'
+        });
+    } catch (err) {
+        showToast(err?.message || 'Unable to preview protected book.');
+    }
 }

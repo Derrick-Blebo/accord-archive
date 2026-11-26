@@ -318,6 +318,7 @@ async function handleAuthorBookUpload(e) {
     const pages = document.getElementById('upload-book-pages').value.trim() || 'TBD';
     const isForSale = document.getElementById('upload-book-access').value === 'true';
     const price = isForSale ? (parseFloat(document.getElementById('upload-book-price').value) || 0) : 0;
+    const isDownloadable = document.getElementById('upload-book-downloadable')?.value !== 'false';
     const description = document.getElementById('upload-book-description').value.trim();
 
     const pdfFile = document.getElementById('upload-book-pdf').files?.[0] || null;
@@ -358,9 +359,35 @@ async function handleAuthorBookUpload(e) {
     try {
         let downloadUrl = externalUrl || '';
         let coverUrl = '';
+        let encryptedUrl = null;
+        let masterFilePath = null;
+        let pendingKeyB64 = null;
 
         if (pdfFile) {
-            downloadUrl = await uploadAuthorFile(pdfFile);
+            if (!isDownloadable && window.AccordProtectedReader) {
+                const protectedAssets = await window.AccordProtectedReader.uploadProtectedBookAssets({
+                    supabaseClient,
+                    file: pdfFile,
+                    bookTitle: title
+                });
+                masterFilePath = protectedAssets.masterFilePath;
+                encryptedUrl = protectedAssets.encryptedUrl;
+                pendingKeyB64 = protectedAssets.keyB64;
+                downloadUrl = '';
+            } else {
+                downloadUrl = await uploadAuthorFile(pdfFile);
+                if (window.AccordProtectedReader) {
+                    try {
+                        masterFilePath = await window.AccordProtectedReader.uploadMasterOnly({
+                            supabaseClient,
+                            file: pdfFile,
+                            bookTitle: title
+                        });
+                    } catch (masterErr) {
+                        console.warn('Master vault backup skipped:', masterErr.message);
+                    }
+                }
+            }
         }
         if (coverFile) {
             coverUrl = await uploadAuthorFile(coverFile, 'covers');
@@ -383,6 +410,9 @@ async function handleAuthorBookUpload(e) {
             cover_url: coverUrl,
             is_for_sale: isForSale,
             price,
+            is_downloadable: isDownloadable,
+            encrypted_url: encryptedUrl,
+            master_file_path: masterFilePath,
             gradient: 'from-blue-900 via-indigo-900 to-slate-900',
             is_visible: false,
             status: 'draft',
@@ -404,6 +434,14 @@ async function handleAuthorBookUpload(e) {
             throw new Error(bookError.message);
         }
 
+        if (pendingKeyB64 && insertedBook?.id && window.AccordProtectedReader) {
+            await window.AccordProtectedReader.saveBookEncryptionKey({
+                supabaseClient,
+                bookId: insertedBook.id,
+                keyB64: pendingKeyB64
+            });
+        }
+
         // Log in user_book_submissions so it appears under Library Admin > Pending Reviews
         await supabaseClient
             .from('user_book_submissions')
@@ -420,6 +458,9 @@ async function handleAuthorBookUpload(e) {
                 cover_url: coverUrl,
                 is_for_sale: isForSale,
                 price,
+                is_downloadable: isDownloadable,
+                encrypted_url: encryptedUrl,
+                master_file_path: masterFilePath,
                 rights_basis: rightsBasis,
                 rights_statement: rightsStatement,
                 rights_proof_url: rightsProofUrl || null,

@@ -450,11 +450,14 @@ function buildBookCardElement(book) {
         : '';
 
     let primaryActionButton = '';
+    const isProtected = book.is_downloadable === false && Boolean(book.encrypted_url);
     if (book.is_for_sale && !isPurchased) {
         primaryActionButton = `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm shadow-amber-500/20 flex items-center justify-center space-x-1.5"><i class="fa-solid fa-cart-shopping text-[11px]"></i><span>Buy Now</span></button>`;
+    } else if (isProtected) {
+        primaryActionButton = `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read In-App</span></button>`;
     } else if (book.is_for_sale && isPurchased) {
         primaryActionButton = cleanReadUrl
-            ? `<a href="${cleanReadUrl}" target="_blank" rel="noopener noreferrer" onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-book-open-reader text-[11px]"></i><span>Read</span></a>`
+            ? `<a href="${book.download_url || cleanReadUrl}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload(${book.id})" class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-full transition-all shadow-sm flex items-center justify-center space-x-1.5"><i class="fa-solid fa-download text-[11px]"></i><span>Download</span></a>`
             : `<button type="button" onclick="openBookModal(${book.id})" class="flex-1 h-9 bg-emerald-600 text-white text-xs font-bold px-4 rounded-full">Read</button>`;
     } else {
         primaryActionButton = book.download_url

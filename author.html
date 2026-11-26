@@ -157,6 +157,15 @@
                     </div>
                 </div>
 
+                <div>
+                    <label for="upload-book-downloadable" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Reader Delivery &amp; Download Option</label>
+                    <select id="upload-book-downloadable" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <option value="true">Downloadable PDF (Readers can download file)</option>
+                        <option value="false">Protected In-App Reader (No Download • Encrypted)</option>
+                    </select>
+                    <p class="text-[10px] text-accord-muted mt-1">You can sell a book as Downloadable or Protected. Protected books are encrypted and read page-by-page inside Accord Archive.</p>
+                </div>
+
                 <input type="hidden" id="upload-book-pages" value="TBD">
 
                 <div>
@@ -463,8 +472,9 @@
         </div>
     </div>
 
+    <script src="protected-reader.js?v=1"></script>
     <script src="admin-core.js"></script>
     <script src="footer.js"></script>
-    <script src="author.js?v=5"></script>
+    <script src="author.js?v=6"></script>
 </body>
 </html>

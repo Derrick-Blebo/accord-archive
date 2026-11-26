@@ -219,6 +219,7 @@ function renderBookDetails() {
 
     // Primary CTA
     const ctaContainer = document.getElementById('book-primary-cta');
+    const isProtected = book.is_downloadable === false && Boolean(book.encrypted_url);
     if (ctaContainer) {
         if (book.is_for_sale && !isPurchased) {
             ctaContainer.innerHTML = `
@@ -226,11 +227,17 @@ function renderBookDetails() {
                     <i class="fa-solid fa-cart-shopping"></i>
                     <span>Buy Now — USD ${Number(book.price || 0).toFixed(2)}</span>
                 </button>`;
+        } else if (isProtected) {
+            ctaContainer.innerHTML = `
+                <button type="button" onclick="openProtectedBookReader()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-book-open-reader"></i>
+                    <span>Read In-App (Protected Edition)</span>
+                </button>`;
         } else if (book.is_for_sale && isPurchased && cleanReadUrl) {
             ctaContainer.innerHTML = `
-                <a href="${escapeHTML(cleanReadUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordBookDownload()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-sm transition-all flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-book-open-reader"></i>
-                    <span>Read Full Publication</span>
+                <a href="${escapeHTML(book.download_url || cleanReadUrl)}" ${isSupabaseFile ? 'download' : 'target="_blank" rel="noopener noreferrer"'} onclick="recordBookDownload()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3.5 px-6 rounded-2xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Download / Read Purchased Edition</span>
                 </a>`;
         } else if (book.download_url) {
             ctaContainer.innerHTML = `
@@ -500,6 +507,24 @@ async function recordBookDownload() {
 
     const { error } = await supabaseClient.rpc('increment_book_download', { book_id: Number(currentBook.id) });
     if (error) console.error('Failed to record download count:', error.message);
+}
+
+async function openProtectedBookReader() {
+    if (!currentBook) return;
+    if (!window.AccordProtectedReader) {
+        showToast('Protected reader is still loading. Please try again.');
+        return;
+    }
+    try {
+        recordBookDownload();
+        await window.AccordProtectedReader.openProtectedReaderModal({
+            supabaseClient,
+            book: currentBook,
+            userEmail: currentUser?.email || ''
+        });
+    } catch (err) {
+        showToast(err?.message || 'Unable to open protected publication.');
+    }
 }
 
 async function initiateBookPurchase() {

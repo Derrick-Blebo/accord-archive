@@ -354,7 +354,7 @@
                         </button>
                     </div>
                     <p class="text-[11px] text-accord-slate leading-relaxed">
-                        First row headers: <strong>title</strong>, <strong>author</strong>, <strong>category</strong>, <strong>year</strong>, <strong>pages</strong>, <strong>description</strong>, <strong>download_url</strong>, <strong>cover_url</strong>, <strong>is_for_sale</strong>, <strong>price</strong>
+                        First row headers: <strong>title</strong>, <strong>author</strong>, <strong>category</strong>, <strong>year</strong>, <strong>pages</strong>, <strong>description</strong>, <strong>download_url</strong>, <strong>cover_url</strong>, <strong>is_for_sale</strong>, <strong>price</strong>, <strong>is_downloadable</strong>
                     </p>
                 </div>
 
@@ -1022,6 +1022,15 @@
                         </div>
                     </div>
 
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Reader Delivery &amp; Download Protection</label>
+                        <select id="form-is-downloadable" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="true">Downloadable PDF (Readers can download file)</option>
+                            <option value="false">Protected In-App Reader (No Download • Encrypted Device Cache)</option>
+                        </select>
+                        <p class="text-[10px] text-accord-muted mt-1">Protected books are encrypted in-browser, cached privately on the reader's device, and read page-by-page without exposing a downloadable PDF. The original PDF stays in your private company vault.</p>
+                    </div>
+
                     <!-- 5. DESCRIPTION -->
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Historical Summary & Description</label>
@@ -1052,7 +1061,10 @@
     <!-- Shared Core Script -->
     <script src="admin-core.js"></script>
 
+    <!-- Protected Reader & Encryption Module -->
+    <script src="protected-reader.js?v=1"></script>
+
     <!-- JavaScript Admin Logic -->
-    <script src="admin.js?v=8"></script>
+    <script src="admin.js?v=9"></script>
 </body>
 </html>
