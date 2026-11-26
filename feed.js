@@ -82,20 +82,33 @@ async function initFeedSession() {
 
         // Load verified pages where this user is a delegated page admin
         managedVerifiedPages = [];
+        window.editableFeedPageIds = [];
         try {
             const { data: adminRows } = await supabaseClient
                 .from('page_admins')
-                .select('page_id, role, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
+                .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
                 .eq('admin_user_id', currentUser.id);
-            managedVerifiedPages = (adminRows || [])
-                .map(r => r.profiles)
-                .filter(p => p && isMinistryOrMinister(p));
+            const activeRows = (adminRows || []).filter(r => r.profiles && isMinistryOrMinister(r.profiles));
+            managedVerifiedPages = activeRows
+                .filter(r => {
+                    const p = r.permissions;
+                    return p && typeof p === 'object' ? p.can_post !== false : true;
+                })
+                .map(r => r.profiles);
+            window.editableFeedPageIds = activeRows
+                .filter(r => {
+                    const p = r.permissions;
+                    return p && typeof p === 'object' ? Boolean(p.can_edit_delete_posts) : (r.role === 'admin');
+                })
+                .map(r => String(r.page_id));
         } catch (err) {
             managedVerifiedPages = [];
+            window.editableFeedPageIds = [];
         }
     } else {
         currentProfile = null;
         managedVerifiedPages = [];
+        window.editableFeedPageIds = [];
         if (authLabel) authLabel.textContent = 'Sign In';
         if (mobileAuthLabel) mobileAuthLabel.textContent = 'Sign In / Create Account';
     }
@@ -898,7 +911,22 @@ async function togglePostLike(postId) {
     }
 }
 
+function showCreatePostError(message) {
+    const box = document.getElementById('create-post-error');
+    const txt = document.getElementById('create-post-error-text');
+    if (txt) txt.textContent = message;
+    if (box) box.classList.remove('hidden');
+}
+
+function clearCreatePostError() {
+    const box = document.getElementById('create-post-error');
+    const txt = document.getElementById('create-post-error-text');
+    if (txt) txt.textContent = '';
+    if (box) box.classList.add('hidden');
+}
+
 function openCreatePostModal(defaultType = 'testimony') {
+    clearCreatePostError();
     const typeSelect = document.getElementById('post-type');
     if (typeSelect) typeSelect.value = defaultType;
     togglePostTypeFields();
@@ -910,6 +938,7 @@ function openCreatePostModal(defaultType = 'testimony') {
 }
 
 function closeCreatePostModal() {
+    clearCreatePostError();
     const modal = document.getElementById('create-post-modal');
     modal?.classList.remove('flex');
     modal?.classList.add('hidden');
@@ -982,6 +1011,7 @@ function toggleAnonymousAuthorInput() {
 
 async function handleCreatePostSubmit(e) {
     e.preventDefault();
+    clearCreatePostError();
 
     const postType = document.getElementById('post-type').value;
     const title = document.getElementById('post-title').value.trim();
@@ -994,11 +1024,17 @@ async function handleCreatePostSubmit(e) {
     // Enforce permissions: Testimonies allow guests/anonymous; Video/Audio/Text require Ministry/Minister or Page Admin
     if (postType !== 'testimony') {
         if (!currentUser) {
-            showToast('Please sign in with a Ministry / Minister account to post.', true);
+            const msg = 'Please sign in with a Ministry / Minister account to post Videos, Audio, or Text Posts.';
+            showCreatePostError(msg);
+            showToast(msg, true);
             return;
         }
         if (!isMinistryOrMinister() && !selectedPage) {
-            showToast('Only verified Ministry / Minister accounts or their Page Admins can publish Video, Audio, or Text Posts.', true);
+            const msg = managedVerifiedPages.length > 0
+                ? 'Select a verified page in "Post As" above to publish Videos, Audio, or Text Posts on its behalf.'
+                : 'Only verified Ministry / Minister accounts or their Page Admins can publish Video, Audio, or Text Posts.';
+            showCreatePostError(msg);
+            showToast(msg, true);
             return;
         }
     }
@@ -1054,7 +1090,9 @@ async function handleCreatePostSubmit(e) {
     }
 
     if (error) {
-        showToast(`Could not publish post: ${error.message}`, true);
+        const msg = `Could not publish post: ${error.message}`;
+        showCreatePostError(msg);
+        showToast(msg, true);
         return;
     }
 

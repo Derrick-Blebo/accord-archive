@@ -4,10 +4,140 @@
 // =========================================================
 
 let authorUser = null;
+let authorProfile = null;
+let managedAuthorPages = [];
+let activeAuthorPageId = '';
 let authorBooks = [];
 let authorWithdrawals = [];
 let salesStatsByBook = {};
 let availableBalance = 0;
+
+function getActiveAuthorContext() {
+    if (activeAuthorPageId) {
+        const entry = managedAuthorPages.find(p => String(p.page.id) === String(activeAuthorPageId));
+        if (entry) {
+            return {
+                isOwn: false,
+                targetAuthorId: entry.page.id,
+                targetAuthorName: entry.page.full_name || entry.page.email || 'Verified Page',
+                targetAuthorEmail: entry.page.email || '',
+                canPostBooks: Boolean(entry.perms.can_post_books),
+                canWithdrawFunds: Boolean(entry.perms.can_withdraw_funds)
+            };
+        }
+    }
+    return {
+        isOwn: true,
+        targetAuthorId: authorUser?.id || null,
+        targetAuthorName: getAuthorDisplayName(),
+        targetAuthorEmail: authorUser?.email || '',
+        canPostBooks: true,
+        canWithdrawFunds: true
+    };
+}
+
+async function loadManagedAuthorPages() {
+    managedAuthorPages = [];
+    if (!authorUser) return;
+    try {
+        const [{ data: myProf }, { data: adminRows }] = await Promise.all([
+            supabaseClient.from('profiles').select('id, full_name, handle, email').eq('id', authorUser.id).maybeSingle(),
+            supabaseClient
+                .from('page_admins')
+                .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, email, account_type, upgrade_status)')
+                .eq('admin_user_id', authorUser.id)
+        ]);
+        authorProfile = myProf || null;
+        managedAuthorPages = (adminRows || [])
+            .filter(r => {
+                const prof = r.profiles;
+                const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+                if (!isVerified) return false;
+                const p = r.permissions && typeof r.permissions === 'object' ? r.permissions : {};
+                return Boolean(p.can_post_books) || Boolean(p.can_withdraw_funds);
+            })
+            .map(r => {
+                const p = r.permissions && typeof r.permissions === 'object' ? r.permissions : {};
+                return {
+                    page: r.profiles,
+                    perms: {
+                        can_post_books: Boolean(p.can_post_books),
+                        can_withdraw_funds: Boolean(p.can_withdraw_funds)
+                    }
+                };
+            });
+    } catch {
+        managedAuthorPages = [];
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const reqPage = params.get('page');
+    if (reqPage && managedAuthorPages.some(e => String(e.page.id) === String(reqPage))) {
+        activeAuthorPageId = reqPage;
+    }
+    syncAuthorContextSwitcher();
+}
+
+function syncAuthorContextSwitcher() {
+    const wrap = document.getElementById('author-page-switcher-wrap');
+    const sel = document.getElementById('author-page-select');
+    if (wrap && sel) {
+        if (managedAuthorPages.length === 0) {
+            wrap.classList.add('hidden');
+        } else {
+            const selfName = getAuthorDisplayName();
+            sel.innerHTML = [
+                `<option value="">Myself (${escapeAuthorHtml(selfName)})</option>`,
+                ...managedAuthorPages.map(e => `<option value="${escapeAuthorHtml(e.page.id)}">${escapeAuthorHtml(e.page.full_name || 'Verified Page')} (Verified Page)</option>`)
+            ].join('');
+            sel.value = activeAuthorPageId;
+            wrap.classList.remove('hidden');
+        }
+    }
+    syncAuthorPermissionButtons();
+}
+
+function syncAuthorPermissionButtons() {
+    const ctx = getActiveAuthorContext();
+    const uploadTop = document.getElementById('author-upload-btn-top');
+    const uploadTable = document.getElementById('author-upload-btn-table');
+    const withdrawBtn = document.getElementById('author-withdraw-btn');
+    const noteEl = document.getElementById('author-context-perms-note');
+
+    [uploadTop, uploadTable].forEach(btn => {
+        if (!btn) return;
+        btn.disabled = !ctx.canPostBooks;
+        btn.classList.toggle('opacity-50', !ctx.canPostBooks);
+        btn.classList.toggle('cursor-not-allowed', !ctx.canPostBooks);
+        btn.title = ctx.canPostBooks ? '' : 'You do not have Book Management permission for this page.';
+    });
+
+    if (withdrawBtn) {
+        withdrawBtn.disabled = !ctx.canWithdrawFunds;
+        withdrawBtn.classList.toggle('opacity-50', !ctx.canWithdrawFunds);
+        withdrawBtn.classList.toggle('cursor-not-allowed', !ctx.canWithdrawFunds);
+        withdrawBtn.title = ctx.canWithdrawFunds ? '' : 'You do not have Withdrawal permission for this page.';
+    }
+
+    if (noteEl) {
+        if (ctx.isOwn) {
+            noteEl.textContent = '';
+        } else {
+            const caps = [
+                ctx.canPostBooks ? 'Books' : null,
+                ctx.canWithdrawFunds ? 'Withdraw Funds' : null
+            ].filter(Boolean).join(' & ');
+            noteEl.textContent = caps ? `Powers on this page: ${caps}` : 'View only';
+        }
+    }
+}
+
+async function handleAuthorContextChange() {
+    const sel = document.getElementById('author-page-select');
+    activeAuthorPageId = sel?.value || '';
+    syncAuthorPermissionButtons();
+    await loadAuthorDashboardData();
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof supabaseClient === 'undefined') return;
@@ -21,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     authorUser = session.user;
     syncAuthorHeaderLabels();
     bindAuthorUploadListeners();
-    await loadAuthorCategories();
+    await Promise.all([loadAuthorCategories(), loadManagedAuthorPages()]);
     await loadAuthorDashboardData();
 });
 
@@ -103,13 +233,18 @@ async function loadAuthorCategories() {
 }
 
 function openUploadBookModal() {
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canPostBooks) {
+        showToast('You do not have permission to post books for this verified page.', true);
+        return;
+    }
     document.getElementById('upload-book-form')?.reset();
     const authorInput = document.getElementById('upload-book-author');
     const yearInput = document.getElementById('upload-book-year');
     const pagesInput = document.getElementById('upload-book-pages');
     const metaEl = document.getElementById('upload-pdf-meta');
 
-    if (authorInput) authorInput.value = getAuthorDisplayName();
+    if (authorInput) authorInput.value = ctx.targetAuthorName || getAuthorDisplayName();
     if (yearInput) yearInput.value = String(new Date().getFullYear());
     if (pagesInput) pagesInput.value = 'TBD';
     if (metaEl) metaEl.textContent = 'PDF up to 50MB, or provide an external PDF link below.';
@@ -226,10 +361,15 @@ async function handleAuthorBookUpload(e) {
             coverUrl = await uploadAuthorFile(coverFile, 'covers');
         }
 
+        const ctx = getActiveAuthorContext();
+        if (!ctx.canPostBooks) {
+            throw new Error('You do not have permission to post books for this verified page.');
+        }
+
         const bookPayload = {
             title,
             author: authorName,
-            author_id: authorUser.id,
+            author_id: ctx.targetAuthorId,
             category,
             year,
             pages,
@@ -340,17 +480,21 @@ function escapeAuthorHtml(str) {
 }
 
 async function loadAuthorDashboardData() {
+    const ctx = getActiveAuthorContext();
+    const targetId = ctx.targetAuthorId;
+    if (!targetId) return;
+
     const [booksRes, withdrawalsRes] = await Promise.all([
         supabaseClient
             .from('books')
             .select('*')
-            .eq('author_id', authorUser.id)
+            .eq('author_id', targetId)
             .is('deleted_at', null)
             .order('created_at', { ascending: false }),
         supabaseClient
             .from('author_withdrawals')
             .select('*')
-            .eq('author_id', authorUser.id)
+            .eq('author_id', targetId)
             .order('created_at', { ascending: false })
     ]);
 
@@ -490,6 +634,11 @@ function renderAuthorBooksTable() {
 }
 
 async function toggleAuthorBookVisibility(bookId, makeVisible) {
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canPostBooks) {
+        showToast('You do not have permission to manage books for this verified page.', true);
+        return;
+    }
     const updatePayload = makeVisible
         ? { is_visible: true, status: 'published' }
         : { is_visible: false };
@@ -498,7 +647,7 @@ async function toggleAuthorBookVisibility(bookId, makeVisible) {
         .from('books')
         .update(updatePayload)
         .eq('id', bookId)
-        .eq('author_id', authorUser.id);
+        .eq('author_id', ctx.targetAuthorId);
 
     if (error) {
         showToast(`Could not update visibility: ${error.message}`, true);
@@ -540,6 +689,16 @@ async function handleTakedownSubmit(e) {
         btn.textContent = 'Submitting...';
     }
 
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canPostBooks) {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Submit Takedown Request';
+        }
+        showToast('You do not have permission to manage books for this verified page.', true);
+        return;
+    }
+
     const { error } = await supabaseClient
         .from('books')
         .update({
@@ -548,7 +707,7 @@ async function handleTakedownSubmit(e) {
             takedown_requested_at: new Date().toISOString()
         })
         .eq('id', bookId)
-        .eq('author_id', authorUser.id);
+        .eq('author_id', ctx.targetAuthorId);
 
     if (btn) {
         btn.disabled = false;
@@ -566,6 +725,11 @@ async function handleTakedownSubmit(e) {
 }
 
 function openWithdrawModal() {
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canWithdrawFunds) {
+        showToast('You do not have permission to withdraw funds for this verified page.', true);
+        return;
+    }
     document.getElementById('modal-available-balance').textContent = `USD ${availableBalance.toFixed(2)}`;
     const amountInput = document.getElementById('withdraw-amount');
     if (amountInput) {
@@ -607,19 +771,30 @@ async function handleWithdrawSubmit(e) {
         return;
     }
 
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canWithdrawFunds) {
+        showToast('You do not have permission to withdraw funds for this verified page.', true);
+        return;
+    }
+
     if (btn) {
         btn.disabled = true;
         btn.textContent = 'Submitting...';
     }
 
-    const authorName = getAuthorDisplayName();
+    const issuerName = authorProfile?.full_name || getAuthorDisplayName();
+    const issuerHandle = authorProfile?.handle || '';
 
     const { error } = await supabaseClient
         .from('author_withdrawals')
         .insert([{
-            author_id: authorUser.id,
-            author_name: authorName,
-            author_email: authorUser.email,
+            author_id: ctx.targetAuthorId,
+            author_name: ctx.targetAuthorName,
+            author_email: ctx.targetAuthorEmail,
+            requested_by_user_id: authorUser.id,
+            requested_by_name: issuerName,
+            requested_by_email: authorUser.email,
+            requested_by_handle: issuerHandle,
             amount,
             payout_method: payoutMethod,
             payout_details: payoutDetails,
@@ -649,7 +824,7 @@ function renderAuthorWithdrawalsTable() {
     if (!tbody) return;
 
     if (authorWithdrawals.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-accord-muted">No withdrawal requests yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-accord-muted">No withdrawal requests yet.</td></tr>`;
         return;
     }
 
@@ -666,12 +841,19 @@ function renderAuthorWithdrawalsTable() {
             pill = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`;
         }
 
+        const issuerName = w.requested_by_name || w.author_name || 'Account Owner';
+        const issuerSub = [w.requested_by_handle, w.requested_by_email].filter(Boolean).join(' • ');
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="py-3.5 px-6 text-accord-muted">${d}</td>
             <td class="py-3.5 px-6">
                 <p class="font-bold text-accord-slate">${escapeAuthorHtml(w.payout_method)}</p>
                 <p class="text-[11px] text-accord-muted">${escapeAuthorHtml(w.payout_details)}</p>
+            </td>
+            <td class="py-3.5 px-6">
+                <p class="font-semibold text-accord-slate">${escapeAuthorHtml(issuerName)}</p>
+                ${issuerSub ? `<p class="text-[10px] text-accord-muted">${escapeAuthorHtml(issuerSub)}</p>` : ''}
             </td>
             <td class="py-3.5 px-6 text-right font-bold text-accord-slate">USD ${Number(w.amount || 0).toFixed(2)}</td>
             <td class="py-3.5 px-6 text-center">${pill}</td>

@@ -67,7 +67,7 @@
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
 
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+    <div id="toast" class="fixed bottom-6 right-6 z-[200] pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
         <span id="toast-message" class="font-medium text-sm">Action completed.</span>
     </div>
@@ -314,14 +314,21 @@
                 <p id="author-subtitle" class="text-xs sm:text-sm text-accord-muted">
                     Upload books, track downloads, sales, earnings, and visibility status.
                 </p>
+                <div id="author-page-switcher-wrap" class="hidden pt-2 flex flex-wrap items-center gap-2">
+                    <label for="author-page-select" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">
+                        <i class="fa-solid fa-user-shield text-accord-blue mr-1"></i> Acting As:
+                    </label>
+                    <select id="author-page-select" onchange="handleAuthorContextChange()" class="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-accord-slate focus:outline-none focus:border-accord-blue"></select>
+                    <span id="author-context-perms-note" class="text-[11px] text-accord-muted"></span>
+                </div>
             </div>
 
             <div class="flex flex-wrap items-center gap-3 shrink-0">
-                <button type="button" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
+                <button type="button" id="author-upload-btn-top" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-5 py-3.5 rounded-xl shadow-md shadow-blue-500/20 transition-all inline-flex items-center space-x-2">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                     <span>Upload Book</span>
                 </button>
-                <button type="button" onclick="openWithdrawModal()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-5 py-3.5 rounded-xl transition-all inline-flex items-center space-x-2">
+                <button type="button" id="author-withdraw-btn" onclick="openWithdrawModal()" class="bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold px-5 py-3.5 rounded-xl transition-all inline-flex items-center space-x-2">
                     <i class="fa-solid fa-wallet"></i>
                     <span>Withdraw Funds</span>
                 </button>
@@ -356,7 +363,7 @@
                     <h2 class="serif-heading text-xl font-bold text-accord-slate">Your Uploaded Books</h2>
                     <p class="text-xs text-accord-muted mt-0.5">Upload new titles anytime, hide books from the public library, or request a takedown for Library Admin review.</p>
                 </div>
-                <button type="button" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all inline-flex items-center space-x-1.5 self-start sm:self-auto">
+                <button type="button" id="author-upload-btn-table" onclick="openUploadBookModal()" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all inline-flex items-center space-x-1.5 self-start sm:self-auto">
                     <i class="fa-solid fa-plus"></i>
                     <span>New Book</span>
                 </button>
@@ -410,13 +417,14 @@
                         <tr class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-accord-muted">
                             <th class="py-3 px-6">Date</th>
                             <th class="py-3 px-6">Method & Details</th>
+                            <th class="py-3 px-6">Issued By</th>
                             <th class="py-3 px-6 text-right">Amount</th>
                             <th class="py-3 px-6 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody id="author-withdrawals-tbody" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="4" class="py-6 text-center text-accord-muted">No withdrawal requests yet.</td>
+                            <td colspan="5" class="py-6 text-center text-accord-muted">No withdrawal requests yet.</td>
                         </tr>
                     </tbody>
                 </table>

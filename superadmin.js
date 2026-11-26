@@ -932,14 +932,21 @@ async function loadSuperadminWithdrawals() {
     listEl.innerHTML = data.map(w => {
         const isPending = w.status === 'pending';
         const pillClass = w.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : w.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700';
+        const isDelegated = w.requested_by_user_id && w.author_id && String(w.requested_by_user_id) !== String(w.author_id);
+        const issuerName = w.requested_by_name || w.author_name || 'Account Owner';
+        const issuerHandle = w.requested_by_handle ? ` ${w.requested_by_handle}` : '';
+        const issuerEmail = w.requested_by_email || w.author_email || '';
+        const issuerText = `${issuerName}${issuerHandle}${issuerEmail ? ` • ${issuerEmail}` : ''}`;
         return `
             <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                 <div class="space-y-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${pillClass}">${escapeHtml(w.status)}</span>
                         <span class="text-sm font-extrabold text-accord-slate">USD ${Number(w.amount || 0).toFixed(2)}</span>
+                        ${isDelegated ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-accord-blue border border-blue-200">Issued by Page Admin</span>` : ''}
                     </div>
-                    <p class="text-xs font-bold text-accord-slate">${escapeHtml(w.author_name || 'Author')} (${escapeHtml(w.author_email || '')})</p>
+                    <p class="text-xs font-bold text-accord-slate">Page / Author: ${escapeHtml(w.author_name || 'Author')} (${escapeHtml(w.author_email || '')})</p>
+                    <p class="text-[11px] font-semibold text-indigo-700">Issued by: ${escapeHtml(issuerText)}</p>
                     <p class="text-[11px] text-accord-muted">${escapeHtml(w.payout_method || '')} • ${escapeHtml(w.payout_details || '')}</p>
                     ${w.paystack_transfer_reference ? `<p class="text-[11px] text-emerald-700 font-mono">Paystack Ref: ${escapeHtml(w.paystack_transfer_reference)}</p>` : ''}
                 </div>

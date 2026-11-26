@@ -54,7 +54,7 @@
     </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
-    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+    <div id="toast" class="fixed bottom-6 right-6 z-[200] pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
         <span id="toast-message" class="font-medium text-sm">Action completed.</span>
     </div>
@@ -145,19 +145,49 @@
                 <div>
                     <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate flex items-center gap-2">
                         <i class="fa-solid fa-user-shield text-accord-blue"></i>
-                        <span>Verified Page Admins</span>
+                        <span>Verified Page Admins & Powers</span>
                     </h3>
                     <p class="text-[11px] text-accord-muted mt-1 leading-relaxed">
-                        Add trusted team members by their <strong>@handle</strong> or <strong>email</strong> so they can publish posts on behalf of your verified ministry or minister page.
+                        Add trusted team members by their <strong>@handle</strong> or <strong>email</strong> and choose the exact powers they have on behalf of your verified page.
                     </p>
                 </div>
-                <form onsubmit="handleAddPageAdmin(event)" class="flex flex-col sm:flex-row gap-2">
-                    <input type="text" id="page-admin-identifier" required placeholder="@handle or member@email.com" class="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                    <button type="submit" id="add-page-admin-btn" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0">
-                        <i class="fa-solid fa-user-plus mr-1"></i> Add Page Admin
-                    </button>
+                <form onsubmit="handleAddPageAdmin(event)" class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="page-admin-identifier" required placeholder="@handle or member@email.com" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <select id="page-admin-preset" onchange="applyAdminPowerPreset(this.value)" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                            <option value="editor">Preset: Post Editor</option>
+                            <option value="manager">Preset: Content &amp; Books Manager</option>
+                            <option value="full">Preset: Full Admin (incl. Withdrawals)</option>
+                            <option value="custom">Custom Powers</option>
+                        </select>
+                        <button type="submit" id="add-page-admin-btn" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0">
+                            <i class="fa-solid fa-user-plus mr-1"></i> Add Page Admin
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-add-can_post" checked onchange="syncPresetSelectFromCheckboxes()" class="rounded text-accord-blue focus:ring-accord-blue">
+                            <span>Create Feed Posts</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-add-can_edit_delete_posts" checked onchange="syncPresetSelectFromCheckboxes()" class="rounded text-accord-blue focus:ring-accord-blue">
+                            <span>Edit &amp; Delete Posts</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-add-can_post_books" onchange="syncPresetSelectFromCheckboxes()" class="rounded text-accord-blue focus:ring-accord-blue">
+                            <span>Post &amp; Manage Books</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-add-can_promote" onchange="syncPresetSelectFromCheckboxes()" class="rounded text-accord-blue focus:ring-accord-blue">
+                            <span>Promote Books &amp; Posts</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-amber-800 bg-amber-50/70 border border-amber-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-add-can_withdraw_funds" onchange="syncPresetSelectFromCheckboxes()" class="rounded text-amber-600 focus:ring-amber-500">
+                            <span>Withdraw Book Sales Funds</span>
+                        </label>
+                    </div>
                 </form>
-                <div id="page-admins-list" class="space-y-2">
+                <div id="page-admins-list" class="space-y-2.5">
                     <p class="text-[11px] text-accord-muted">Loading page admins...</p>
                 </div>
             </div>
@@ -168,8 +198,8 @@
                     <i class="fa-solid fa-church text-accord-blue"></i>
                     <span>Verified Pages You Administer</span>
                 </h3>
-                <p class="text-[11px] text-accord-muted">You can select these pages in the Feed composer to post on their behalf.</p>
-                <div id="managed-pages-list" class="space-y-2"></div>
+                <p class="text-[11px] text-accord-muted">Your assigned powers for each verified page are shown below.</p>
+                <div id="managed-pages-list" class="space-y-2.5"></div>
             </div>
 
             <!-- Shown when request is pending review -->

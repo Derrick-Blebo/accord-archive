@@ -269,6 +269,88 @@ function escapeProfileMgmtHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
+const PAGE_ADMIN_PERMS_META = [
+    { key: 'can_post', label: 'Create Feed Posts', badge: 'Post', color: 'bg-blue-50 text-accord-blue border-blue-200' },
+    { key: 'can_edit_delete_posts', label: 'Edit & Delete Posts', badge: 'Edit/Delete', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { key: 'can_post_books', label: 'Post & Manage Books', badge: 'Books', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { key: 'can_promote', label: 'Promote Books & Posts', badge: 'Promote', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { key: 'can_withdraw_funds', label: 'Withdraw Book Sales Funds', badge: 'Withdraw Funds', color: 'bg-amber-50 text-amber-800 border-amber-200' }
+];
+
+function normalizePageAdminPermissions(rawPerms, role = 'admin') {
+    const p = rawPerms && typeof rawPerms === 'object' ? rawPerms : {};
+    return {
+        can_post: p.can_post !== undefined ? Boolean(p.can_post) : true,
+        can_edit_delete_posts: p.can_edit_delete_posts !== undefined ? Boolean(p.can_edit_delete_posts) : (role === 'admin'),
+        can_post_books: Boolean(p.can_post_books),
+        can_promote: Boolean(p.can_promote),
+        can_withdraw_funds: Boolean(p.can_withdraw_funds)
+    };
+}
+
+function renderPermissionBadgesHtml(perms) {
+    const active = PAGE_ADMIN_PERMS_META.filter(m => perms[m.key]);
+    if (active.length === 0) {
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">View Only</span>`;
+    }
+    return active.map(m => `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${m.color}">${escapeProfileMgmtHtml(m.badge)}</span>`).join('');
+}
+
+function applyAdminPowerPreset(preset) {
+    const presets = {
+        editor: { can_post: true, can_edit_delete_posts: true, can_post_books: false, can_promote: false, can_withdraw_funds: false },
+        manager: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_withdraw_funds: false },
+        full: { can_post: true, can_edit_delete_posts: true, can_post_books: true, can_promote: true, can_withdraw_funds: true }
+    };
+    const vals = presets[preset];
+    if (!vals) return;
+    PAGE_ADMIN_PERMS_META.forEach(m => {
+        const cb = document.getElementById(`perm-add-${m.key}`);
+        if (cb) cb.checked = Boolean(vals[m.key]);
+    });
+}
+
+function syncPresetSelectFromCheckboxes() {
+    const sel = document.getElementById('page-admin-preset');
+    if (sel) sel.value = 'custom';
+}
+
+function readAddAdminPermissions() {
+    const perms = {};
+    PAGE_ADMIN_PERMS_META.forEach(m => {
+        perms[m.key] = Boolean(document.getElementById(`perm-add-${m.key}`)?.checked);
+    });
+    return perms;
+}
+
+function toggleEditAdminPowers(rowId) {
+    const panel = document.getElementById(`edit-admin-powers-${rowId}`);
+    panel?.classList.toggle('hidden');
+}
+
+async function savePageAdminPermissions(rowId) {
+    if (!currentProfileUser || !isVerifiedMinistryAccount(currentUserProfile)) return;
+    const perms = {};
+    PAGE_ADMIN_PERMS_META.forEach(m => {
+        perms[m.key] = Boolean(document.getElementById(`perm-edit-${rowId}-${m.key}`)?.checked);
+    });
+    const role = (perms.can_edit_delete_posts || perms.can_post_books || perms.can_promote || perms.can_withdraw_funds) ? 'admin' : 'editor';
+
+    const { error } = await supabaseClient
+        .from('page_admins')
+        .update({ permissions: perms, role })
+        .eq('id', rowId)
+        .eq('page_id', currentProfileUser.id);
+
+    if (error) {
+        showToast(`Could not update powers: ${error.message}`);
+        return;
+    }
+
+    showToast('Page admin powers updated.');
+    await loadPageAdminsManagement(currentUserProfile);
+}
+
 async function loadPageAdminsManagement(profile) {
     const isVerified = isVerifiedMinistryAccount(profile);
     const section = document.getElementById('page-admins-section');
@@ -284,7 +366,7 @@ async function loadPageAdminsManagement(profile) {
         try {
             const { data: rows, error } = await supabaseClient
                 .from('page_admins')
-                .select('id, admin_user_id, role, created_at, profiles!page_admins_admin_user_id_fkey(id, full_name, handle, email)')
+                .select('id, admin_user_id, role, permissions, created_at, profiles!page_admins_admin_user_id_fkey(id, full_name, handle, email)')
                 .eq('page_id', currentProfileUser.id)
                 .order('created_at', { ascending: false });
 
@@ -297,15 +379,40 @@ async function loadPageAdminsManagement(profile) {
                     const adminProf = r.profiles || {};
                     const name = adminProf.full_name || adminProf.email || 'Member';
                     const handle = adminProf.handle ? ` ${adminProf.handle}` : '';
+                    const perms = normalizePageAdminPermissions(r.permissions, r.role);
+                    const checkboxesHtml = PAGE_ADMIN_PERMS_META.map(m => `
+                        <label class="flex items-center gap-2 text-[11px] font-semibold text-accord-slate bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 cursor-pointer">
+                            <input type="checkbox" id="perm-edit-${escapeProfileMgmtHtml(r.id)}-${m.key}" ${perms[m.key] ? 'checked' : ''} class="rounded text-accord-blue focus:ring-accord-blue">
+                            <span>${escapeProfileMgmtHtml(m.label)}</span>
+                        </label>
+                    `).join('');
                     return `
-                        <div class="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5">
-                            <div class="min-w-0">
-                                <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(name)}<span class="text-accord-blue font-semibold">${escapeProfileMgmtHtml(handle)}</span></p>
-                                <p class="text-[10px] text-accord-muted truncate">Can post on behalf of your page</p>
+                        <div class="bg-white border border-slate-200 rounded-2xl p-3.5 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div class="min-w-0 space-y-1.5">
+                                    <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(name)}<span class="text-accord-blue font-semibold">${escapeProfileMgmtHtml(handle)}</span></p>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        ${renderPermissionBadgesHtml(perms)}
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button type="button" onclick="toggleEditAdminPowers('${escapeProfileMgmtHtml(r.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-colors">
+                                        Edit Powers
+                                    </button>
+                                    <button type="button" onclick="removePageAdmin('${escapeProfileMgmtHtml(r.id)}')" class="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold transition-colors">
+                                        Remove
+                                    </button>
+                                </div>
                             </div>
-                            <button type="button" onclick="removePageAdmin('${escapeProfileMgmtHtml(r.id)}')" class="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold shrink-0 transition-colors">
-                                Remove
-                            </button>
+                            <div id="edit-admin-powers-${escapeProfileMgmtHtml(r.id)}" class="hidden pt-2.5 border-t border-slate-100 space-y-2.5">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    ${checkboxesHtml}
+                                </div>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" onclick="toggleEditAdminPowers('${escapeProfileMgmtHtml(r.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold">Cancel</button>
+                                    <button type="button" onclick="savePageAdminPermissions('${escapeProfileMgmtHtml(r.id)}')" class="px-3.5 py-1.5 rounded-lg bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold shadow-sm">Save Powers</button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -319,22 +426,33 @@ async function loadPageAdminsManagement(profile) {
         try {
             const { data: myManaged } = await supabaseClient
                 .from('page_admins')
-                .select('id, page_id, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
+                .select('id, page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
                 .eq('admin_user_id', currentProfileUser.id);
             const activePages = (myManaged || []).filter(m => m.profiles && isVerifiedMinistryAccount(m.profiles));
             if (activePages.length > 0) {
                 managedSection.classList.remove('hidden');
                 managedListEl.innerHTML = activePages.map(m => {
                     const p = m.profiles;
+                    const perms = normalizePageAdminPermissions(m.permissions, m.role);
+                    const actionLinks = [
+                        perms.can_post ? `<a href="feed.html" class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-accord-blue text-[10px] font-bold">Feed</a>` : '',
+                        (perms.can_post_books || perms.can_withdraw_funds) ? `<a href="author.html?page=${encodeURIComponent(p.id)}" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold">Books &amp; Earnings</a>` : '',
+                        perms.can_promote ? `<a href="promote.html" class="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold">Promote</a>` : ''
+                    ].filter(Boolean).join('');
                     return `
-                        <div class="flex items-center justify-between gap-3 bg-white border border-blue-200/80 rounded-xl px-3.5 py-2.5">
-                            <a href="user.html?id=${encodeURIComponent(p.id)}" class="min-w-0 flex-1">
-                                <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(p.full_name || 'Verified Ministry')} <span class="text-accord-blue">${escapeProfileMgmtHtml(p.handle || '')}</span></p>
-                                <p class="text-[10px] text-accord-muted">Active Page Admin</p>
-                            </a>
-                            <button type="button" onclick="leaveManagedPage('${escapeProfileMgmtHtml(m.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-600 text-accord-slate text-[11px] font-bold shrink-0 transition-colors">
-                                Leave
-                            </button>
+                        <div class="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 space-y-2">
+                            <div class="flex items-center justify-between gap-3">
+                                <a href="user.html?id=${encodeURIComponent(p.id)}" class="min-w-0 flex-1">
+                                    <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileMgmtHtml(p.full_name || 'Verified Ministry')} <span class="text-accord-blue">${escapeProfileMgmtHtml(p.handle || '')}</span></p>
+                                </a>
+                                <button type="button" onclick="leaveManagedPage('${escapeProfileMgmtHtml(m.id)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-600 text-accord-slate text-[11px] font-bold shrink-0 transition-colors">
+                                    Leave
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap gap-1.5">${renderPermissionBadgesHtml(perms)}</div>
+                                <div class="flex items-center gap-1.5">${actionLinks}</div>
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -388,11 +506,15 @@ async function handleAddPageAdmin(e) {
         return;
     }
 
+    const permissions = readAddAdminPermissions();
+    const role = (permissions.can_edit_delete_posts || permissions.can_post_books || permissions.can_promote || permissions.can_withdraw_funds) ? 'admin' : 'editor';
+
     const { error } = await supabaseClient.from('page_admins').insert([{
         page_id: currentProfileUser.id,
         admin_user_id: targetProfile.id,
         added_by: currentProfileUser.id,
-        role: 'admin'
+        role,
+        permissions
     }]);
 
     if (btn) btn.disabled = false;
@@ -406,11 +528,14 @@ async function handleAddPageAdmin(e) {
         user_id: targetProfile.id,
         type: 'page_admin_added',
         title: 'Added as Verified Page Admin',
-        message: `${currentUserProfile.full_name || 'A verified ministry'} added you as a Page Admin. You can now post on their behalf in the Feed.`,
-        link_url: 'feed.html'
+        message: `${currentUserProfile.full_name || 'A verified ministry'} added you as a Page Admin. Check your Profile to view your assigned powers.`,
+        link_url: 'profile.html'
     }]);
 
     if (input) input.value = '';
+    const presetSel = document.getElementById('page-admin-preset');
+    if (presetSel) presetSel.value = 'editor';
+    applyAdminPowerPreset('editor');
     showToast(`${targetProfile.full_name || targetProfile.handle || 'Member'} added as Page Admin.`);
     await loadPageAdminsManagement(currentUserProfile);
 }

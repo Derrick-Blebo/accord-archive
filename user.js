@@ -83,6 +83,27 @@ async function loadUnifiedProfile() {
     const displayName = profile.full_name || 'Accord Member';
     document.title = `${displayName} — Accord Archive`;
 
+    window.editableFeedPageIds = [];
+    if (viewerUser?.id) {
+        try {
+            const { data: adminRows } = await supabaseClient
+                .from('page_admins')
+                .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, account_type, upgrade_status)')
+                .eq('admin_user_id', viewerUser.id);
+            window.editableFeedPageIds = (adminRows || [])
+                .filter(r => {
+                    const prof = r.profiles;
+                    const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+                    const p = r.permissions;
+                    const canEdit = p && typeof p === 'object' ? Boolean(p.can_edit_delete_posts) : (r.role === 'admin');
+                    return isVerified && canEdit;
+                })
+                .map(r => String(r.page_id));
+        } catch {
+            window.editableFeedPageIds = [];
+        }
+    }
+
     const requests = [
         supabaseClient
             .from('account_follows')

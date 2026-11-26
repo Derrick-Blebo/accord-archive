@@ -6,6 +6,8 @@ const supabaseClient = window.supabaseClient;
 let promoUser = null;
 let myPostsCache = [];
 let booksCache = [];
+let promotablePageIds = [];
+let promotablePagesById = {};
 
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
@@ -65,9 +67,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPromoteChoices() {
+    promotablePageIds = [];
+    promotablePagesById = {};
+    try {
+        const { data: adminRows } = await supabaseClient
+            .from('page_admins')
+            .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
+            .eq('admin_user_id', promoUser.id);
+        (adminRows || []).forEach(r => {
+            const prof = r.profiles;
+            const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+            const p = r.permissions && typeof r.permissions === 'object' ? r.permissions : {};
+            if (isVerified && Boolean(p.can_promote)) {
+                const pid = String(r.page_id);
+                promotablePageIds.push(pid);
+                promotablePagesById[pid] = prof;
+            }
+        });
+    } catch {
+        promotablePageIds = [];
+        promotablePagesById = {};
+    }
+
+    const allowedAuthorIds = [String(promoUser.id), ...promotablePageIds];
+
     const [postsRes, booksRes] = await Promise.all([
-        supabaseClient.from('feed_posts').select('id, title, body, author_id').eq('author_id', promoUser.id).order('created_at', { ascending: false }).limit(50),
-        supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).eq('author_id', promoUser.id).order('created_at', { ascending: false }).limit(100)
+        supabaseClient.from('feed_posts').select('id, title, body, author_id').in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(80),
+        supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(120)
     ]);
 
     myPostsCache = postsRes.data || [];
@@ -76,17 +102,25 @@ async function loadPromoteChoices() {
     const postSel = document.getElementById('promo-post-id');
     if (postSel) {
         postSel.innerHTML = myPostsCache.length === 0
-            ? '<option value="">-- You have no posts to promote yet --</option>'
-            : '<option value="">-- Choose one of your posts --</option>' +
-              myPostsCache.map(p => `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(p.title || 'Untitled Post')}</option>`).join('');
+            ? '<option value="">-- No eligible posts to promote yet --</option>'
+            : '<option value="">-- Choose a post to promote --</option>' +
+              myPostsCache.map(p => {
+                  const pageProf = promotablePagesById[String(p.author_id)];
+                  const prefix = pageProf ? `[${pageProf.full_name || 'Verified Page'}] ` : '';
+                  return `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(prefix + (p.title || 'Untitled Post'))}</option>`;
+              }).join('');
     }
 
     const bookSel = document.getElementById('promo-book-id');
     if (bookSel) {
         bookSel.innerHTML = booksCache.length === 0
-            ? '<option value="">-- You have no uploaded books to promote yet --</option>'
-            : '<option value="">-- Choose one of your uploaded books --</option>' +
-              booksCache.map(b => `<option value="${escapePromoHtml(b.id)}">${escapePromoHtml(b.title)} — ${escapePromoHtml(b.author || '')}</option>`).join('');
+            ? '<option value="">-- No eligible books to promote yet --</option>'
+            : '<option value="">-- Choose a book to promote --</option>' +
+              booksCache.map(b => {
+                  const pageProf = promotablePagesById[String(b.author_id)];
+                  const prefix = pageProf ? `[${pageProf.full_name || 'Verified Page'}] ` : '';
+                  return `<option value="${escapePromoHtml(b.id)}">${escapePromoHtml(prefix + b.title)} — ${escapePromoHtml(b.author || '')}</option>`;
+              }).join('');
     }
 }
 
@@ -154,7 +188,7 @@ async function handlePromotionSubmit(e) {
 
     if (promoType === 'post') {
         if (!targetPostId) {
-            showToast('Please select one of your own posts to promote.', true);
+            showToast('Please select a post to promote.', true);
             return;
         }
         const { data: postCheck } = await supabaseClient
@@ -162,13 +196,17 @@ async function handlePromotionSubmit(e) {
             .select('id, author_id')
             .eq('id', targetPostId)
             .maybeSingle();
-        if (!postCheck || String(postCheck.author_id) !== String(promoUser.id)) {
-            showToast('You can only promote posts you made yourself.', true);
+        const isAllowedPost = postCheck && (
+            String(postCheck.author_id) === String(promoUser.id) ||
+            promotablePageIds.includes(String(postCheck.author_id))
+        );
+        if (!isAllowedPost) {
+            showToast('You can only promote posts made by you or a verified page you manage.', true);
             return;
         }
     } else if (promoType === 'book') {
         if (!targetBookId) {
-            showToast('Please select one of your own uploaded books to promote.', true);
+            showToast('Please select a book to promote.', true);
             return;
         }
         const { data: bookCheck } = await supabaseClient
@@ -176,8 +214,12 @@ async function handlePromotionSubmit(e) {
             .select('id, author_id')
             .eq('id', targetBookId)
             .maybeSingle();
-        if (!bookCheck || String(bookCheck.author_id) !== String(promoUser.id)) {
-            showToast('You can only promote books you uploaded yourself.', true);
+        const isAllowedBook = bookCheck && (
+            String(bookCheck.author_id) === String(promoUser.id) ||
+            promotablePageIds.includes(String(bookCheck.author_id))
+        );
+        if (!isAllowedBook) {
+            showToast('You can only promote books uploaded by you or a verified page you manage.', true);
             return;
         }
     }

@@ -387,6 +387,7 @@ function createSharedFeedCardElement(post, options = {}) {
         authorHandle = '',
         reposterHandle = '',
         currentUserId = null,
+        canManagePost = false,
         expandFullBody = false,
         openCommentsByDefault = false,
         showOpenFullPostLink = true
@@ -394,6 +395,12 @@ function createSharedFeedCardElement(post, options = {}) {
 
     const resolvedViewerId = currentUserId || window.currentFeedUserId || null;
     const isOwner = Boolean(resolvedViewerId && post.author_id && String(resolvedViewerId) === String(post.author_id));
+    const canManage = isOwner || Boolean(canManagePost) || Boolean(
+        resolvedViewerId &&
+        post.author_id &&
+        Array.isArray(window.editableFeedPageIds) &&
+        window.editableFeedPageIds.includes(String(post.author_id))
+    );
 
     const card = document.createElement('article');
     card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
@@ -516,7 +523,7 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
                         <span>Open Full Post</span>
                     </a>` : ''}
-                    ${isOwner ? `
+                    ${canManage ? `
                     <button type="button" onclick="closeAllFeedPostMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                         <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
                         <span>Edit Post</span>

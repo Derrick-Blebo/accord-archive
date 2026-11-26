@@ -61,7 +61,7 @@
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
 
     <!-- Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+    <div id="toast" class="fixed bottom-6 right-6 z-[200] pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
         <span id="toast-message" class="font-medium text-sm">Action completed.</span>
     </div>
@@ -276,6 +276,28 @@
                     .from('post_views')
                     .upsert({ user_id: currentUser.id, post_id: currentPost.id, viewed_at: new Date().toISOString() }, { onConflict: 'user_id,post_id' })
                     .then(() => {});
+            }
+
+            window.editableFeedPageIds = [];
+            if (currentUser?.id && currentPost.author_id && String(currentUser.id) !== String(currentPost.author_id)) {
+                try {
+                    const { data: adminRows } = await supabaseClient
+                        .from('page_admins')
+                        .select('page_id, role, permissions, profiles!page_admins_page_id_fkey(id, account_type, upgrade_status)')
+                        .eq('admin_user_id', currentUser.id)
+                        .eq('page_id', currentPost.author_id);
+                    window.editableFeedPageIds = (adminRows || [])
+                        .filter(r => {
+                            const prof = r.profiles;
+                            const isVerified = prof && (prof.account_type === 'ministry_minister' || prof.upgrade_status === 'approved') && prof.upgrade_status !== 'revoked';
+                            const p = r.permissions;
+                            const canEdit = p && typeof p === 'object' ? Boolean(p.can_edit_delete_posts) : (r.role === 'admin');
+                            return isVerified && canEdit;
+                        })
+                        .map(r => String(r.page_id));
+                } catch {
+                    window.editableFeedPageIds = [];
+                }
             }
 
             renderSinglePost();
