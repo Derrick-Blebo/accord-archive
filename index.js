@@ -72,7 +72,7 @@ let bannerConfig = {
     subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
     btnText: 'Submit a Manuscript',
     actionType: 'contribute',
-    customUrl: 'forum.html'
+    customUrl: 'feed.html'
 };
 
 let currentBannerSlideIndex = 0;
@@ -634,7 +634,7 @@ function renderMidGridBanner(showBanner) {
             if (slide.actionType === 'contribute') {
                 clickableWrapper = `<div onclick="openContributeModal()" class="cursor-pointer group relative overflow-hidden rounded-3xl">${pictureMarkup}</div>`;
             } else if (slide.actionType === 'forum') {
-                clickableWrapper = `<a href="forum.html" class="block group relative overflow-hidden rounded-3xl">${pictureMarkup}</a>`;
+                clickableWrapper = `<a href="feed.html" class="block group relative overflow-hidden rounded-3xl">${pictureMarkup}</a>`;
             } else if (slide.linkUrl) {
                 const isExternal = slide.linkUrl.startsWith('http');
                 clickableWrapper = `<a href="${escapeHTML(slide.linkUrl)}" ${isExternal ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block group relative overflow-hidden rounded-3xl">${pictureMarkup}</a>`;
@@ -675,12 +675,12 @@ function renderMidGridBanner(showBanner) {
     // 2. Fallback Default Banner if no Image Slides have been uploaded yet
     let ctaHtml = '';
     if (bannerConfig.actionType === 'forum') {
-        ctaHtml = `<a href="forum.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-                       <span>${escapeHTML(bannerConfig.btnText || 'Explore Testimonies')}</span>
+        ctaHtml = `<a href="feed.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+                       <span>${escapeHTML(bannerConfig.btnText || 'Explore Feed')}</span>
                        <i class="fa-solid fa-arrow-right text-[11px]"></i>
                    </a>`;
     } else if (bannerConfig.actionType === 'custom') {
-        ctaHtml = `<a href="${escapeHTML(bannerConfig.customUrl || 'forum.html')}" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
+        ctaHtml = `<a href="${escapeHTML(bannerConfig.customUrl || 'feed.html')}" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
                        <span>${escapeHTML(bannerConfig.btnText || 'Learn More')}</span>
                        <i class="fa-solid fa-arrow-right text-[11px]"></i>
                    </a>`;

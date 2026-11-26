@@ -140,6 +140,38 @@
                 </p>
             </div>
 
+            <!-- Verified Page Admins Management (only for verified pages) -->
+            <div id="page-admins-section" class="hidden bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                <div>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate flex items-center gap-2">
+                        <i class="fa-solid fa-user-shield text-accord-blue"></i>
+                        <span>Verified Page Admins</span>
+                    </h3>
+                    <p class="text-[11px] text-accord-muted mt-1 leading-relaxed">
+                        Add trusted team members by their <strong>@handle</strong> or <strong>email</strong> so they can publish posts on behalf of your verified ministry or minister page.
+                    </p>
+                </div>
+                <form onsubmit="handleAddPageAdmin(event)" class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="page-admin-identifier" required placeholder="@handle or member@email.com" class="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                    <button type="submit" id="add-page-admin-btn" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0">
+                        <i class="fa-solid fa-user-plus mr-1"></i> Add Page Admin
+                    </button>
+                </form>
+                <div id="page-admins-list" class="space-y-2">
+                    <p class="text-[11px] text-accord-muted">Loading page admins...</p>
+                </div>
+            </div>
+
+            <!-- Pages this user is a delegated admin for -->
+            <div id="managed-pages-section" class="hidden bg-blue-50/60 border border-blue-200/80 rounded-2xl p-5 space-y-3">
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-slate flex items-center gap-2">
+                    <i class="fa-solid fa-church text-accord-blue"></i>
+                    <span>Verified Pages You Administer</span>
+                </h3>
+                <p class="text-[11px] text-accord-muted">You can select these pages in the Feed composer to post on their behalf.</p>
+                <div id="managed-pages-list" class="space-y-2"></div>
+            </div>
+
             <!-- Shown when request is pending review -->
             <div id="upgrade-pending-notice" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1.5">
                 <p class="font-bold flex items-center gap-1.5">

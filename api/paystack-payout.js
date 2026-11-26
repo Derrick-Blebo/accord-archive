@@ -1,12 +1,55 @@
 /**
  * Server-side Paystack Transfer (Author Sales Withdrawal Payout) endpoint.
  * Creates a Paystack Transfer Recipient and initiates a Transfer using PAYSTACK_SECRET_KEY.
+ * Requires a valid Supabase JWT belonging to an active Superadmin.
  */
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mzblgajftvyyosyrawcx.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
+const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
+
+async function verifySuperadminCaller(authHeader) {
+    const token = String(authHeader || '').replace(/^Bearer\s+/i, '').trim();
+    if (!token) return { ok: false, status: 401, error: 'Authentication required.' };
+
+    const userResp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`
+        }
+    });
+    if (!userResp.ok) return { ok: false, status: 401, error: 'Invalid or expired session.' };
+
+    const user = await userResp.json();
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email) return { ok: false, status: 401, error: 'Invalid user session.' };
+
+    if (email === MASTER_ADMIN_EMAIL) return { ok: true, user };
+
+    const superResp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/is_superadmin`, {
+        method: 'POST',
+        headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: '{}'
+    });
+    const isSuper = superResp.ok ? await superResp.json() : false;
+    if (!isSuper) return { ok: false, status: 403, error: 'Forbidden: Superadmin privileges required.' };
+
+    return { ok: true, user };
+}
+
 export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    const auth = await verifySuperadminCaller(req.headers.authorization);
+    if (!auth.ok) {
+        return res.status(auth.status).json({ success: false, error: auth.error });
     }
 
     const secretKey = process.env.PAYSTACK_SECRET_KEY || '';

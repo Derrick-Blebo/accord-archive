@@ -46,20 +46,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (prePost) {
         document.getElementById('promo-type').value = 'post';
         handlePromoTypeChange();
-        document.getElementById('promo-post-id').value = prePost;
-        prefillFromSelectedPost();
+        if (myPostsCache.some(p => String(p.id) === String(prePost))) {
+            document.getElementById('promo-post-id').value = prePost;
+            prefillFromSelectedPost();
+        } else {
+            showToast('You can only promote posts you made yourself.', true);
+        }
     } else if (preBook) {
         document.getElementById('promo-type').value = 'book';
         handlePromoTypeChange();
-        document.getElementById('promo-book-id').value = preBook;
-        prefillFromSelectedBook();
+        if (booksCache.some(b => String(b.id) === String(preBook))) {
+            document.getElementById('promo-book-id').value = preBook;
+            prefillFromSelectedBook();
+        } else {
+            showToast('You can only promote books you uploaded yourself.', true);
+        }
     }
 });
 
 async function loadPromoteChoices() {
     const [postsRes, booksRes] = await Promise.all([
-        supabaseClient.from('feed_posts').select('id, title, body').eq('author_id', promoUser.id).order('created_at', { ascending: false }).limit(50),
-        supabaseClient.from('books').select('id, title, author, description, cover_url').eq('is_visible', true).order('created_at', { ascending: false }).limit(100)
+        supabaseClient.from('feed_posts').select('id, title, body, author_id').eq('author_id', promoUser.id).order('created_at', { ascending: false }).limit(50),
+        supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).eq('author_id', promoUser.id).order('created_at', { ascending: false }).limit(100)
     ]);
 
     myPostsCache = postsRes.data || [];
@@ -67,14 +75,18 @@ async function loadPromoteChoices() {
 
     const postSel = document.getElementById('promo-post-id');
     if (postSel) {
-        postSel.innerHTML = '<option value="">-- Choose one of your posts --</option>' +
-            myPostsCache.map(p => `<option value="${p.id}">${escapePromoHtml(p.title || 'Untitled Post')}</option>`).join('');
+        postSel.innerHTML = myPostsCache.length === 0
+            ? '<option value="">-- You have no posts to promote yet --</option>'
+            : '<option value="">-- Choose one of your posts --</option>' +
+              myPostsCache.map(p => `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(p.title || 'Untitled Post')}</option>`).join('');
     }
 
     const bookSel = document.getElementById('promo-book-id');
     if (bookSel) {
-        bookSel.innerHTML = '<option value="">-- Choose a library book --</option>' +
-            booksCache.map(b => `<option value="${b.id}">${escapePromoHtml(b.title)} — ${escapePromoHtml(b.author || '')}</option>`).join('');
+        bookSel.innerHTML = booksCache.length === 0
+            ? '<option value="">-- You have no uploaded books to promote yet --</option>'
+            : '<option value="">-- Choose one of your uploaded books --</option>' +
+              booksCache.map(b => `<option value="${escapePromoHtml(b.id)}">${escapePromoHtml(b.title)} — ${escapePromoHtml(b.author || '')}</option>`).join('');
     }
 }
 
@@ -134,6 +146,41 @@ async function handlePromotionSubmit(e) {
     const desktopImg = promoType === 'banner' ? (document.getElementById('promo-desktop-img').value.trim() || null) : null;
     const mobileImg = promoType === 'banner' ? (document.getElementById('promo-mobile-img').value.trim() || null) : null;
     const { duration_days, budget_amount } = getSelectedPackage();
+
+    if (/^(javascript|data|vbscript):/i.test(ctaUrl)) {
+        showToast('Please enter a valid destination URL.', true);
+        return;
+    }
+
+    if (promoType === 'post') {
+        if (!targetPostId) {
+            showToast('Please select one of your own posts to promote.', true);
+            return;
+        }
+        const { data: postCheck } = await supabaseClient
+            .from('feed_posts')
+            .select('id, author_id')
+            .eq('id', targetPostId)
+            .maybeSingle();
+        if (!postCheck || String(postCheck.author_id) !== String(promoUser.id)) {
+            showToast('You can only promote posts you made yourself.', true);
+            return;
+        }
+    } else if (promoType === 'book') {
+        if (!targetBookId) {
+            showToast('Please select one of your own uploaded books to promote.', true);
+            return;
+        }
+        const { data: bookCheck } = await supabaseClient
+            .from('books')
+            .select('id, author_id')
+            .eq('id', targetBookId)
+            .maybeSingle();
+        if (!bookCheck || String(bookCheck.author_id) !== String(promoUser.id)) {
+            showToast('You can only promote books you uploaded yourself.', true);
+            return;
+        }
+    }
 
     const btn = document.getElementById('promo-pay-btn');
     if (btn) btn.disabled = true;

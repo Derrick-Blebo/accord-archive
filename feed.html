@@ -145,6 +145,12 @@
             </div>
 
             <form id="create-post-form" onsubmit="handleCreatePostSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div id="post-as-page-group" class="hidden bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3.5">
+                    <label for="post-as-page-select" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">
+                        <i class="fa-solid fa-user-shield text-accord-blue mr-1"></i> Post As
+                    </label>
+                    <select id="post-as-page-select" onchange="togglePostTypeFields()" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue"></select>
+                </div>
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Post Type *</label>
                     <select id="post-type" required onchange="togglePostTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue">

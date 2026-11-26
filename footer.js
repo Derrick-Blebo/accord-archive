@@ -14,8 +14,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 </div>
                 <div class="flex items-center space-x-5 font-semibold text-accord-slate">
                     <a href="index.html" class="hover:text-accord-blue transition-colors">Library</a>
-                    <a href="forum.html" class="hover:text-accord-blue transition-colors">Forum</a>
-                    <a href="library-admin.html" class="hover:text-accord-blue transition-colors">Admin Portal</a>
+                    <a href="feed.html" class="hover:text-accord-blue transition-colors">Fellowship Feed</a>
+                    <a href="music.html" class="hover:text-accord-blue transition-colors">Music</a>
+                    <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy</a>
+                    <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms</a>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>

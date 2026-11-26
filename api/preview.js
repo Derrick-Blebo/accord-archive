@@ -21,13 +21,6 @@ const PAGE_DEFAULTS = {
         url: `${SITE_URL}/book.html`,
         type: 'article'
     },
-    forum: {
-        file: 'forum.html',
-        title: 'Testimonies & Church Events Forum — Accord Archive & Library',
-        description: 'Read and share testimonies of what God has done, and discover upcoming Christian events and conferences.',
-        url: `${SITE_URL}/forum.html`,
-        type: 'website'
-    },
     post: {
         file: 'post.html',
         title: 'Post — Accord Fellowship Feed',
@@ -108,8 +101,8 @@ export default async function handler(req, res) {
     let ogType = defaults.type;
 
     try {
-        if (bookId && (page === 'index' || page === 'book')) {
-            const item = await fetchFromSupabase('books', `id=eq.${encodeURIComponent(bookId)}&select=id,title,author,description,cover_url`);
+        if (bookId && /^\d+$/.test(String(bookId)) && (page === 'index' || page === 'book')) {
+            const item = await fetchFromSupabase('books', `id=eq.${encodeURIComponent(bookId)}&is_visible=eq.true&select=id,title,author,description,cover_url`);
             if (item) {
                 title = `${item.title} — by ${item.author}`;
                 description = cleanDescription(item.description, defaults.description);
@@ -122,27 +115,8 @@ export default async function handler(req, res) {
                     imageUrl = normalizedCover;
                 }
             }
-        } else if (testimony) {
-            const item = await fetchFromSupabase('testimonies', `id=eq.${encodeURIComponent(testimony)}&select=id,title,author_name,location,body`);
-            if (item) {
-                title = `"${item.title}" — Testimony by ${item.author_name || 'Believer'}`;
-                description = cleanDescription(item.body, defaults.description);
-                canonicalUrl = `${SITE_URL}/forum.html?testimony=${item.id}`;
-                ogType = 'article';
-            }
-        } else if (event) {
-            const item = await fetchFromSupabase('forum_events', `id=eq.${encodeURIComponent(event)}&select=id,title,organizer_name,description,flyer_url`);
-            if (item) {
-                title = `${item.title} — ${item.organizer_name}`;
-                description = cleanDescription(item.description, defaults.description);
-                canonicalUrl = `${SITE_URL}/forum.html?event=${item.id}`;
-                ogType = 'article';
-                if (item.flyer_url && item.flyer_url.startsWith('http')) {
-                    imageUrl = item.flyer_url;
-                }
-            }
-        } else if (page === 'post' && id) {
-            const item = await fetchFromSupabase('feed_posts', `id=eq.${encodeURIComponent(id)}&select=id,title,body,post_type,media_url,author_name,is_anonymous`);
+        } else if (page === 'post' && id && /^[a-zA-Z0-9-]+$/.test(String(id))) {
+            const item = await fetchFromSupabase('feed_posts', `id=eq.${encodeURIComponent(id)}&is_approved=eq.true&select=id,title,body,post_type,media_url,author_name,is_anonymous`);
             if (item) {
                 const author = item.is_anonymous ? 'Anonymous' : (item.author_name || 'Accord Fellowship');
                 title = `${item.title} — ${author}`;
@@ -154,7 +128,7 @@ export default async function handler(req, res) {
                     if (ytThumb) imageUrl = ytThumb;
                 }
             }
-        } else if (page === 'ministry' && id) {
+        } else if (page === 'ministry' && id && /^[a-zA-Z0-9-]+$/.test(String(id))) {
             const item = await fetchFromSupabase('profiles', `id=eq.${encodeURIComponent(id)}&select=id,full_name,account_type,upgrade_status`);
             if (item && item.full_name) {
                 title = `${item.full_name} — Verified Ministry on Accord`;

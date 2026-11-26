@@ -17,6 +17,7 @@ let feedSearchScope = 'all'; // 'all' | 'people' | 'posts'
 let feedPeopleResults = [];
 let feedSearchTimer = null;
 let feedBookPreviewCache = new Map();
+let managedVerifiedPages = []; // Verified ministry/minister pages where currentUser is a page admin
 
 function getVoterKey() {
     if (currentUser?.id) return `user_${currentUser.id}`;
@@ -78,12 +79,28 @@ async function initFeedSession() {
             account_type: 'normal_user',
             upgrade_status: 'none'
         };
+
+        // Load verified pages where this user is a delegated page admin
+        managedVerifiedPages = [];
+        try {
+            const { data: adminRows } = await supabaseClient
+                .from('page_admins')
+                .select('page_id, role, profiles!page_admins_page_id_fkey(id, full_name, handle, account_type, upgrade_status)')
+                .eq('admin_user_id', currentUser.id);
+            managedVerifiedPages = (adminRows || [])
+                .map(r => r.profiles)
+                .filter(p => p && isMinistryOrMinister(p));
+        } catch (err) {
+            managedVerifiedPages = [];
+        }
     } else {
         currentProfile = null;
+        managedVerifiedPages = [];
         if (authLabel) authLabel.textContent = 'Sign In';
         if (mobileAuthLabel) mobileAuthLabel.textContent = 'Sign In / Create Account';
     }
 
+    syncPostAsPageSelector();
     syncFeedAccountUI();
 }
 
@@ -745,12 +762,17 @@ function handleShareClick(postId) {
 function handleSendPostToChat(postId) {
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!post || typeof openShareToChatModal !== 'function') return;
+    const videoThumb = post.post_type === 'video' && typeof getSharedVideoThumbnailUrl === 'function'
+        ? getSharedVideoThumbnailUrl(post.media_url)
+        : '';
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
         id: post.id,
         title: post.title,
         subtitle: (post.body || '').slice(0, 110),
         url: getFeedPostDetailUrl(post),
+        image_url: videoThumb,
+        media_url: post.media_url || '',
         author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
         post_type: post.post_type
     });
@@ -894,26 +916,59 @@ function closeCreatePostModal() {
     document.getElementById('create-post-form')?.reset();
 }
 
+function syncPostAsPageSelector() {
+    const group = document.getElementById('post-as-page-group');
+    const sel = document.getElementById('post-as-page-select');
+    if (!group || !sel) return;
+
+    if (!currentUser || managedVerifiedPages.length === 0) {
+        group.classList.add('hidden');
+        sel.innerHTML = '';
+        return;
+    }
+
+    const selfName = currentProfile?.full_name || currentUser.email?.split('@')[0] || 'My Account';
+    const options = [
+        `<option value="">Myself (${escapeHtml(selfName)})</option>`,
+        ...managedVerifiedPages.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.full_name || 'Verified Page')} (Verified Page)</option>`)
+    ];
+    sel.innerHTML = options.join('');
+    group.classList.remove('hidden');
+}
+
+function getSelectedPostingPage() {
+    const sel = document.getElementById('post-as-page-select');
+    const pageId = sel?.value || '';
+    if (!pageId) return null;
+    return managedVerifiedPages.find(p => String(p.id) === String(pageId)) || null;
+}
+
 function togglePostTypeFields() {
     const type = document.getElementById('post-type')?.value || 'testimony';
     const urlGroup = document.getElementById('post-url-group');
     const urlInput = document.getElementById('post-url');
     const idBox = document.getElementById('testimony-identity-box');
     const noteEl = document.getElementById('create-post-permission-note');
+    const selectedPage = getSelectedPostingPage();
+    const canPostVerified = isMinistryOrMinister() || Boolean(selectedPage);
 
     const needsUrl = type === 'video' || type === 'audio';
     urlGroup?.classList.toggle('hidden', !needsUrl);
     if (urlInput) urlInput.required = needsUrl;
 
-    // Anonymous toggle applies to testimonies
-    idBox?.classList.toggle('hidden', type !== 'testimony');
+    // Anonymous toggle applies to testimonies when posting as self
+    idBox?.classList.toggle('hidden', type !== 'testimony' || Boolean(selectedPage));
 
-    if (type === 'testimony') {
+    if (selectedPage) {
+        if (noteEl) noteEl.textContent = `Posting on behalf of verified page: ${selectedPage.full_name}.`;
+    } else if (type === 'testimony') {
         if (noteEl) noteEl.textContent = 'Testimonies can be shared by anyone, including anonymously.';
     } else if (!currentUser) {
         if (noteEl) noteEl.textContent = 'Sign in with a Ministry / Minister account to post Videos, Audio, or Text Posts.';
-    } else if (!isMinistryOrMinister()) {
-        if (noteEl) noteEl.innerHTML = 'Your account is a Normal User. <a href="verify.html" class="text-accord-blue font-bold underline">Apply for Ministry / Minister Verification</a> to publish Videos, Audio, or Text Posts.';
+    } else if (!canPostVerified) {
+        if (noteEl) noteEl.innerHTML = managedVerifiedPages.length > 0
+            ? 'Select a verified page in <strong>Post As</strong> above to publish Videos, Audio, or Text Posts on its behalf, or <a href="verify.html" class="text-accord-blue font-bold underline">apply for your own verification</a>.'
+            : 'Your account is a Normal User. <a href="verify.html" class="text-accord-blue font-bold underline">Apply for Ministry / Minister Verification</a> to publish Videos, Audio, or Text Posts.';
     } else {
         if (noteEl) noteEl.textContent = 'Verified Ministry / Minister account active: your post publishes directly to the feed.';
     }
@@ -932,17 +987,18 @@ async function handleCreatePostSubmit(e) {
     const title = document.getElementById('post-title').value.trim();
     const body = document.getElementById('post-content').value.trim();
     const mediaUrl = document.getElementById('post-url')?.value.trim() || null;
-    const isAnonymous = postType === 'testimony' ? Boolean(document.getElementById('post-anonymous')?.checked) : false;
+    const selectedPage = getSelectedPostingPage();
+    const isAnonymous = (postType === 'testimony' && !selectedPage) ? Boolean(document.getElementById('post-anonymous')?.checked) : false;
     const customName = document.getElementById('post-author-name')?.value.trim() || '';
 
-    // Enforce permissions: Testimonies allow guests/anonymous; Video/Audio/Text require Ministry/Minister
+    // Enforce permissions: Testimonies allow guests/anonymous; Video/Audio/Text require Ministry/Minister or Page Admin
     if (postType !== 'testimony') {
         if (!currentUser) {
             showToast('Please sign in with a Ministry / Minister account to post.', true);
             return;
         }
-        if (!isMinistryOrMinister()) {
-            showToast('Only verified Ministry / Minister accounts can publish Video, Audio, or Text Posts. Apply at verify.html.', true);
+        if (!isMinistryOrMinister() && !selectedPage) {
+            showToast('Only verified Ministry / Minister accounts or their Page Admins can publish Video, Audio, or Text Posts.', true);
             return;
         }
     }
@@ -954,7 +1010,9 @@ async function handleCreatePostSubmit(e) {
     }
 
     let authorName = 'Anonymous';
-    if (!isAnonymous) {
+    if (selectedPage) {
+        authorName = selectedPage.full_name || 'Verified Ministry';
+    } else if (!isAnonymous) {
         if (currentProfile?.full_name) {
             authorName = currentProfile.full_name;
         } else if (currentUser?.email) {
@@ -966,16 +1024,18 @@ async function handleCreatePostSubmit(e) {
         }
     }
 
-    const resolvedRole = currentUser
-        ? (isMinistryOrMinister(currentProfile) ? 'ministry_minister' : (currentProfile?.account_type || 'normal_user'))
-        : 'guest';
+    const resolvedRole = selectedPage
+        ? 'ministry_minister'
+        : (currentUser
+            ? (isMinistryOrMinister(currentProfile) ? 'ministry_minister' : (currentProfile?.account_type || 'normal_user'))
+            : 'guest');
 
     const payload = {
         post_type: postType,
         title,
         body,
         media_url: (postType === 'video' || postType === 'audio') ? mediaUrl : null,
-        author_id: currentUser ? currentUser.id : null,
+        author_id: selectedPage ? selectedPage.id : (currentUser ? currentUser.id : null),
         author_name: authorName,
         author_role: resolvedRole,
         is_anonymous: isAnonymous,

@@ -337,12 +337,17 @@
 
         function handleSendPostToChat() {
             if (!currentPost || typeof openShareToChatModal !== 'function') return;
+            const videoThumb = currentPost.post_type === 'video' && typeof getSharedVideoThumbnailUrl === 'function'
+                ? getSharedVideoThumbnailUrl(currentPost.media_url)
+                : '';
             openShareToChatModal({
                 type: currentPost.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
                 id: currentPost.id,
                 title: currentPost.title,
                 subtitle: (currentPost.body || '').slice(0, 110),
                 url: getPostShareUrl(currentPost.id),
+                image_url: videoThumb,
+                media_url: currentPost.media_url || '',
                 author_name: currentPost.is_anonymous ? 'Anonymous' : (currentPost.author_name || 'Member'),
                 post_type: currentPost.post_type
             });

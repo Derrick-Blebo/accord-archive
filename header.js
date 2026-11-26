@@ -211,7 +211,7 @@ async function initGlobalHeaderAuth() {
                 : (isVerifiedMinistry ? 'Verified Ministry / Minister' : 'Authenticated Member');
 
             const superadminLinkHtml = isSuperadmin ? `
-                <a href="Superadmin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
+                <a href="superadmin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
                     <i class="fa-solid fa-crown text-accord-gold w-4"></i>
                     <span>Superadmin Portal</span>
                 </a>

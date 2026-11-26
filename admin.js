@@ -80,7 +80,7 @@ function getDefaultHomeLayoutConfig() {
             subtext: 'Partner with Accord Archive to digitize and preserve revival histories, biographies, and sermons for future generations.',
             btnText: 'Submit a Manuscript',
             actionType: 'contribute',
-            customUrl: 'forum.html'
+            customUrl: 'feed.html'
         }
     };
 }

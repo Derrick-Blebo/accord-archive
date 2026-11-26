@@ -955,12 +955,22 @@ async function loadSuperadminWithdrawals() {
 }
 
 async function triggerPaystackAuthorPayout(withdrawalId) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+        showToast('Session expired. Please sign in again.', true);
+        return;
+    }
+
     const { data: w } = await supabaseClient.from('author_withdrawals').select('*').eq('id', withdrawalId).maybeSingle();
     if (!w) return;
 
     const resp = await fetch('/api/paystack-payout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
             withdrawalId: w.id,
             amount: w.amount,

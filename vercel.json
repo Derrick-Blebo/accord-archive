@@ -1,7 +1,19 @@
 {
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+      ]
+    }
+  ],
   "functions": {
     "api/preview.js": {
-      "includeFiles": "{index,book,forum,post,ministry}.html"
+      "includeFiles": "{index,book,post,ministry}.html"
     }
   },
   "rewrites": [
@@ -14,16 +26,6 @@
       "source": "/index.html",
       "has": [{ "type": "query", "key": "book" }],
       "destination": "/api/preview?page=index"
-    },
-    {
-      "source": "/forum.html",
-      "has": [{ "type": "query", "key": "testimony" }],
-      "destination": "/api/preview?page=forum"
-    },
-    {
-      "source": "/forum.html",
-      "has": [{ "type": "query", "key": "event" }],
-      "destination": "/api/preview?page=forum"
     },
     {
       "source": "/book.html",

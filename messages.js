@@ -266,18 +266,52 @@ function renderMessagesStream() {
         let cardHtml = '';
         if (msg.message_type !== 'text' && msg.attachment_meta) {
             const meta = msg.attachment_meta;
+            const isVideoPost = meta.post_type === 'video';
             const badgeLabel = msg.message_type === 'shared_book'
                 ? 'Shared Book'
                 : msg.message_type === 'shared_testimony'
                     ? 'Shared Testimony'
                     : msg.message_type === 'shared_profile'
                         ? 'Shared Profile'
-                        : 'Shared Post';
+                        : isVideoPost
+                            ? 'Shared Video'
+                            : 'Shared Post';
+            const resolvedThumb = meta.image_url || (isVideoPost ? getChatVideoThumbnailUrl(meta.media_url) : '');
+            let mediaThumbHtml = '';
+            if (isVideoPost) {
+                if (resolvedThumb) {
+                    mediaThumbHtml = `
+                        <div class="relative w-16 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-900">
+                            <img src="${escapeChatHtml(resolvedThumb)}" class="w-full h-full object-cover" alt="">
+                            <span class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <span class="w-6 h-6 rounded-full bg-white/90 text-accord-slate flex items-center justify-center text-[9px] shadow"><i class="fa-solid fa-play ml-0.5"></i></span>
+                            </span>
+                        </div>
+                    `;
+                } else if (meta.media_url && /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(meta.media_url)) {
+                    mediaThumbHtml = `
+                        <div class="relative w-16 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-900">
+                            <video src="${escapeChatHtml(meta.media_url)}#t=0.5" muted playsinline preload="metadata" class="w-full h-full object-cover"></video>
+                            <span class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <span class="w-6 h-6 rounded-full bg-white/90 text-accord-slate flex items-center justify-center text-[9px] shadow"><i class="fa-solid fa-play ml-0.5"></i></span>
+                            </span>
+                        </div>
+                    `;
+                } else {
+                    mediaThumbHtml = `
+                        <div class="w-16 h-12 rounded-lg bg-slate-900/90 text-white flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-play text-xs"></i>
+                        </div>
+                    `;
+                }
+            } else if (resolvedThumb) {
+                mediaThumbHtml = `<img src="${escapeChatHtml(resolvedThumb)}" class="w-10 h-14 object-cover rounded-lg shrink-0" alt="">`;
+            }
             cardHtml = `
-                <a href="${escapeChatHtml(meta.url || '#')}" class="block rounded-2xl p-3 border transition-colors ${isMine ? 'bg-white/15 border-white/25 text-white hover:bg-white/20' : 'bg-slate-50 border-slate-200 text-accord-slate hover:bg-slate-100'}">
+                <a href="${escapeChatHtml(safeChatUrl(meta.url))}" class="block rounded-2xl p-3 border transition-colors ${isMine ? 'bg-white/15 border-white/25 text-white hover:bg-white/20' : 'bg-slate-50 border-slate-200 text-accord-slate hover:bg-slate-100'}">
                     <span class="text-[10px] font-extrabold uppercase tracking-wider opacity-80">${badgeLabel}</span>
                     <div class="flex items-start gap-2.5 mt-1">
-                        ${meta.image_url ? `<img src="${escapeChatHtml(meta.image_url)}" class="w-10 h-14 object-cover rounded-lg shrink-0" alt="">` : ''}
+                        ${mediaThumbHtml}
                         <div class="min-w-0 flex-1">
                             <p class="text-xs font-bold leading-snug line-clamp-2">${escapeChatHtml(meta.title || 'Shared Item')}</p>
                             ${meta.author_name ? `<p class="text-[10px] opacity-80 mt-0.5">${escapeChatHtml(meta.author_name)}</p>` : ''}
@@ -615,7 +649,7 @@ async function openAttachModal() {
     if (attachPostsCache.length === 0) {
         const { data } = await supabaseClient
             .from('feed_posts')
-            .select('id, title, body, author_name, post_type')
+            .select('id, title, body, author_name, post_type, media_url')
             .eq('is_approved', true)
             .order('created_at', { ascending: false })
             .limit(60);
@@ -702,6 +736,7 @@ async function sendAttachedPost(postId) {
     const p = attachPostsCache.find(x => String(x.id) === String(postId));
     if (!p || !activeConvId) return;
     closeAttachModal();
+    const videoThumb = p.post_type === 'video' ? getChatVideoThumbnailUrl(p.media_url) : '';
     await supabaseClient.from('chat_messages').insert([{
         conversation_id: activeConvId,
         sender_id: chatUser.id,
@@ -712,9 +747,33 @@ async function sendAttachedPost(postId) {
             subtitle: (p.body || '').slice(0, 110),
             author_name: p.author_name || 'Member',
             post_type: p.post_type,
+            image_url: videoThumb,
+            media_url: p.media_url || '',
             url: `post.html?id=${encodeURIComponent(p.id)}`
         }
     }]);
+}
+
+function getChatVideoThumbnailUrl(url) {
+    if (!url) return '';
+    const str = String(url).trim();
+    let videoId = '';
+    if (str.includes('youtu.be/')) videoId = str.split('youtu.be/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('watch?v=')) videoId = str.split('watch?v=')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('embed/')) videoId = str.split('embed/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('/shorts/')) videoId = str.split('/shorts/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('/live/')) videoId = str.split('/live/')[1]?.split(/[?&#]/)[0];
+    if (videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+        return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    }
+    return '';
+}
+
+function safeChatUrl(url) {
+    const s = String(url || '').trim();
+    if (!s) return '#';
+    if (/^(javascript|data|vbscript):/i.test(s)) return '#';
+    return s;
 }
 
 function formatChatTime(dateStr) {

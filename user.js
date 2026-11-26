@@ -656,12 +656,17 @@ function handleShareClick(postId) {
 function handleSendPostToChat(postId) {
     const post = allVisibleProfilePosts.find(p => String(p.id) === String(postId));
     if (!post || typeof openShareToChatModal !== 'function') return;
+    const videoThumb = post.post_type === 'video' && typeof getSharedVideoThumbnailUrl === 'function'
+        ? getSharedVideoThumbnailUrl(post.media_url)
+        : '';
     openShareToChatModal({
         type: post.post_type === 'testimony' ? 'shared_testimony' : 'shared_post',
         id: post.id,
         title: post.title,
         subtitle: (post.body || '').slice(0, 110),
         url: getPostShareUrl(post.id),
+        image_url: videoThumb,
+        media_url: post.media_url || '',
         author_name: post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member'),
         post_type: post.post_type
     });

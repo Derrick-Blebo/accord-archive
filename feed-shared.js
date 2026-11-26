@@ -225,6 +225,7 @@ async function sendSharedItemToConversation(conversationId) {
             subtitle: _shareToChatPayload.subtitle || '',
             url: _shareToChatPayload.url,
             image_url: _shareToChatPayload.image_url || '',
+            media_url: _shareToChatPayload.media_url || '',
             author_name: _shareToChatPayload.author_name || '',
             post_type: _shareToChatPayload.post_type || ''
         }
@@ -289,7 +290,23 @@ function getSharedYouTubeEmbedUrl(url) {
     else if (url.includes('watch?v=')) videoId = url.split('watch?v=')[1]?.split('&')[0];
     else if (url.includes('embed/')) videoId = url.split('embed/')[1]?.split('?')[0];
     else if (url.includes('/shorts/')) videoId = url.split('/shorts/')[1]?.split('?')[0];
+    else if (url.includes('/live/')) videoId = url.split('/live/')[1]?.split('?')[0];
     return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+}
+
+function getSharedVideoThumbnailUrl(url) {
+    if (!url) return '';
+    const str = String(url).trim();
+    let videoId = '';
+    if (str.includes('youtu.be/')) videoId = str.split('youtu.be/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('watch?v=')) videoId = str.split('watch?v=')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('embed/')) videoId = str.split('embed/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('/shorts/')) videoId = str.split('/shorts/')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('/live/')) videoId = str.split('/live/')[1]?.split(/[?&#]/)[0];
+    if (videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+        return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    }
+    return '';
 }
 
 function extractSharedBookId(text) {
