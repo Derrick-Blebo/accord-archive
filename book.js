@@ -74,6 +74,13 @@ async function syncUserState() {
 
         currentProfile = profileRes.data || null;
 
+        const isVerifiedMinistry = Boolean(
+            currentProfile &&
+            (currentProfile.account_type === 'ministry_minister' || currentProfile.upgrade_status === 'approved')
+        );
+        document.getElementById('book-profile-verified-badge')?.classList.toggle('hidden', !isVerifiedMinistry);
+        document.getElementById('mobile-book-profile-verified-badge')?.classList.toggle('hidden', !isVerifiedMinistry);
+
         if (!bookmarksRes.error && bookmarksRes.data) {
             savedBookmarks = bookmarksRes.data.map(b => b.book_title);
             localStorage.setItem('accord_bookmarks', JSON.stringify(savedBookmarks));
@@ -86,6 +93,8 @@ async function syncUserState() {
         }
     } else {
         currentProfile = null;
+        document.getElementById('book-profile-verified-badge')?.classList.add('hidden');
+        document.getElementById('mobile-book-profile-verified-badge')?.classList.add('hidden');
         if (navLabel) navLabel.innerText = 'Sign In';
         if (mobileLabel) mobileLabel.innerText = 'Sign In / Create Account';
         if (commentHint) commentHint.innerHTML = `<button type="button" onclick="openAuthModal()" class="text-accord-blue font-bold hover:underline">Sign in</button> to join the discussion.`;

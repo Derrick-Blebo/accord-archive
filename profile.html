@@ -44,7 +44,7 @@
 
     <!-- Global Header Container -->
     <div id="accord-header"></div>
-    <script src="header.js?v2"></script>?v2"></script>"></script>
+    <script src="header.js?v=3"></script>
 
     <main class="max-w-2xl mx-auto px-4 sm:px-6 py-12 flex-grow w-full space-y-8">
         <!-- Personal Details Card -->
@@ -156,7 +156,7 @@
             const form = document.getElementById('role-upgrade-form');
             const pitchInput = document.getElementById('upgrade-pitch');
 
-            if (type === 'ministry_minister') {
+            if (type === 'ministry_minister' || status === 'approved') {
                 badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200';
                 badge.innerHTML = '<i class="fa-solid fa-church mr-1.5"></i> Ministry / Minister';
                 statusPill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700';

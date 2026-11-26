@@ -4,7 +4,24 @@
  */
 
 let globalHeaderUser = null;
+let globalHeaderProfile = null;
 let globalNotifications = [];
+let globalHeaderAuthSubscribed = false;
+let globalHeaderAuthRequestId = 0;
+
+function isVerifiedMinistryProfile(profile) {
+    if (!profile) return false;
+    return profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved';
+}
+
+function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
+    return `
+        <svg viewBox="0 0 24 24" class="${className}" aria-hidden="true" focusable="false">
+            <path d="M12.00 2.80 Q15.13 0.31 16.60 4.03 Q20.56 3.44 19.97 7.40 Q23.69 8.87 21.20 12.00 Q23.69 15.13 19.97 16.60 Q20.56 20.56 16.60 19.97 Q15.13 23.69 12.00 21.20 Q8.87 23.69 7.40 19.97 Q3.44 20.56 4.03 16.60 Q0.31 15.13 2.80 12.00 Q0.31 8.87 4.03 7.40 Q3.44 3.44 7.40 4.03 Q8.87 0.31 12.00 2.80 Z" fill="#1D9BF0" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" paint-order="stroke" />
+            <path d="M8.5 12.3l2.3 2.3 4.8-5.1" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+    `;
+}
 
 (function () {
     // Ensure Supabase client is available globally inside header.js
@@ -99,11 +116,25 @@ function setActive(id) {
 }
 
 async function initGlobalHeaderAuth() {
+    const requestId = ++globalHeaderAuthRequestId;
     try {
         const client = window.supabaseClient;
         if (!client) return;
 
+        window.refreshGlobalHeaderAuth = initGlobalHeaderAuth;
+
+        if (!globalHeaderAuthSubscribed && client.auth?.onAuthStateChange) {
+            globalHeaderAuthSubscribed = true;
+            client.auth.onAuthStateChange((event) => {
+                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+                    initGlobalHeaderAuth();
+                }
+            });
+        }
+
         const { data: { session } } = await client.auth.getSession();
+        if (requestId !== globalHeaderAuthRequestId) return;
+
         const user = session?.user || null;
         globalHeaderUser = user;
 
@@ -115,6 +146,7 @@ async function initGlobalHeaderAuth() {
         const isAdmin = user && adminEmails.includes(user.email);
 
         if (!user) {
+            globalHeaderProfile = null;
             authArea.innerHTML = `
                 <a href="signin.html" class="text-xs sm:text-sm font-semibold text-accord-slate hover:text-accord-blue px-2 py-2 transition-colors">
                     Log in
@@ -132,13 +164,33 @@ async function initGlobalHeaderAuth() {
                 `;
             }
         } else {
+            let profile = null;
+            try {
+                const { data, error } = await client
+                    .from('profiles')
+                    .select('id, full_name, account_type, upgrade_status')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                if (!error) profile = data || null;
+            } catch (profileErr) {
+                console.warn('Could not load header profile status:', profileErr);
+            }
+            if (requestId !== globalHeaderAuthRequestId) return;
+
+            globalHeaderProfile = profile;
+            const isVerifiedMinistry = isVerifiedMinistryProfile(profile);
+
             const email = user.email || 'user@accord.com';
-            const avatarUrl = user.user_metadata?.avatar_url || null;
+            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
             const initial = email.charAt(0).toUpperCase();
 
             const avatarContent = avatarUrl
-                ? `<img src="${avatarUrl}" class="w-full h-full object-cover" alt="Profile">`
-                : `<span class="text-white font-bold text-sm">${initial}</span>`;
+                ? `<img src="${escapeHeaderHtml(avatarUrl)}" class="w-full h-full object-cover" alt="Profile">`
+                : `<span class="text-white font-bold text-sm">${escapeHeaderHtml(initial)}</span>`;
+
+            const roleLabel = isAdmin
+                ? (isVerifiedMinistry ? 'Administrator · Verified Ministry' : 'Administrator')
+                : (isVerifiedMinistry ? 'Verified Ministry / Minister' : 'Authenticated Member');
 
             const adminLinkHtml = isAdmin ? `
                 <a href="feed-admin.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
@@ -170,14 +222,19 @@ async function initGlobalHeaderAuth() {
 
                 <!-- Profile Avatar Dropdown -->
                 <div class="relative">
-                    <button type="button" onclick="toggleProfileDropdown(event)" class="w-11 h-11 rounded-full bg-accord-blue overflow-hidden ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer">
-                        ${avatarContent}
+                    <button type="button" onclick="toggleProfileDropdown(event)" class="relative w-11 h-11 rounded-full bg-accord-blue ring-2 ring-accord-blue/25 hover:ring-accord-blue transition-all flex items-center justify-center focus:outline-none shadow-sm cursor-pointer" aria-label="Account menu">
+                        <span class="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                            ${avatarContent}
+                        </span>
+                        <span id="profile-verified-badge" title="Verified Ministry / Minister" aria-label="Verified Ministry / Minister" class="${isVerifiedMinistry ? '' : 'hidden'} absolute -bottom-0.5 -right-0.5 w-5 h-5 z-10 pointer-events-none select-none drop-shadow-sm">
+                            ${getVerifiedCheckmarkSvg()}
+                        </span>
                     </button>
 
                     <div id="profile-dropdown" class="hidden absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
                         <div class="px-4 py-3 border-b border-slate-100">
-                            <p class="text-xs font-bold text-accord-slate truncate">${email}</p>
-                            <p class="text-[10px] text-accord-muted">${isAdmin ? 'Administrator' : 'Authenticated Member'}</p>
+                            <p class="text-xs font-bold text-accord-slate truncate">${escapeHeaderHtml(email)}</p>
+                            <p class="text-[10px] text-accord-muted">${roleLabel}</p>
                         </div>
                         <div class="py-1">
                             <a href="profile.html" class="flex items-center space-x-3 px-4 py-2.5 text-xs font-semibold text-accord-slate hover:bg-slate-50 transition-colors">
