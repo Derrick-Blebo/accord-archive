@@ -436,12 +436,14 @@ function renderSongSpotlightsTable() {
         tr.innerHTML = `
             <td class="py-4 px-6 font-bold text-accord-slate">
                 <div class="flex items-center gap-3">
-                    ${song.image
-                        ? `<img src="${escapeHTML(song.image)}" alt="${escapeHTML(song.title)}" class="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0">`
-                        : `<div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100"><i class="fa-solid fa-music text-xs"></i></div>`}
+                    <div data-song-thumb class="shrink-0">
+                        ${song.image
+                            ? `<img src="${escapeHTML(song.image)}" alt="${escapeHTML(song.title)}" class="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0">`
+                            : `<div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100"><i class="fa-solid fa-music text-xs"></i></div>`}
+                    </div>
                     <div class="min-w-0">
-                        <div class="truncate">${escapeHTML(song.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</div>
-                        ${song.artist ? `<div class="text-[11px] font-normal text-accord-muted truncate">${escapeHTML(song.artist)}</div>` : ''}
+                        <div class="truncate"><span data-song-title>${escapeHTML(song.title)}</span>${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</div>
+                        <div data-song-artist class="text-[11px] font-normal text-accord-muted truncate ${song.artist ? '' : 'hidden'}">${escapeHTML(song.artist || '')}</div>
                     </div>
                 </div>
             </td>
@@ -463,6 +465,10 @@ function renderSongSpotlightsTable() {
             </td>
         `;
         tbody.appendChild(tr);
+
+        if (song.link && (!song.image || isPlaceholderSongTitle(song.title) || !song.artist)) {
+            hydrateAdminSongSpotlightRow(song, tr);
+        }
     });
 }
 
@@ -1094,19 +1100,69 @@ function renderSongSpotlightMetaPreview({ statusText, title, artist, image, load
     }
 }
 
+function isPlaceholderSongTitle(title) {
+    const clean = String(title || '').trim();
+    if (!clean) return true;
+    return /^(featured song|(spotify|apple music|apple podcasts?|youtube|audiomack|soundcloud|music)\s+track)$/i.test(clean);
+}
+
+async function hydrateAdminSongSpotlightRow(song, tr) {
+    const meta = await fetchSongSpotlightMetadata(song.link);
+    if (!meta || !tr.isConnected) return;
+
+    const resolvedTitle = (!isPlaceholderSongTitle(song.title) ? song.title : '') || meta.title || song.title;
+    const resolvedImage = song.image || meta.image || '';
+    const resolvedArtist = song.artist || meta.artist || '';
+
+    const thumbEl = tr.querySelector('[data-song-thumb]');
+    const titleEl = tr.querySelector('[data-song-title]');
+    const artistEl = tr.querySelector('[data-song-artist]');
+
+    if (thumbEl && resolvedImage && !song.image) {
+        thumbEl.innerHTML = `<img src="${escapeHTML(resolvedImage)}" alt="${escapeHTML(resolvedTitle)}" class="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0">`;
+    }
+    if (titleEl && resolvedTitle && resolvedTitle !== song.title) {
+        titleEl.textContent = resolvedTitle;
+    }
+    if (artistEl && resolvedArtist && !song.artist) {
+        artistEl.textContent = resolvedArtist;
+        artistEl.classList.remove('hidden');
+    }
+}
+
 async function fetchSongSpotlightMetadata(url) {
     const clean = String(url || '').trim();
     if (!clean || !/^https?:\/\//i.test(clean)) return null;
+    const cacheKey = `accord_song_meta_${clean}`;
+    try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && (parsed.title || parsed.image || parsed.artist)) {
+                return { url: clean, ...parsed };
+            }
+        }
+    } catch {}
     try {
         const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
         if (!resp.ok) return null;
         const data = await resp.json();
-        return {
+        const meta = {
             url: clean,
             title: String(data?.title || '').trim(),
             image: String(data?.image || '').trim(),
-            artist: String(data?.curator || '').trim()
+            artist: String(data?.artist || data?.curator || '').trim()
         };
+        if (meta.title || meta.image || meta.artist) {
+            try {
+                sessionStorage.setItem(cacheKey, JSON.stringify({
+                    title: meta.title,
+                    image: meta.image,
+                    artist: meta.artist
+                }));
+            } catch {}
+        }
+        return meta;
     } catch {
         return null;
     }
@@ -1139,11 +1195,11 @@ function scheduleSongSpotlightMetaPreview() {
         const artistInput = document.getElementById('song-spotlight-artist');
 
         if (meta && (meta.title || meta.image || meta.artist)) {
-            if (titleInput && !titleInput.value.trim() && meta.title) {
+            if (titleInput && (!titleInput.value.trim() || isPlaceholderSongTitle(titleInput.value)) && meta.title) {
                 titleInput.value = meta.title;
             }
-            if (imageInput) imageInput.value = meta.image || '';
-            if (artistInput) artistInput.value = meta.artist || '';
+            if (imageInput && meta.image) imageInput.value = meta.image;
+            if (artistInput && meta.artist) artistInput.value = meta.artist;
 
             renderSongSpotlightMetaPreview({
                 statusText: 'Auto-pulled from source',
@@ -1196,6 +1252,9 @@ function openSongSpotlightModal(mode = 'add', id = null) {
                     image: song.image || ''
                 });
             }
+            if (song.link && (!song.image || isPlaceholderSongTitle(song.title) || !song.artist)) {
+                scheduleSongSpotlightMetaPreview();
+            }
         }
     } else {
         heading.innerText = 'Add Song Spotlight';
@@ -1228,17 +1287,20 @@ async function handleSaveSongSpotlight(e) {
     const originalBtnHtml = saveBtn ? saveBtn.innerHTML : '';
     const linkChanged = existing && existing.link !== link;
 
-    if (link && (!title || !image || !artist || linkChanged)) {
+    const titleNeedsPull = isPlaceholderSongTitle(title);
+
+    if (link && (titleNeedsPull || !image || !artist || linkChanged)) {
         let meta = (_pendingSongSpotlightMeta && _pendingSongSpotlightMeta.url === link) ? _pendingSongSpotlightMeta : null;
-        if (!meta) {
+        if (!meta || (titleNeedsPull && !meta.title) || (!image && !meta.image) || (!artist && !meta.artist)) {
             if (saveBtn) {
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Pulling details...';
             }
-            meta = await fetchSongSpotlightMetadata(link);
+            const freshMeta = await fetchSongSpotlightMetadata(link);
+            if (freshMeta) meta = freshMeta;
         }
         if (meta) {
-            if (!title && meta.title) title = meta.title;
+            if (titleNeedsPull && meta.title) title = meta.title;
             if ((!image || linkChanged) && meta.image) image = meta.image;
             if ((!artist || linkChanged) && meta.artist) artist = meta.artist;
         }

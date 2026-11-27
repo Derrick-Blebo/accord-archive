@@ -233,6 +233,107 @@ function renderSpotlights() {
 // 2. SONG SPOTLIGHT
 // ==========================================
 
+function isPlaceholderSongTitle(title) {
+    const clean = String(title || '').trim();
+    if (!clean) return true;
+    return /^(featured song|(spotify|apple music|apple podcasts?|youtube|audiomack|soundcloud|music)\s+track)$/i.test(clean);
+}
+
+const _songSpotlightMetaInflight = new Map();
+
+async function fetchSongSpotlightMetaCached(url) {
+    const clean = String(url || '').trim();
+    if (!clean || !/^https?:\/\//i.test(clean)) return null;
+
+    const cacheKey = `accord_song_meta_${clean}`;
+    try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && (parsed.title || parsed.image || parsed.artist)) {
+                return parsed;
+            }
+        }
+    } catch {}
+
+    if (_songSpotlightMetaInflight.has(clean)) {
+        return _songSpotlightMetaInflight.get(clean);
+    }
+
+    const promise = (async () => {
+        try {
+            const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            const meta = {
+                title: String(data?.title || '').trim(),
+                image: String(data?.image || '').trim(),
+                artist: String(data?.artist || data?.curator || '').trim()
+            };
+            if (meta.title || meta.image || meta.artist) {
+                try { sessionStorage.setItem(cacheKey, JSON.stringify(meta)); } catch {}
+                return meta;
+            }
+            return null;
+        } catch {
+            return null;
+        } finally {
+            _songSpotlightMetaInflight.delete(clean);
+        }
+    })();
+
+    _songSpotlightMetaInflight.set(clean, promise);
+    return promise;
+}
+
+function applySongSpotlightCardDisplay(card, songLink, { title, image, artist }) {
+    const playBtn = card.querySelector('[data-song-play-btn]');
+    const titleEl = card.querySelector('[data-song-title]');
+    const artistEl = card.querySelector('[data-song-artist]');
+    const safeTitle = title || 'Featured Song';
+    const subtitle = artist || 'Song Spotlight';
+
+    if (playBtn) {
+        playBtn.onclick = () => openMediaPlayerModal(safeTitle, subtitle, songLink || '');
+        playBtn.innerHTML = image
+            ? `<img src="${escapeHTML(image)}" alt="${escapeHTML(safeTitle)}" class="w-full h-full object-cover">
+               <span class="absolute inset-0 bg-black/35 group-hover:bg-black/50 flex items-center justify-center transition-colors">
+                   <i class="fa-solid fa-play text-xs text-white ml-0.5"></i>
+               </span>`
+            : `<i class="fa-solid fa-play text-xs ml-0.5"></i>`;
+    }
+
+    if (titleEl) {
+        titleEl.textContent = safeTitle;
+    }
+
+    if (artistEl) {
+        artistEl.textContent = artist || '';
+        artistEl.classList.toggle('hidden', !artist);
+    }
+}
+
+async function hydrateSongSpotlightCard(song, card) {
+    const meta = await fetchSongSpotlightMetaCached(song.link);
+    if (!meta || !card.isConnected) return;
+
+    const titleMissing = isPlaceholderSongTitle(song.title);
+    const imageMissing = !String(song.image || '').trim();
+    const artistMissing = !String(song.artist || '').trim();
+
+    const resolvedTitle = (!titleMissing ? song.title : '') || meta.title || song.title || 'Featured Song';
+    const resolvedImage = (!imageMissing ? song.image : '') || meta.image || '';
+    const resolvedArtist = (!artistMissing ? song.artist : '') || meta.artist || '';
+
+    if (resolvedTitle !== song.title || resolvedImage !== (song.image || '') || resolvedArtist !== (song.artist || '')) {
+        applySongSpotlightCardDisplay(card, song.link, {
+            title: resolvedTitle,
+            image: resolvedImage,
+            artist: resolvedArtist
+        });
+    }
+}
+
 function renderSongSpotlights() {
     const grid = document.getElementById('song-spotlight-grid');
     if (!grid) return;
@@ -248,20 +349,16 @@ function renderSongSpotlights() {
         const platform = getPlaylistPlatformInfo(song.link);
         const card = document.createElement('div');
         card.className = "bg-accord-blue border border-white/20 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3";
-        const subtitle = song.artist ? `${song.artist}` : 'Song Spotlight';
+        const initialTitle = String(song.title || '').trim() || 'Featured Song';
+        const initialImage = String(song.image || '').trim();
+        const initialArtist = String(song.artist || '').trim();
         card.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
-                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', '${escapeHTML(subtitle).replace(/'/g, "\\'")}', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="relative w-12 h-12 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm overflow-hidden group" title="Play Song">
-                    ${song.image
-                        ? `<img src="${escapeHTML(song.image)}" alt="${escapeHTML(song.title)}" class="w-full h-full object-cover">
-                           <span class="absolute inset-0 bg-black/35 group-hover:bg-black/50 flex items-center justify-center transition-colors">
-                               <i class="fa-solid fa-play text-xs text-white ml-0.5"></i>
-                           </span>`
-                        : `<i class="fa-solid fa-play text-xs ml-0.5"></i>`}
+                <button type="button" data-song-play-btn class="relative w-12 h-12 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm overflow-hidden group" title="Play Song">
                 </button>
                 <div class="min-w-0">
-                    <h3 class="text-sm font-bold text-white truncate">${escapeHTML(song.title)}</h3>
-                    ${song.artist ? `<p class="text-[11px] text-white/80 truncate">${escapeHTML(song.artist)}</p>` : ''}
+                    <h3 data-song-title class="text-sm font-bold text-white truncate"></h3>
+                    <p data-song-artist class="text-[11px] text-white/80 truncate hidden"></p>
                     <div class="text-[10px] text-slate-800 inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white/95">
                         ${platform.brandHtml}
                     </div>
@@ -271,7 +368,16 @@ function renderSongSpotlights() {
                 Open <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[9px]"></i>
             </a>
         `;
+        applySongSpotlightCardDisplay(card, song.link, {
+            title: initialTitle,
+            image: initialImage,
+            artist: initialArtist
+        });
         grid.appendChild(card);
+
+        if (song.link && (!initialImage || isPlaceholderSongTitle(song.title) || !initialArtist)) {
+            hydrateSongSpotlightCard(song, card);
+        }
     });
 }
 

@@ -71,7 +71,16 @@ function extractAppleMusicServerDataTracks(html) {
     }
 }
 
-function extractAppleMusicJsonLd(html) {
+function extractArtistName(byArtist) {
+    if (!byArtist) return '';
+    if (typeof byArtist === 'string') return byArtist.trim();
+    if (Array.isArray(byArtist)) {
+        return byArtist.map(a => (typeof a === 'string' ? a : a?.name)).filter(Boolean).join(', ').trim();
+    }
+    return String(byArtist?.name || '').trim();
+}
+
+function extractMusicJsonLd(html) {
     const matches = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
     for (const block of matches) {
         const inner = block.replace(/<script[^>]*>|<\/script>/gi, '').trim();
@@ -79,18 +88,29 @@ function extractAppleMusicJsonLd(html) {
             const parsed = JSON.parse(inner);
             const items = Array.isArray(parsed) ? parsed : [parsed];
             for (const item of items) {
-                if (item && (item['@type'] === 'MusicPlaylist' || item['@type'] === 'MusicAlbum' || item['@type'] === 'PodcastSeries' || item['@type'] === 'PodcastEpisode' || item.track)) {
+                if (item && (
+                    item['@type'] === 'MusicRecording' ||
+                    item['@type'] === 'MusicPlaylist' ||
+                    item['@type'] === 'MusicAlbum' ||
+                    item['@type'] === 'PodcastSeries' ||
+                    item['@type'] === 'PodcastEpisode' ||
+                    item.track
+                )) {
                     const tracks = Array.isArray(item.track)
                         ? item.track.slice(0, 15).map(t => ({
                             title: t?.name || '',
-                            artist: t?.byArtist?.name || (Array.isArray(t?.byArtist) ? t.byArtist[0]?.name : '') || '',
+                            artist: extractArtistName(t?.byArtist),
                             image: t?.audio?.thumbnailUrl || ''
                         })).filter(t => t.title)
                         : [];
+                    const curator = extractArtistName(item.byArtist)
+                        || item.creator?.name
+                        || item.author?.name
+                        || '';
                     return {
                         title: item.name || '',
                         image: typeof item.image === 'string' ? item.image : (item.image?.url || ''),
-                        curator: item.creator?.name || item.author?.name || '',
+                        curator,
                         description: item.description || '',
                         tracks
                     };
@@ -116,7 +136,7 @@ async function fetchSpotifyMetadata(parsedUrl) {
 
     let title = '';
     let image = '';
-    let curator = 'Spotify';
+    let curator = '';
     let tracks = [];
 
     if (oembedRes?.ok) {
@@ -124,6 +144,7 @@ async function fetchSpotifyMetadata(parsedUrl) {
             const oembed = await oembedRes.json();
             title = oembed.title || '';
             image = oembed.thumbnail_url || '';
+            if (oembed.author_name) curator = String(oembed.author_name).trim();
         } catch {}
     }
 
@@ -143,7 +164,14 @@ async function fetchSpotifyMetadata(parsedUrl) {
                     if (!image && entity.visualIdentity?.image?.[0]?.url) {
                         image = entity.visualIdentity.image[0].url;
                     }
-                    if (entity.subtitle) curator = entity.subtitle;
+                    const artistNames = Array.isArray(entity.artists)
+                        ? entity.artists.map(a => a?.name).filter(Boolean).join(', ')
+                        : '';
+                    if (entity.subtitle) {
+                        curator = entity.subtitle;
+                    } else if (artistNames) {
+                        curator = artistNames;
+                    }
                     if (Array.isArray(entity.trackList)) {
                         tracks = entity.trackList.slice(0, 15).map(t => ({
                             title: t?.title || '',
@@ -159,7 +187,76 @@ async function fetchSpotifyMetadata(parsedUrl) {
         } catch {}
     }
 
-    return { title, image, curator, description: '', tracks };
+    return { title, image, curator, artist: curator, description: '', tracks };
+}
+
+async function fetchYouTubeMetadata(parsedUrl) {
+    const cleanUrl = parsedUrl.toString();
+    const [oembedRes, pageRes] = await Promise.all([
+        fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`).catch(() => null),
+        fetch(cleanUrl, {
+            headers: {
+                'User-Agent': BROWSER_UA,
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        }).catch(() => null)
+    ]);
+
+    let title = '';
+    let image = '';
+    let curator = '';
+    let description = '';
+
+    if (oembedRes?.ok) {
+        try {
+            const oembed = await oembedRes.json();
+            title = String(oembed?.title || '').trim();
+            image = String(oembed?.thumbnail_url || '').trim();
+            curator = String(oembed?.author_name || '').trim();
+        } catch {}
+    }
+
+    if (pageRes?.ok && (!title || !image || !curator)) {
+        try {
+            const html = await pageRes.text();
+            if (!title) {
+                title = (extractMetaTag(html, 'property', 'og:title') || extractMetaTag(html, 'name', 'twitter:title'))
+                    .replace(/\s*[-–|]\s*YouTube(?:\s+Music)?$/i, '')
+                    .trim();
+            }
+            if (!image) {
+                image = extractMetaTag(html, 'property', 'og:image') || extractMetaTag(html, 'name', 'twitter:image');
+            }
+            if (!curator) {
+                const authorMatch = html.match(/<link[^>]+itemprop=["']name["'][^>]+content=["']([^"']+)["']/i)
+                    || html.match(/"ownerChannelName"\s*:\s*"([^"]+)"/);
+                if (authorMatch) curator = decodeHtmlEntities(authorMatch[1]);
+            }
+            description = extractMetaTag(html, 'property', 'og:description') || extractMetaTag(html, 'name', 'description');
+        } catch {}
+    }
+
+    return { title, image, curator, artist: curator, description, tracks: [] };
+}
+
+async function fetchSoundCloudMetadata(parsedUrl) {
+    const cleanUrl = parsedUrl.toString();
+    try {
+        const oembedRes = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(cleanUrl)}`);
+        if (oembedRes.ok) {
+            const oembed = await oembedRes.json();
+            const curator = String(oembed?.author_name || '').trim();
+            let title = String(oembed?.title || '').trim();
+            if (curator && title.toLowerCase().endsWith(` by ${curator.toLowerCase()}`)) {
+                title = title.slice(0, title.length - (` by ${curator}`).length).trim();
+            }
+            const image = String(oembed?.thumbnail_url || '').trim();
+            if (title || image || curator) {
+                return { title, image, curator, artist: curator, description: String(oembed?.description || '').trim(), tracks: [] };
+            }
+        }
+    } catch {}
+    return null;
 }
 
 export default async function handler(req, res) {
@@ -194,6 +291,16 @@ export default async function handler(req, res) {
             return res.status(200).json(spotifyMeta);
         }
 
+        if (host === 'youtube.com' || host === 'www.youtube.com' || host === 'youtu.be' || host === 'music.youtube.com') {
+            const ytMeta = await fetchYouTubeMetadata(parsedUrl);
+            return res.status(200).json(ytMeta);
+        }
+
+        if (host === 'soundcloud.com' || host === 'www.soundcloud.com') {
+            const scMeta = await fetchSoundCloudMetadata(parsedUrl);
+            if (scMeta) return res.status(200).json(scMeta);
+        }
+
         const pageRes = await fetch(parsedUrl.toString(), {
             headers: {
                 'User-Agent': BROWSER_UA,
@@ -202,12 +309,11 @@ export default async function handler(req, res) {
         });
 
         if (!pageRes.ok) {
-            return res.status(200).json({ title: '', image: '', curator: '', description: '', tracks: [] });
+            return res.status(200).json({ title: '', image: '', curator: '', artist: '', description: '', tracks: [] });
         }
 
         const html = await pageRes.text();
-        const isApple = host.includes('music.apple.com') || host.includes('podcasts.apple.com');
-        const jsonLd = isApple ? extractAppleMusicJsonLd(html) : null;
+        const jsonLd = extractMusicJsonLd(html);
         const serverTracks = host.includes('music.apple.com') ? extractAppleMusicServerDataTracks(html) : [];
 
         let ogTitle = extractMetaTag(html, 'property', 'og:title') || extractMetaTag(html, 'name', 'twitter:title');
@@ -219,14 +325,30 @@ export default async function handler(req, res) {
             .replace(/\s*on Apple Music$/i, '')
             .replace(/\s*[-–|]\s*Apple Podcasts?$/i, '')
             .replace(/\s*on Apple Podcasts?$/i, '')
+            .replace(/\s*[-–|]\s*Audiomack$/i, '')
+            .replace(/\s*[-–|]\s*SoundCloud$/i, '')
             .trim();
+
+        let title = jsonLd?.title || ogTitle || '';
+        let curator = jsonLd?.curator || '';
+        if (!curator && serverTracks.length > 0 && serverTracks[0].artist) {
+            curator = serverTracks[0].artist;
+        }
+        if (!curator && ogTitle) {
+            const byMatch = ogTitle.match(/^(.+?)\s+by\s+(.+)$/i);
+            if (byMatch) {
+                if (!jsonLd?.title) title = byMatch[1].trim();
+                curator = byMatch[2].trim();
+            }
+        }
 
         const tracks = serverTracks.length > 0 ? serverTracks : (jsonLd?.tracks || []);
 
         return res.status(200).json({
-            title: jsonLd?.title || ogTitle || '',
+            title,
             image: jsonLd?.image || ogImage || '',
-            curator: jsonLd?.curator || '',
+            curator,
+            artist: curator,
             description: jsonLd?.description || ogDesc || '',
             tracks
         });
@@ -235,6 +357,7 @@ export default async function handler(req, res) {
             title: '',
             image: '',
             curator: '',
+            artist: '',
             description: '',
             tracks: []
         });
