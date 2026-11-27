@@ -107,10 +107,40 @@ function unlockSuperadminDashboard(user) {
     const emailEl = document.getElementById('superadmin-user-email');
     if (emailEl && user?.email) emailEl.innerText = user.email;
 
+    const hashTab = (window.location.hash || '').replace('#', '').trim();
+    const validTabs = ['overview', 'roles', 'upgrades', 'promotions', 'withdrawals'];
+    switchSuperadminTab(validTabs.includes(hashTab) ? hashTab : 'overview');
+
     fetchEcosystemMetrics();
     loadMinistryUpgradeRequests();
     loadSuperadminPromotions();
     loadSuperadminWithdrawals();
+}
+
+function switchSuperadminTab(tabKey) {
+    const validTabs = ['overview', 'roles', 'upgrades', 'promotions', 'withdrawals'];
+    const activeTab = validTabs.includes(tabKey) ? tabKey : 'overview';
+
+    validTabs.forEach(key => {
+        const panel = document.getElementById(`tab-panel-${key}`);
+        const btn = document.getElementById(`tab-btn-${key}`);
+        if (panel) {
+            panel.classList.toggle('hidden', key !== activeTab);
+        }
+        if (btn) {
+            if (key === activeTab) {
+                btn.classList.add('bg-accord-slate', 'text-white', 'shadow-sm');
+                btn.classList.remove('text-accord-muted', 'hover:text-accord-slate', 'hover:bg-slate-100');
+            } else {
+                btn.classList.remove('bg-accord-slate', 'text-white', 'shadow-sm');
+                btn.classList.add('text-accord-muted', 'hover:text-accord-slate', 'hover:bg-slate-100');
+            }
+        }
+    });
+
+    if (window.location.hash !== `#${activeTab}`) {
+        history.replaceState(null, '', `#${activeTab}`);
+    }
 }
 
 async function handleSuperadminLogout() {
@@ -165,6 +195,13 @@ function renderMinistryUpgradeRequests() {
     if (badge) {
         badge.textContent = `${pendingCount} Pending`;
     }
+    const tabBadge = document.getElementById('tab-badge-upgrades');
+    if (tabBadge) {
+        tabBadge.textContent = pendingCount;
+        tabBadge.classList.toggle('hidden', pendingCount === 0);
+    }
+    const overviewCount = document.getElementById('overview-pending-upgrades');
+    if (overviewCount) overviewCount.textContent = pendingCount;
 
     if (ministryUpgradeRequests.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No Ministry / Minister upgrade requests yet.</td></tr>`;
@@ -558,6 +595,7 @@ function updateAdminRoleCounts() {
     if (document.getElementById('stat-lib-admins')) document.getElementById('stat-lib-admins').innerText = libAdmins;
     if (document.getElementById('stat-music-admins')) document.getElementById('stat-music-admins').innerText = musicAdmins;
     if (document.getElementById('stat-forum-admins')) document.getElementById('stat-forum-admins').innerText = forumAdmins;
+    if (document.getElementById('overview-active-admins')) document.getElementById('overview-active-admins').innerText = activeRoles.length;
 }
 
 // ==========================================
@@ -844,20 +882,27 @@ async function loadSuperadminPromotions() {
         geoEl.innerHTML = top.map(([country, count]) => `
             <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Audience Region</p>
-                <p class="text-base font-extrabold text-accord-slate mt-0.5">${escapeHtml(country)}</p>
+                <p class="text-base font-extrabold text-accord-slate mt-0.5">${escapeSuperHtml(country)}</p>
                 <p class="text-[11px] text-accord-blue font-semibold">${count} sessions</p>
             </div>
         `).join('');
     }
 
     if (promosRes.error) {
-        listEl.innerHTML = `<p class="text-xs text-red-600 py-6 text-center bg-white border border-slate-200 rounded-2xl">Could not load promotions: ${escapeHtml(promosRes.error.message)}</p>`;
+        listEl.innerHTML = `<p class="text-xs text-red-600 py-6 text-center bg-white border border-slate-200 rounded-2xl">Could not load promotions: ${escapeSuperHtml(promosRes.error.message)}</p>`;
         return;
     }
 
     const promos = promosRes.data || [];
     const pendingCount = promos.filter(p => p.status === 'pending_approval').length;
     if (badgeEl) badgeEl.textContent = `${pendingCount} Pending`;
+    const tabBadge = document.getElementById('tab-badge-promotions');
+    if (tabBadge) {
+        tabBadge.textContent = pendingCount;
+        tabBadge.classList.toggle('hidden', pendingCount === 0);
+    }
+    const overviewCount = document.getElementById('overview-pending-promotions');
+    if (overviewCount) overviewCount.textContent = pendingCount;
 
     if (promos.length === 0) {
         listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">No paid promotion requests yet.</p>`;
@@ -875,13 +920,13 @@ async function loadSuperadminPromotions() {
             <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                 <div class="space-y-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeHtml(p.status.replace('_', ' '))}</span>
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeHtml(p.promo_type)}</span>
-                        <span class="text-[11px] font-semibold text-accord-muted">Placement: ${escapeHtml((p.placements || ['all']).join(', '))}</span>
-                        <span class="text-[11px] font-bold text-accord-slate">${escapeHtml(p.currency || 'USD')} ${Number(p.budget_amount || 0).toFixed(2)} (${p.duration_days}d)</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeSuperHtml((p.status || '').replace('_', ' '))}</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeSuperHtml(p.promo_type)}</span>
+                        <span class="text-[11px] font-semibold text-accord-muted">Placement: ${escapeSuperHtml((p.placements || ['all']).join(', '))}</span>
+                        <span class="text-[11px] font-bold text-accord-slate">${escapeSuperHtml(p.currency || 'USD')} ${Number(p.budget_amount || 0).toFixed(2)} (${p.duration_days}d)</span>
                     </div>
-                    <h3 class="text-sm font-bold text-accord-slate">${escapeHtml(p.title)}</h3>
-                    <p class="text-[11px] text-accord-muted">By ${escapeHtml(p.advertiser_name || 'Member')} (${escapeHtml(p.advertiser_email || '')}) • Ref: ${escapeHtml(p.payment_reference || 'N/A')}</p>
+                    <h3 class="text-sm font-bold text-accord-slate">${escapeSuperHtml(p.title)}</h3>
+                    <p class="text-[11px] text-accord-muted">By ${escapeSuperHtml(p.advertiser_name || 'Member')} (${escapeSuperHtml(p.advertiser_email || '')}) • Ref: ${escapeSuperHtml(p.payment_reference || 'N/A')}</p>
                     <p class="text-[11px] text-slate-600">Views: <strong>${p.impressions_count || 0}</strong> • Clicks: <strong>${p.clicks_count || 0}</strong></p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 shrink-0">
@@ -916,20 +961,47 @@ async function reviewSuperadminPromotion(promoId, newStatus, durationDays = 7) {
 
 async function loadSuperadminWithdrawals() {
     const listEl = document.getElementById('superadmin-withdrawals-list');
+    const badgeEl = document.getElementById('pending-withdrawals-badge');
+    const tabBadge = document.getElementById('tab-badge-withdrawals');
+    const overviewCount = document.getElementById('overview-pending-withdrawals');
     if (!listEl) return;
 
     const { data, error } = await supabaseClient
         .from('author_withdrawals')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(60);
+        .limit(100);
 
-    if (error || !data || data.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">${error ? escapeHtml(error.message) : 'No author withdrawal requests yet.'}</p>`;
+    if (error) {
+        console.error('Failed to load author withdrawals:', error);
+        if (badgeEl) badgeEl.textContent = 'Error';
+        listEl.innerHTML = `<p class="text-xs text-red-600 py-6 text-center bg-white border border-red-200 rounded-2xl">Could not load withdrawal requests: ${escapeSuperHtml(error.message)}</p>`;
         return;
     }
 
-    listEl.innerHTML = data.map(w => {
+    const rows = Array.isArray(data) ? data : [];
+    const pendingCount = rows.filter(w => w.status === 'pending').length;
+    if (badgeEl) badgeEl.textContent = `${pendingCount} Pending`;
+    if (tabBadge) {
+        tabBadge.textContent = pendingCount;
+        tabBadge.classList.toggle('hidden', pendingCount === 0);
+    }
+    if (overviewCount) overviewCount.textContent = pendingCount;
+
+    if (rows.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-8 text-center bg-white border border-slate-200 rounded-2xl">No author withdrawal requests yet.</p>`;
+        return;
+    }
+
+    const statusOrder = { pending: 0, paid: 1, rejected: 2 };
+    const sorted = rows.slice().sort((a, b) => {
+        const pa = statusOrder[a.status] ?? 3;
+        const pb = statusOrder[b.status] ?? 3;
+        if (pa !== pb) return pa - pb;
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+    listEl.innerHTML = sorted.map(w => {
         const isPending = w.status === 'pending';
         const pillClass = w.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : w.status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700';
         const isDelegated = w.requested_by_user_id && w.author_id && String(w.requested_by_user_id) !== String(w.author_id);
@@ -937,18 +1009,20 @@ async function loadSuperadminWithdrawals() {
         const issuerHandle = w.requested_by_handle ? ` ${w.requested_by_handle}` : '';
         const issuerEmail = w.requested_by_email || w.author_email || '';
         const issuerText = `${issuerName}${issuerHandle}${issuerEmail ? ` • ${issuerEmail}` : ''}`;
+        const createdText = w.created_at ? new Date(w.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         return `
             <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                 <div class="space-y-1 min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${pillClass}">${escapeHtml(w.status)}</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${pillClass}">${escapeSuperHtml(w.status)}</span>
                         <span class="text-sm font-extrabold text-accord-slate">USD ${Number(w.amount || 0).toFixed(2)}</span>
                         ${isDelegated ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-accord-blue border border-blue-200">Issued by Page Admin</span>` : ''}
+                        ${createdText ? `<span class="text-[11px] text-accord-muted">${escapeSuperHtml(createdText)}</span>` : ''}
                     </div>
-                    <p class="text-xs font-bold text-accord-slate">Page / Author: ${escapeHtml(w.author_name || 'Author')} (${escapeHtml(w.author_email || '')})</p>
-                    <p class="text-[11px] font-semibold text-indigo-700">Issued by: ${escapeHtml(issuerText)}</p>
-                    <p class="text-[11px] text-accord-muted">${escapeHtml(w.payout_method || '')} • ${escapeHtml(w.payout_details || '')}</p>
-                    ${w.paystack_transfer_reference ? `<p class="text-[11px] text-emerald-700 font-mono">Paystack Ref: ${escapeHtml(w.paystack_transfer_reference)}</p>` : ''}
+                    <p class="text-xs font-bold text-accord-slate">Page / Author: ${escapeSuperHtml(w.author_name || 'Author')} (${escapeSuperHtml(w.author_email || '')})</p>
+                    <p class="text-[11px] font-semibold text-indigo-700">Issued by: ${escapeSuperHtml(issuerText)}</p>
+                    <p class="text-[11px] text-accord-muted">${escapeSuperHtml(w.payout_method || '')} • ${escapeSuperHtml(w.payout_details || '')}</p>
+                    ${w.paystack_transfer_reference ? `<p class="text-[11px] text-emerald-700 font-mono">Paystack Ref: ${escapeSuperHtml(w.paystack_transfer_reference)}</p>` : ''}
                 </div>
                 ${isPending ? `
                 <div class="flex flex-wrap items-center gap-2 shrink-0">

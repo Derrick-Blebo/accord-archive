@@ -19,6 +19,8 @@ let feedPeopleResults = [];
 let feedSearchTimer = null;
 let feedBookPreviewCache = new Map();
 let managedVerifiedPages = []; // Verified ministry/minister pages where currentUser is a page admin
+let suggestedAccounts = [];
+let dismissedSuggestionIds = new Set();
 
 function getVoterKey() {
     if (currentUser?.id) return `user_${currentUser.id}`;
@@ -164,6 +166,7 @@ function setFeedTab(tab) {
     }
 
     renderFeedStream();
+    loadFeedSuggestions();
 }
 
 async function loadFeedPosts() {
@@ -248,6 +251,7 @@ async function loadFeedPosts() {
     });
 
     renderFeedStream();
+    loadFeedSuggestions();
 }
 
 function matchesFeedSearch(post) {
@@ -457,10 +461,12 @@ function handleFeedSearchInput(val) {
     if (!hasQuery) {
         feedPeopleResults = [];
         renderPeopleSearchResults();
+        renderFeedSuggestions();
         renderFeedStream();
         return;
     }
 
+    renderFeedSuggestions();
     renderFeedStream();
     clearTimeout(feedSearchTimer);
     feedSearchTimer = setTimeout(() => {
@@ -488,6 +494,7 @@ function setFeedSearchScope(scope) {
     });
     renderPeopleSearchResults();
     renderFeedStream();
+    loadFeedSuggestions();
 }
 
 function updateFeedSearchSummary(postsCount) {
@@ -615,8 +622,11 @@ async function toggleFeedPersonFollow(targetUserId, btnEl) {
         if (!error) {
             followingIds.delete(idStr);
             if (btnEl) {
+                const isCardBtn = btnEl.dataset.suggestionBtn === 'true';
                 btnEl.textContent = 'Follow';
-                btnEl.className = 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-accord-blue text-white hover:bg-accord-darkBlue';
+                btnEl.className = isCardBtn
+                    ? 'w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all bg-accord-blue text-white hover:bg-accord-darkBlue'
+                    : 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-accord-blue text-white hover:bg-accord-darkBlue';
             }
         }
     } else {
@@ -626,11 +636,110 @@ async function toggleFeedPersonFollow(targetUserId, btnEl) {
         if (!error) {
             followingIds.add(idStr);
             if (btnEl) {
+                const isCardBtn = btnEl.dataset.suggestionBtn === 'true';
                 btnEl.textContent = 'Following';
-                btnEl.className = 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-slate-100 text-accord-slate hover:bg-slate-200';
+                btnEl.className = isCardBtn
+                    ? 'w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all bg-slate-100 text-accord-slate hover:bg-slate-200'
+                    : 'px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 transition-all bg-slate-100 text-accord-slate hover:bg-slate-200';
             }
         }
     }
+}
+
+async function loadFeedSuggestions() {
+    const section = document.getElementById('feed-suggestions-section');
+    if (!section) return;
+
+    const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, ministry_role')
+        .neq('upgrade_status', 'revoked')
+        .limit(40);
+
+    if (error) {
+        console.warn('Suggestions load error:', error.message);
+        suggestedAccounts = [];
+        renderFeedSuggestions();
+        return;
+    }
+
+    const candidates = (data || []).filter(person => {
+        const idStr = String(person.id);
+        if (currentUser?.id && String(currentUser.id) === idStr) return false;
+        if (followingIds.has(idStr)) return false;
+        if (dismissedSuggestionIds.has(idStr)) return false;
+        if (!person.full_name && !person.handle) return false;
+        return true;
+    });
+
+    // Prioritize verified ministries/ministers & profiles with avatars/handles, with light shuffle for freshness
+    candidates.sort((a, b) => {
+        const scoreA = (isMinistryOrMinister(a) ? 4 : 0) + (a.avatar_url ? 2 : 0) + (a.handle ? 1 : 0) + Math.random() * 2;
+        const scoreB = (isMinistryOrMinister(b) ? 4 : 0) + (b.avatar_url ? 2 : 0) + (b.handle ? 1 : 0) + Math.random() * 2;
+        return scoreB - scoreA;
+    });
+
+    suggestedAccounts = candidates.slice(0, 12);
+    renderFeedSuggestions();
+}
+
+function dismissFeedSuggestion(userId) {
+    dismissedSuggestionIds.add(String(userId));
+    suggestedAccounts = suggestedAccounts.filter(p => String(p.id) !== String(userId));
+    renderFeedSuggestions();
+}
+
+function refreshFeedSuggestions() {
+    loadFeedSuggestions();
+}
+
+function renderFeedSuggestions() {
+    const section = document.getElementById('feed-suggestions-section');
+    const listEl = document.getElementById('feed-suggestions-list');
+    if (!section || !listEl) return;
+
+    const isSearching = Boolean(feedSearchQuery.trim());
+    if (isSearching || suggestedAccounts.length === 0) {
+        section.classList.add('hidden');
+        listEl.innerHTML = '';
+        return;
+    }
+
+    section.classList.remove('hidden');
+    listEl.innerHTML = suggestedAccounts.map(person => {
+        const name = person.full_name || 'Accord Member';
+        const verified = isMinistryOrMinister(person);
+        const profileHref = `user.html?id=${encodeURIComponent(person.id)}`;
+        const subtitle = person.handle
+            ? person.handle
+            : (person.ministry_role || (verified ? 'Verified Ministry' : 'Suggested for you'));
+        const isFollowing = followingIds.has(String(person.id));
+
+        return `
+            <div class="relative w-36 sm:w-40 shrink-0 rounded-2xl border border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-slate-300 p-3 flex flex-col items-center text-center justify-between gap-2.5 transition-all">
+                <button type="button" onclick="dismissFeedSuggestion('${person.id}')" class="absolute top-2 right-2 w-5 h-5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 flex items-center justify-center text-[10px]" title="Dismiss" aria-label="Dismiss suggestion">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <a href="${profileHref}" class="flex flex-col items-center gap-2 min-w-0 w-full pt-1">
+                    <div class="relative w-14 h-14 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-lg flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm">
+                        ${person.avatar_url
+                            ? `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" class="w-full h-full object-cover rounded-full">`
+                            : `<span>${escapeHtml(name.charAt(0).toUpperCase())}</span>`}
+                        ${verified
+                            ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>`
+                            : ''}
+                    </div>
+                    <div class="min-w-0 w-full">
+                        <p class="text-xs font-bold text-accord-slate truncate">${escapeHtml(name)}</p>
+                        <p class="text-[11px] text-accord-muted truncate">${escapeHtml(subtitle)}</p>
+                    </div>
+                </a>
+                <button type="button" data-suggestion-btn="true" onclick="toggleFeedPersonFollow('${person.id}', this)" class="w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${isFollowing ? 'bg-slate-100 text-accord-slate hover:bg-slate-200' : 'bg-accord-blue text-white hover:bg-accord-darkBlue'}">
+                    ${isFollowing ? 'Following' : 'Follow'}
+                </button>
+            </div>
+        `;
+    }).join('');
 }
 
 function getPostTypeMeta(type) {

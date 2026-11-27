@@ -62,7 +62,7 @@
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
 
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+    <div id="toast" class="fixed bottom-6 right-6 z-[200] pointer-events-none transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
         <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
     </div>
@@ -221,43 +221,30 @@
 
         <!-- Header / Superadmin Navigation -->
         <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
                 <!-- Brand Logo -->
                 <div class="flex items-center space-x-3">
                     <a href="index.html" class="flex items-center space-x-3 group">
-                        <div class="w-11 h-11 bg-accord-slate rounded-xl flex items-center justify-center text-accord-gold shadow-md group-hover:scale-105 transition-transform">
-                            <span class="font-bold text-xl tracking-tighter">Ac</span>
+                        <div class="w-10 h-10 bg-accord-slate rounded-xl flex items-center justify-center text-accord-gold shadow-md group-hover:scale-105 transition-transform">
+                            <span class="font-bold text-lg tracking-tighter">Ac</span>
                         </div>
                         <div>
                             <div class="flex items-center">
-                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
-                                <span class="text-2xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
+                                <span class="text-xl font-extrabold tracking-tight text-accord-slate">Acco</span>
+                                <span class="text-xl font-extrabold tracking-tight text-accord-slate logo-rd-bar">rd</span>
                             </div>
                             <p class="text-[10px] uppercase tracking-widest font-extrabold text-accord-gold">Master Superadmin</p>
                         </div>
                     </a>
                 </div>
 
-                <!-- Quick Portal Switcher Links -->
-                <nav class="hidden lg:flex items-center space-x-2 bg-slate-100 p-1.5 rounded-2xl">
-                    <span class="px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-accord-muted">Jump to Portal:</span>
-                    <a href="admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-accord-blue text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
-                        <i class="fa-solid fa-book-bookmark text-accord-blue group-hover:text-white"></i>
-                        <span>Library Admin</span>
-                    </a>
-                    <a href="music-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-emerald-600 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
-                        <i class="fa-solid fa-music text-emerald-600"></i>
-                        <span>Music & Polls</span>
-                    </a>
-                    <a href="feed-admin.html" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-500 text-accord-slate hover:text-white shadow-sm transition-all flex items-center space-x-1.5">
-                        <i class="fa-solid fa-comments text-accord-gold"></i>
-                        <span>Testimonies</span>
-                    </a>
-                </nav>
-
                 <!-- Superadmin Profile & Actions -->
                 <div class="flex items-center space-x-3">
-                    <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2">
+                    <a href="index.html" target="_blank" class="hidden md:inline-flex items-center space-x-1.5 text-xs font-bold text-accord-muted hover:text-accord-blue px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors">
+                        <span>Public Site</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-2">
                         <i class="fa-solid fa-user-plus"></i>
                         <span class="hidden sm:inline">Assign New Admin</span>
                     </button>
@@ -273,302 +260,313 @@
         </header>
 
         <!-- Main Content -->
-        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-10">
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
 
-            <!-- Section 1: Department Portals Overview & Quick Launch -->
-            <section class="space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Department Admin Workspaces</h2>
-                        <p class="text-xs text-accord-muted">Launch any dedicated management portal or review live metrics across the Accord ecosystem.</p>
-                    </div>
-                    <a href="index.html" target="_blank" class="text-xs font-bold text-accord-blue hover:underline inline-flex items-center space-x-1.5">
-                        <span>View Live Public Website</span>
-                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                    </a>
-                </div>
+            <!-- Command Center Tab Bar -->
+            <div class="bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-sm flex items-center gap-1.5 overflow-x-auto">
+                <button type="button" id="tab-btn-overview" onclick="switchSuperadminTab('overview')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 bg-accord-slate text-white shadow-sm">
+                    <i class="fa-solid fa-grid-2"></i>
+                    <span>Overview &amp; Portals</span>
+                </button>
+                <button type="button" id="tab-btn-withdrawals" onclick="switchSuperadminTab('withdrawals')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
+                    <i class="fa-solid fa-money-bill-transfer"></i>
+                    <span>Withdrawals</span>
+                    <span id="tab-badge-withdrawals" class="hidden px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">0</span>
+                </button>
+                <button type="button" id="tab-btn-upgrades" onclick="switchSuperadminTab('upgrades')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
+                    <i class="fa-solid fa-church"></i>
+                    <span>Ministry Upgrades</span>
+                    <span id="tab-badge-upgrades" class="hidden px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">0</span>
+                </button>
+                <button type="button" id="tab-btn-promotions" onclick="switchSuperadminTab('promotions')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
+                    <i class="fa-solid fa-bullhorn"></i>
+                    <span>Promotions &amp; Ads</span>
+                    <span id="tab-badge-promotions" class="hidden px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">0</span>
+                </button>
+                <button type="button" id="tab-btn-roles" onclick="switchSuperadminTab('roles')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <span>Team &amp; Roles</span>
+                </button>
+            </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Workspace 1: Library Admin -->
-                    <div class="bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center text-xl">
-                                    <i class="fa-solid fa-book-bookmark"></i>
-                                </div>
-                                <span class="bg-blue-50 text-accord-blue text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Library Portal</span>
-                            </div>
-                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Library & Archive Admin</h3>
-                            <p class="text-xs text-accord-muted leading-relaxed">
-                                Manage publications, Kindle-style homepage shelves, promotional banners, categories, bulk Excel uploads, and manuscript reviews.
-                            </p>
+            <!-- TAB 1: OVERVIEW & PORTALS -->
+            <div id="tab-panel-overview" class="space-y-8">
+                <!-- Live Action Queue -->
+                <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <button type="button" onclick="switchSuperadminTab('withdrawals')" class="text-left bg-white border border-slate-200/90 hover:border-accord-blue rounded-2xl p-5 shadow-sm transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Withdrawals</span>
+                            <span class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xs"><i class="fa-solid fa-money-bill-transfer"></i></span>
                         </div>
-
-                        <div class="pt-4 border-t border-slate-100 space-y-3">
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Live Publications:</span>
-                                <span id="stat-lib-books" class="font-extrabold text-accord-slate">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Pending Manuscripts:</span>
-                                <span id="stat-lib-pending" class="font-extrabold text-amber-600">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
-                                <span id="stat-lib-admins" class="font-extrabold text-accord-blue">1</span>
-                            </div>
-                            <a href="admin.html" class="w-full mt-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
-                                <span>Open Library Admin</span>
-                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Workspace 2: Music & Polls Admin -->
-                    <div class="bg-white border border-slate-200/90 hover:border-emerald-500 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
-                                    <i class="fa-solid fa-music"></i>
-                                </div>
-                                <span class="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Music Portal</span>
-                            </div>
-                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Gospel Music & Polls Admin</h3>
-                            <p class="text-xs text-accord-muted leading-relaxed">
-                                Manage curated playlists, Artiste Spotlight profiles, music banners, periodic award voting polls, Excel result exports, and new song submissions.
-                            </p>
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-100 space-y-3">
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Spotlight Artistes & Playlists:</span>
-                                <span id="stat-music-items" class="font-extrabold text-accord-slate">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Active Award Polls:</span>
-                                <span id="stat-music-polls" class="font-extrabold text-emerald-600">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
-                                <span id="stat-music-admins" class="font-extrabold text-emerald-600">1</span>
-                            </div>
-                            <a href="music-admin.html" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
-                                <span>Open Music Admin</span>
-                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Workspace 3: Testimonies & Forum Admin -->
-                    <div class="bg-white border border-slate-200/90 hover:border-accord-gold rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5">
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between">
-                                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center text-xl">
-                                    <i class="fa-solid fa-comments"></i>
-                                </div>
-                                <span class="bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full">Forum Portal</span>
-                            </div>
-                            <h3 class="serif-heading text-xl font-bold text-accord-slate">Testimonies & Forum Admin</h3>
-                            <p class="text-xs text-accord-muted leading-relaxed">
-                                Review and moderate community testimonies, manage reader comments and replies, and export approved faith chronicles for book compilation.
-                            </p>
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-100 space-y-3">
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Published Testimonies:</span>
-                                <span id="stat-forum-posts" class="font-extrabold text-accord-slate">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Reader Comments:</span>
-                                <span id="stat-forum-comments" class="font-extrabold text-accord-gold">0</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-accord-muted font-medium">Assigned Admins:</span>
-                                <span id="stat-forum-admins" class="font-extrabold text-amber-600">1</span>
-                            </div>
-                            <a href="feed-admin.html" class="w-full mt-2 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-3 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
-                                <span>Open Testimonies Admin</span>
-                                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 2: Admin Accounts & Role Assignment Matrix -->
-            <section class="space-y-5">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Approved Admin Accounts & Portal Permissions</h2>
-                        <p class="text-xs text-accord-muted mt-1">Control which team members can sign in to the Library, Music, and Testimonies admin dashboards.</p>
-                    </div>
-
-                    <div class="flex flex-wrap items-center gap-2.5">
-                        <div class="relative">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
-                            <input type="text" id="role-search" oninput="renderAdminRolesTable()" placeholder="Search name or email..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-56">
-                        </div>
-                        <button type="button" onclick="exportRolesToExcel()" class="bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5">
-                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
-                            <span>Export Access Sheet</span>
-                        </button>
-                        <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Add Approved Account</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Permissions Table -->
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Team Member & Email</th>
-                                    <th class="py-4 px-6">Role / Title</th>
-                                    <th class="py-4 px-6 text-center">Library Admin</th>
-                                    <th class="py-4 px-6 text-center">Music Admin</th>
-                                    <th class="py-4 px-6 text-center">Testimonies Admin</th>
-                                    <th class="py-4 px-6 text-center">Status</th>
-                                    <th class="py-4 px-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-roles-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <!-- Populated dynamically by superadmin.js -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 2B: Ministry / Minister Account Upgrade Requests -->
-            <section id="ministry-upgrades-section" class="space-y-5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Ministry / Minister Upgrade Requests</h2>
-                        <p class="text-xs text-accord-muted mt-1">Review community members requesting direct feed publishing privileges for Videos, Audio, and Text Posts.</p>
-                    </div>
-                    <div class="flex items-center gap-2 self-start sm:self-auto">
-                        <span id="pending-upgrades-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">
-                            0 Pending
-                        </span>
-                        <button type="button" onclick="loadMinistryUpgradeRequests()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 transition-colors" title="Refresh upgrade requests">
-                            <i class="fa-solid fa-rotate-right text-[11px]"></i>
-                            <span>Refresh</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="ministry-upgrades-rls-hint" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1">
-                    <p class="font-bold flex items-center gap-1.5">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
-                        <span>Supabase RLS Policy Required for Admin Profile Updates</span>
-                    </p>
-                    <p class="text-amber-800 leading-relaxed">
-                        Your database blocked reading or updating other users' rows in <code class="font-mono font-semibold">public.profiles</code> (0 rows affected). Run <code class="font-mono font-semibold">supabase-superadmin-profiles-rls.sql</code> in the Supabase Dashboard SQL Editor, then click Refresh.
-                    </p>
-                </div>
-
-                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
-                                    <th class="py-4 px-6">Member</th>
-                                    <th class="py-4 px-6">Who They Are & Community Plan</th>
-                                    <th class="py-4 px-6 text-center">Requested</th>
-                                    <th class="py-4 px-6 text-center">Status</th>
-                                    <th class="py-4 px-6 text-right">Decision</th>
-                                </tr>
-                            </thead>
-                            <tbody id="ministry-upgrades-tbody" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
-                                <tr>
-                                    <td colspan="5" class="py-8 text-center text-accord-muted">Loading upgrade requests...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 3: How Role-Based Access Works (Quick Reference) -->
-            <section class="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-sm">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="flex items-start space-x-3.5">
-                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-accord-blue flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-user-check"></i>
-                        </div>
-                        <div>
-                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">1. Create or Use Account</h4>
-                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
-                                Have your team member create an account on the main site (or in Supabase Auth) using their email address.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-start space-x-3.5">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-sliders"></i>
-                        </div>
-                        <div>
-                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">2. Toggle Portal Checkboxes</h4>
-                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
-                                Add their email above and check which portals they are allowed to access. You can toggle individual portals on or off anytime with one click.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-start space-x-3.5">
-                        <div class="w-10 h-10 rounded-xl bg-amber-50 text-accord-gold flex items-center justify-center shrink-0">
-                            <i class="fa-solid fa-lock"></i>
-                        </div>
-                        <div>
-                            <h4 class="font-bold text-xs uppercase tracking-wider text-accord-slate">3. Automatic Gate Enforcement</h4>
-                            <p class="text-xs text-accord-muted mt-1 leading-relaxed">
-                                Each admin portal verifies the signed-in user's email against this registry and blocks unauthorized accounts automatically.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 2C: Paid Promotions & Centralized Ads Approval -->
-            <section id="promotions-admin-section" class="space-y-5 pt-6 border-t border-slate-200">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Paid Promotions &amp; Centralized Ads</h2>
-                        <p class="text-xs text-accord-muted mt-1">Review and approve paid promotions (posts, books, and banners) across Library, Feed, and Music, plus audience location insights.</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span id="pending-promotions-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">0 Pending</span>
-                        <button type="button" onclick="loadSuperadminPromotions()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
-                            <i class="fa-solid fa-rotate-right text-[11px]"></i>
-                            <span>Refresh</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="audience-geo-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
-                <div id="superadmin-promotions-list" class="space-y-3">
-                    <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading promotions...</p>
-                </div>
-            </section>
-
-            <!-- Section 2D: Author Sales Withdrawals (Paystack Payouts) -->
-            <section id="author-withdrawals-admin-section" class="space-y-5 pt-6 border-t border-slate-200">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Author Sales Withdrawals (Paystack Payouts)</h2>
-                        <p class="text-xs text-accord-muted mt-1">Disburse author book royalties via Paystack Transfer or mark completed manually.</p>
-                    </div>
-                    <button type="button" onclick="loadSuperadminWithdrawals()" class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
-                        <i class="fa-solid fa-rotate-right text-[11px]"></i>
-                        <span>Refresh</span>
+                        <p id="overview-pending-withdrawals" class="text-2xl font-extrabold text-accord-slate mt-2">0</p>
+                        <p class="text-[11px] font-semibold text-accord-blue mt-1 group-hover:underline">Review payouts &rarr;</p>
                     </button>
-                </div>
-                <div id="superadmin-withdrawals-list" class="space-y-3">
-                    <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading withdrawal requests...</p>
-                </div>
-            </section>
+
+                    <button type="button" onclick="switchSuperadminTab('upgrades')" class="text-left bg-white border border-slate-200/90 hover:border-accord-blue rounded-2xl p-5 shadow-sm transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Ministry Upgrades</span>
+                            <span class="w-8 h-8 rounded-xl bg-blue-50 text-accord-blue flex items-center justify-center text-xs"><i class="fa-solid fa-church"></i></span>
+                        </div>
+                        <p id="overview-pending-upgrades" class="text-2xl font-extrabold text-accord-slate mt-2">0</p>
+                        <p class="text-[11px] font-semibold text-accord-blue mt-1 group-hover:underline">Review applications &rarr;</p>
+                    </button>
+
+                    <button type="button" onclick="switchSuperadminTab('promotions')" class="text-left bg-white border border-slate-200/90 hover:border-accord-blue rounded-2xl p-5 shadow-sm transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Pending Promotions</span>
+                            <span class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs"><i class="fa-solid fa-bullhorn"></i></span>
+                        </div>
+                        <p id="overview-pending-promotions" class="text-2xl font-extrabold text-accord-slate mt-2">0</p>
+                        <p class="text-[11px] font-semibold text-accord-blue mt-1 group-hover:underline">Review ads &rarr;</p>
+                    </button>
+
+                    <button type="button" onclick="switchSuperadminTab('roles')" class="text-left bg-white border border-slate-200/90 hover:border-accord-blue rounded-2xl p-5 shadow-sm transition-all group">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Active Admins</span>
+                            <span class="w-8 h-8 rounded-xl bg-slate-100 text-accord-slate flex items-center justify-center text-xs"><i class="fa-solid fa-user-shield"></i></span>
+                        </div>
+                        <p id="overview-active-admins" class="text-2xl font-extrabold text-accord-slate mt-2">1</p>
+                        <p class="text-[11px] font-semibold text-accord-blue mt-1 group-hover:underline">Manage team &rarr;</p>
+                    </button>
+                </section>
+
+                <!-- Department Admin Workspaces -->
+                <section class="space-y-4">
+                    <h2 class="serif-heading text-xl font-bold text-accord-slate">Department Admin Workspaces</h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <!-- Workspace 1: Library Admin -->
+                        <div class="bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm transition-all flex flex-col justify-between space-y-4">
+                            <div class="space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-10 h-10 rounded-xl bg-blue-50 text-accord-blue flex items-center justify-center text-lg">
+                                        <i class="fa-solid fa-book-bookmark"></i>
+                                    </div>
+                                    <span class="bg-blue-50 text-accord-blue text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full">Library</span>
+                                </div>
+                                <h3 class="serif-heading text-lg font-bold text-accord-slate">Library &amp; Archive Admin</h3>
+                            </div>
+
+                            <div class="pt-3 border-t border-slate-100 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Live Publications</span>
+                                    <span id="stat-lib-books" class="font-extrabold text-accord-slate">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Pending Manuscripts</span>
+                                    <span id="stat-lib-pending" class="font-extrabold text-amber-600">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Assigned Admins</span>
+                                    <span id="stat-lib-admins" class="font-extrabold text-accord-blue">1</span>
+                                </div>
+                                <a href="admin.html" class="w-full mt-2 bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                    <span>Open Library Admin</span>
+                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Workspace 2: Music & Polls Admin -->
+                        <div class="bg-white border border-slate-200/90 hover:border-emerald-500 rounded-3xl p-5 shadow-sm transition-all flex flex-col justify-between space-y-4">
+                            <div class="space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                                        <i class="fa-solid fa-music"></i>
+                                    </div>
+                                    <span class="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full">Music</span>
+                                </div>
+                                <h3 class="serif-heading text-lg font-bold text-accord-slate">Gospel Music &amp; Polls</h3>
+                            </div>
+
+                            <div class="pt-3 border-t border-slate-100 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Artistes &amp; Playlists</span>
+                                    <span id="stat-music-items" class="font-extrabold text-accord-slate">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Active Award Polls</span>
+                                    <span id="stat-music-polls" class="font-extrabold text-emerald-600">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Assigned Admins</span>
+                                    <span id="stat-music-admins" class="font-extrabold text-emerald-600">1</span>
+                                </div>
+                                <a href="music-admin.html" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                    <span>Open Music Admin</span>
+                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Workspace 3: Testimonies & Forum Admin -->
+                        <div class="bg-white border border-slate-200/90 hover:border-accord-gold rounded-3xl p-5 shadow-sm transition-all flex flex-col justify-between space-y-4">
+                            <div class="space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-accord-gold flex items-center justify-center text-lg">
+                                        <i class="fa-solid fa-comments"></i>
+                                    </div>
+                                    <span class="bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full">Forum</span>
+                                </div>
+                                <h3 class="serif-heading text-lg font-bold text-accord-slate">Testimonies &amp; Forum</h3>
+                            </div>
+
+                            <div class="pt-3 border-t border-slate-100 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Published Testimonies</span>
+                                    <span id="stat-forum-posts" class="font-extrabold text-accord-slate">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Reader Comments</span>
+                                    <span id="stat-forum-comments" class="font-extrabold text-accord-gold">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-accord-muted">Assigned Admins</span>
+                                    <span id="stat-forum-admins" class="font-extrabold text-amber-600">1</span>
+                                </div>
+                                <a href="feed-admin.html" class="w-full mt-2 bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                    <span>Open Testimonies Admin</span>
+                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 2: TEAM & ROLES -->
+            <div id="tab-panel-roles" class="hidden space-y-6">
+                <section class="space-y-5">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Approved Admin Accounts &amp; Portal Permissions</h2>
+
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-accord-muted text-xs"></i>
+                                <input type="text" id="role-search" oninput="renderAdminRolesTable()" placeholder="Search name or email..." class="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-accord-slate focus:outline-none focus:border-accord-blue w-56">
+                            </div>
+                            <button type="button" onclick="exportRolesToExcel()" class="bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center space-x-1.5">
+                                <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                                <span>Export Access Sheet</span>
+                            </button>
+                            <button type="button" onclick="openAdminRoleModal('add')" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Add Approved Account</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Permissions Table -->
+                    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                        <th class="py-4 px-6">Team Member &amp; Email</th>
+                                        <th class="py-4 px-6">Role / Title</th>
+                                        <th class="py-4 px-6 text-center">Library Admin</th>
+                                        <th class="py-4 px-6 text-center">Music Admin</th>
+                                        <th class="py-4 px-6 text-center">Testimonies Admin</th>
+                                        <th class="py-4 px-6 text-center">Status</th>
+                                        <th class="py-4 px-6 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-roles-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                    <!-- Populated dynamically by superadmin.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 3: MINISTRY UPGRADES -->
+            <div id="tab-panel-upgrades" class="hidden space-y-5">
+                <section id="ministry-upgrades-section" class="space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Ministry / Minister Upgrade Requests</h2>
+                        <div class="flex items-center gap-2 self-start sm:self-auto">
+                            <span id="pending-upgrades-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">
+                                0 Pending
+                            </span>
+                            <button type="button" onclick="loadMinistryUpgradeRequests()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200 transition-colors" title="Refresh upgrade requests">
+                                <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="ministry-upgrades-rls-hint" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-1">
+                        <p class="font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                            <span>Supabase RLS Policy Required for Admin Profile Updates</span>
+                        </p>
+                        <p class="text-amber-800 leading-relaxed">
+                            Your database blocked reading or updating other users' rows in <code class="font-mono font-semibold">public.profiles</code> (0 rows affected). Run <code class="font-mono font-semibold">supabase-superadmin-profiles-rls.sql</code> in the Supabase Dashboard SQL Editor, then click Refresh.
+                        </p>
+                    </div>
+
+                    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                        <th class="py-4 px-6">Member</th>
+                                        <th class="py-4 px-6">Who They Are &amp; Community Plan</th>
+                                        <th class="py-4 px-6 text-center">Requested</th>
+                                        <th class="py-4 px-6 text-center">Status</th>
+                                        <th class="py-4 px-6 text-right">Decision</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ministry-upgrades-tbody" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                    <tr>
+                                        <td colspan="5" class="py-8 text-center text-accord-muted">Loading upgrade requests...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 4: PROMOTIONS & ADS -->
+            <div id="tab-panel-promotions" class="hidden space-y-5">
+                <section id="promotions-admin-section" class="space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Paid Promotions &amp; Centralized Ads</h2>
+                        <div class="flex items-center gap-2">
+                            <span id="pending-promotions-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">0 Pending</span>
+                            <button type="button" onclick="loadSuperadminPromotions()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
+                                <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="audience-geo-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+                    <div id="superadmin-promotions-list" class="space-y-3">
+                        <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading promotions...</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 5: AUTHOR WITHDRAWALS -->
+            <div id="tab-panel-withdrawals" class="hidden space-y-5">
+                <section id="author-withdrawals-admin-section" class="space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Author Sales Withdrawals (Paystack Payouts)</h2>
+                        <div class="flex items-center gap-2 self-start sm:self-auto">
+                            <span id="pending-withdrawals-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">0 Pending</span>
+                            <button type="button" onclick="loadSuperadminWithdrawals()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
+                                <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="superadmin-withdrawals-list" class="space-y-3">
+                        <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading withdrawal requests...</p>
+                    </div>
+                </section>
+            </div>
 
         </main>
 
@@ -627,6 +625,6 @@
     <script src="admin-core.js?v=3"></script>
 
     <!-- Superadmin Logic -->
-    <script src="superadmin.js?v=5"></script>
+    <script src="superadmin.js?v=6"></script>
 </body>
 </html>

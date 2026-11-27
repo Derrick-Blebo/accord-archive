@@ -366,19 +366,20 @@
                 <div class="flex items-center gap-2 shrink-0">
                     <button type="button" id="apr-zoom-out" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs flex items-center justify-center" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
                     <button type="button" id="apr-zoom-in" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs flex items-center justify-center" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button type="button" id="apr-fullscreen-btn" class="px-2.5 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold flex items-center gap-1.5" title="Toggle Full Screen">
+                        <i id="apr-fullscreen-icon" class="fa-solid fa-expand"></i>
+                        <span class="hidden sm:inline" id="apr-fullscreen-label">Full Screen</span>
+                    </button>
                     <button type="button" id="apr-close-btn" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-xs font-bold">Close</button>
                 </div>
             </div>
 
-            <div id="apr-stage" class="flex-1 overflow-auto flex items-center justify-center p-3 sm:p-6 relative">
-                <div id="apr-loading" class="text-center text-slate-300 space-y-3">
+            <div id="apr-stage" class="flex-1 overflow-auto flex flex-col items-center p-3 sm:p-6 relative">
+                <div id="apr-loading" class="my-auto text-center text-slate-300 space-y-3">
                     <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     <p id="apr-loading-text" class="text-xs font-semibold">Decrypting publication...</p>
                 </div>
-                <div id="apr-canvas-wrap" class="hidden relative shadow-2xl rounded-lg overflow-hidden bg-white">
-                    <canvas id="apr-canvas" class="block max-w-full h-auto"></canvas>
-                    <div id="apr-watermark" class="pointer-events-none absolute inset-0 flex items-end justify-end p-3 opacity-25 text-[10px] font-bold text-slate-700 select-none"></div>
-                </div>
+                <div id="apr-pages-container" class="hidden w-full flex-col items-center gap-4"></div>
             </div>
 
             <div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white shrink-0">
@@ -412,41 +413,104 @@
         const statusEl = document.getElementById('apr-status-line');
         const loadingEl = document.getElementById('apr-loading');
         const loadingTextEl = document.getElementById('apr-loading-text');
-        const canvasWrap = document.getElementById('apr-canvas-wrap');
-        const canvas = document.getElementById('apr-canvas');
-        const watermarkEl = document.getElementById('apr-watermark');
+        const pagesContainer = document.getElementById('apr-pages-container');
         const prevBtn = document.getElementById('apr-prev-btn');
         const nextBtn = document.getElementById('apr-next-btn');
         const pageInput = document.getElementById('apr-page-input');
         const pageTotalEl = document.getElementById('apr-page-total');
         const zoomInBtn = document.getElementById('apr-zoom-in');
         const zoomOutBtn = document.getElementById('apr-zoom-out');
+        const fullscreenBtn = document.getElementById('apr-fullscreen-btn');
+        const fullscreenIcon = document.getElementById('apr-fullscreen-icon');
+        const fullscreenLabel = document.getElementById('apr-fullscreen-label');
         const closeBtn = document.getElementById('apr-close-btn');
         const stageEl = document.getElementById('apr-stage');
 
+        const watermarkText = userEmail ? `Licensed to ${userEmail}` : 'Accord Archive Protected Reader';
         titleEl.innerText = book.title || 'Protected Publication';
-        watermarkEl.innerText = userEmail ? `Licensed to ${userEmail}` : 'Accord Archive Protected Reader';
         loadingEl.classList.remove('hidden');
-        canvasWrap.classList.add('hidden');
+        pagesContainer.classList.add('hidden');
+        pagesContainer.classList.remove('flex');
+        pagesContainer.innerHTML = '';
         modal.classList.remove('hidden');
         modal.classList.add('flex');
 
         let pdfDoc = null;
         let currentPage = 1;
         let scale = window.innerWidth < 640 ? 1.1 : 1.35;
-        let renderTask = null;
         let closed = false;
+        let pageObserver = null;
+        let visibilityObserver = null;
+        let pageSlots = [];
+        let renderGeneration = 0;
+
+        const syncFullscreenUi = () => {
+            const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) {
+                fullscreenIcon.className = isFs ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+            }
+            if (fullscreenLabel) {
+                fullscreenLabel.textContent = isFs ? 'Exit Full Screen' : 'Full Screen';
+            }
+        };
+
+        const toggleFullscreen = async () => {
+            try {
+                const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+                if (!isFs) {
+                    if (modal.requestFullscreen) {
+                        await modal.requestFullscreen();
+                    } else if (modal.webkitRequestFullscreen) {
+                        modal.webkitRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        await document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
+                }
+            } catch (err) {
+                console.warn('Fullscreen toggle warning:', err);
+            } finally {
+                syncFullscreenUi();
+            }
+        };
+
+        if (fullscreenBtn) {
+            fullscreenBtn.onclick = toggleFullscreen;
+        }
+        document.addEventListener('fullscreenchange', syncFullscreenUi);
+        document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+        syncFullscreenUi();
 
         const cleanup = () => {
             closed = true;
+            if (pageObserver) {
+                pageObserver.disconnect();
+                pageObserver = null;
+            }
+            if (visibilityObserver) {
+                visibilityObserver.disconnect();
+                visibilityObserver = null;
+            }
+            document.removeEventListener('fullscreenchange', syncFullscreenUi);
+            document.removeEventListener('webkitfullscreenchange', syncFullscreenUi);
+            const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+            if (isFs) {
+                try {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                } catch (_) {}
+            }
             modal.classList.add('hidden');
             modal.classList.remove('flex');
             if (pdfDoc && typeof pdfDoc.destroy === 'function') {
                 try { pdfDoc.destroy(); } catch (_) {}
             }
             pdfDoc = null;
-            const ctx = canvas.getContext('2d');
-            ctx?.clearRect(0, 0, canvas.width, canvas.height);
+            pagesContainer.innerHTML = '';
+            pageSlots = [];
         };
 
         closeBtn.onclick = cleanup;
@@ -501,52 +565,168 @@
             pageTotalEl.innerText = `/ ${pdfDoc.numPages}`;
             pageInput.max = String(pdfDoc.numPages);
 
-            const renderPage = async (num) => {
-                if (!pdfDoc || closed) return;
+            const updatePageControls = (num) => {
                 currentPage = Math.max(1, Math.min(pdfDoc.numPages, num));
                 pageInput.value = String(currentPage);
                 prevBtn.disabled = currentPage <= 1;
                 nextBtn.disabled = currentPage >= pdfDoc.numPages;
+            };
 
-                if (renderTask) {
-                    try { renderTask.cancel(); } catch (_) {}
+            const renderPageSlot = async (slot, gen) => {
+                if (!pdfDoc || closed || gen !== renderGeneration) return;
+                if (slot.renderedScale === scale && slot.rendered) return;
+                if (slot.rendering) return;
+                slot.rendering = true;
+
+                try {
+                    const page = await pdfDoc.getPage(slot.pageNum);
+                    if (closed || gen !== renderGeneration) return;
+                    const viewport = page.getViewport({ scale });
+                    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+                    slot.wrap.style.minHeight = `${Math.floor(viewport.height)}px`;
+                    slot.canvas.width = Math.floor(viewport.width * dpr);
+                    slot.canvas.height = Math.floor(viewport.height * dpr);
+                    slot.canvas.style.width = `${Math.floor(viewport.width)}px`;
+                    slot.canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+                    const ctx = slot.canvas.getContext('2d');
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    if (closed || gen !== renderGeneration) return;
+                    slot.rendered = true;
+                    slot.renderedScale = scale;
+                } catch (err) {
+                    if (err?.name !== 'RenderingCancelledException') {
+                        console.warn(`Page ${slot.pageNum} render warning:`, err);
+                    }
+                } finally {
+                    slot.rendering = false;
                 }
-
-                const page = await pdfDoc.getPage(currentPage);
-                const viewport = page.getViewport({ scale });
-                const dpr = Math.min(window.devicePixelRatio || 1, 2);
-                canvas.width = Math.floor(viewport.width * dpr);
-                canvas.height = Math.floor(viewport.height * dpr);
-                canvas.style.width = `${Math.floor(viewport.width)}px`;
-                canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-                const ctx = canvas.getContext('2d');
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                renderTask = page.render({ canvasContext: ctx, viewport });
-                await renderTask.promise;
-                stageEl.scrollTop = 0;
             };
 
-            prevBtn.onclick = () => renderPage(currentPage - 1);
-            nextBtn.onclick = () => renderPage(currentPage + 1);
-            pageInput.onchange = () => renderPage(parseInt(pageInput.value, 10) || 1);
-            zoomInBtn.onclick = () => { scale = Math.min(2.6, scale + 0.2); renderPage(currentPage); };
-            zoomOutBtn.onclick = () => { scale = Math.max(0.6, scale - 0.2); renderPage(currentPage); };
+            const scrollToPage = (num) => {
+                if (!pdfDoc || closed) return;
+                const target = Math.max(1, Math.min(pdfDoc.numPages, num));
+                updatePageControls(target);
+                const slot = pageSlots[target - 1];
+                if (slot?.wrap) {
+                    slot.wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    renderPageSlot(slot, renderGeneration);
+                }
+            };
 
-            // Touch swipe support for mobile page turns
-            let touchStartX = 0;
-            stageEl.ontouchstart = (e) => {
-                touchStartX = e.changedTouches?.[0]?.screenX || 0;
+            const firstPage = await pdfDoc.getPage(1);
+            const baseViewport = firstPage.getViewport({ scale });
+            const estimatedHeight = Math.floor(baseViewport.height);
+
+            pageSlots = [];
+            const fragment = document.createDocumentFragment();
+            for (let p = 1; p <= pdfDoc.numPages; p++) {
+                const wrap = document.createElement('div');
+                wrap.className = 'relative shadow-2xl rounded-lg overflow-hidden bg-white shrink-0';
+                wrap.style.minHeight = `${estimatedHeight}px`;
+                wrap.dataset.pageNum = String(p);
+
+                const canvas = document.createElement('canvas');
+                canvas.className = 'block max-w-full h-auto';
+
+                const watermark = document.createElement('div');
+                watermark.className = 'pointer-events-none absolute inset-0 flex items-end justify-end p-3 opacity-25 text-[10px] font-bold text-slate-700 select-none';
+                watermark.innerText = watermarkText;
+
+                const pageBadge = document.createElement('div');
+                pageBadge.className = 'pointer-events-none absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-slate-900/60 text-white text-[10px] font-bold select-none';
+                pageBadge.innerText = `${p} / ${pdfDoc.numPages}`;
+
+                wrap.appendChild(canvas);
+                wrap.appendChild(watermark);
+                wrap.appendChild(pageBadge);
+                fragment.appendChild(wrap);
+
+                pageSlots.push({
+                    pageNum: p,
+                    wrap,
+                    canvas,
+                    rendered: false,
+                    rendering: false,
+                    renderedScale: null
+                });
+            }
+            pagesContainer.appendChild(fragment);
+
+            const setupObservers = () => {
+                if (pageObserver) pageObserver.disconnect();
+                if (visibilityObserver) visibilityObserver.disconnect();
+
+                const gen = renderGeneration;
+                if (typeof IntersectionObserver !== 'undefined') {
+                    pageObserver = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (!entry.isIntersecting) return;
+                            const pageNum = Number(entry.target.dataset.pageNum);
+                            const idx = pageNum - 1;
+                            [idx - 1, idx, idx + 1].forEach(i => {
+                                if (pageSlots[i]) renderPageSlot(pageSlots[i], gen);
+                            });
+                        });
+                    }, { root: stageEl, rootMargin: '600px 0px' });
+
+                    visibilityObserver = new IntersectionObserver((entries) => {
+                        let bestPage = null;
+                        let bestRatio = 0;
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting && entry.intersectionRatio >= bestRatio) {
+                                bestRatio = entry.intersectionRatio;
+                                bestPage = Number(entry.target.dataset.pageNum);
+                            }
+                        });
+                        if (bestPage) {
+                            updatePageControls(bestPage);
+                        }
+                    }, { root: stageEl, threshold: [0.15, 0.4, 0.7] });
+
+                    pageSlots.forEach(slot => {
+                        pageObserver.observe(slot.wrap);
+                        visibilityObserver.observe(slot.wrap);
+                    });
+                } else {
+                    pageSlots.forEach(slot => renderPageSlot(slot, gen));
+                }
             };
-            stageEl.ontouchend = (e) => {
-                const dx = (e.changedTouches?.[0]?.screenX || 0) - touchStartX;
-                if (dx < -55) renderPage(currentPage + 1);
-                if (dx > 55) renderPage(currentPage - 1);
+
+            prevBtn.onclick = () => scrollToPage(currentPage - 1);
+            nextBtn.onclick = () => scrollToPage(currentPage + 1);
+            pageInput.onchange = () => scrollToPage(parseInt(pageInput.value, 10) || 1);
+
+            const rerenderZoom = async () => {
+                const anchorPage = currentPage;
+                renderGeneration += 1;
+                const gen = renderGeneration;
+                pageSlots.forEach(slot => {
+                    slot.rendered = false;
+                    slot.rendering = false;
+                });
+                const anchorSlot = pageSlots[anchorPage - 1];
+                if (anchorSlot) {
+                    await renderPageSlot(anchorSlot, gen);
+                    anchorSlot.wrap.scrollIntoView({ behavior: 'auto', block: 'start' });
+                }
+                if (pageSlots[anchorPage - 2]) renderPageSlot(pageSlots[anchorPage - 2], gen);
+                if (pageSlots[anchorPage]) renderPageSlot(pageSlots[anchorPage], gen);
             };
+
+            zoomInBtn.onclick = () => { scale = Math.min(2.6, scale + 0.2); rerenderZoom(); };
+            zoomOutBtn.onclick = () => { scale = Math.max(0.6, scale - 0.2); rerenderZoom(); };
 
             loadingEl.classList.add('hidden');
-            canvasWrap.classList.remove('hidden');
-            await renderPage(1);
+            pagesContainer.classList.remove('hidden');
+            pagesContainer.classList.add('flex');
+            stageEl.scrollTop = 0;
+            updatePageControls(1);
+            setupObservers();
+            await renderPageSlot(pageSlots[0], renderGeneration);
+            if (pageSlots[1]) renderPageSlot(pageSlots[1], renderGeneration);
         } catch (err) {
             console.error('Protected Reader Error:', err);
             loadingTextEl.innerText = err?.message || 'Unable to open protected book.';
