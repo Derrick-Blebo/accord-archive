@@ -3,12 +3,13 @@ const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
 window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const supabaseClient = window.supabaseClient;
-
+const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
 
 let musicData = {
     artistes: [],
     playlists: [],
-    polls: []
+    polls: [],
+    submissions: []
 };
 
 // ==========================================
@@ -23,22 +24,26 @@ window.onload = async function () {
 };
 
 async function fetchMusicData() {
-    const { data, error } = await supabaseClient
-        .from('books')
-        .select('description')
-        .eq('title', MUSIC_CONFIG_RECORD_NAME)
-        .maybeSingle();
+    try {
+        const { data, error } = await supabaseClient
+            .from('books')
+            .select('description')
+            .eq('title', MUSIC_CONFIG_RECORD_NAME)
+            .maybeSingle();
 
-    if (!error && data?.description) {
-        try {
+        if (!error && data?.description) {
             const parsed = JSON.parse(data.description);
             musicData = {
                 artistes: Array.isArray(parsed.artistes) ? parsed.artistes : [],
                 playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
-                polls: Array.isArray(parsed.polls) ? parsed.polls : []
+                polls: Array.isArray(parsed.polls) ? parsed.polls : [],
+                submissions: Array.isArray(parsed.submissions) ? parsed.submissions : []
             };
+            localStorage.setItem('accord_music_config', JSON.stringify(musicData));
             return;
-        } catch (e) {}
+        }
+    } catch (e) {
+        console.warn('Could not load music config from Supabase:', e);
     }
 
     // Fallback to localStorage or default seed data if offline/unconfigured
@@ -49,7 +54,8 @@ async function fetchMusicData() {
             musicData = {
                 artistes: Array.isArray(parsed.artistes) ? parsed.artistes : [],
                 playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
-                polls: Array.isArray(parsed.polls) ? parsed.polls : []
+                polls: Array.isArray(parsed.polls) ? parsed.polls : [],
+                submissions: Array.isArray(parsed.submissions) ? parsed.submissions : []
             };
             return;
         } catch (e) {}
@@ -182,6 +188,112 @@ function renderSpotlights() {
     });
 }
 
+function getPlaylistPlatformInfo(url) {
+    const raw = String(url || '').toLowerCase();
+    if (raw.includes('music.apple.com')) {
+        return {
+            brandHtml: '<i class="fa-brands fa-apple text-[13px] mr-1"></i><span class="font-semibold tracking-tight">music</span>',
+            ctaLabel: 'View in Apple Music',
+            platform: 'apple'
+        };
+    }
+    if (raw.includes('spotify.com')) {
+        return {
+            brandHtml: '<i class="fa-brands fa-spotify text-[#1DB954] text-[13px] mr-1"></i><span class="font-semibold tracking-tight">Spotify</span>',
+            ctaLabel: 'View in Spotify',
+            platform: 'spotify'
+        };
+    }
+    if (raw.includes('audiomack.com')) {
+        return {
+            brandHtml: '<i class="fa-solid fa-headphones text-amber-500 text-[12px] mr-1"></i><span class="font-semibold tracking-tight">Audiomack</span>',
+            ctaLabel: 'View on Audiomack',
+            platform: 'audiomack'
+        };
+    }
+    if (raw.includes('youtube.com') || raw.includes('youtu.be')) {
+        return {
+            brandHtml: '<i class="fa-brands fa-youtube text-red-600 text-[13px] mr-1"></i><span class="font-semibold tracking-tight">YouTube</span>',
+            ctaLabel: 'View on YouTube',
+            platform: 'youtube'
+        };
+    }
+    return {
+        brandHtml: '<i class="fa-solid fa-music text-accord-blue text-[11px] mr-1"></i><span class="font-semibold tracking-tight">music</span>',
+        ctaLabel: 'Open Playlist',
+        platform: 'other'
+    };
+}
+
+function getEmbedUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+
+    if (raw.includes('embed.music.apple.com')) return raw;
+    if (raw.includes('music.apple.com')) {
+        return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
+    }
+    if (raw.includes('open.spotify.com/embed/')) return raw;
+    if (raw.includes('open.spotify.com/')) {
+        return raw.replace('open.spotify.com/', 'open.spotify.com/embed/');
+    }
+    if (raw.includes('youtube.com/watch?v=')) {
+        const id = raw.split('v=')[1]?.split('&')[0];
+        return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+    if (raw.includes('youtu.be/')) {
+        const id = raw.split('youtu.be/')[1]?.split(/[?&#]/)[0];
+        return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+    if (raw.includes('youtube.com/playlist?list=')) {
+        const listId = raw.split('list=')[1]?.split('&')[0];
+        return listId ? `https://www.youtube.com/embed/videoseries?list=${listId}` : '';
+    }
+    return '';
+}
+
+function openPlaylistPlayerModal(playlistId) {
+    const pl = musicData.playlists.find(p => p.id === playlistId);
+    if (!pl) return;
+
+    const embedUrl = getEmbedUrl(pl.link);
+    if (!embedUrl) {
+        if (pl.link) window.open(pl.link, '_blank', 'noopener,noreferrer');
+        return;
+    }
+
+    const modal = document.getElementById('playlist-player-modal');
+    const titleEl = document.getElementById('player-modal-title');
+    const subEl = document.getElementById('player-modal-subtitle');
+    const extEl = document.getElementById('player-modal-external');
+    const bodyEl = document.getElementById('player-modal-body');
+
+    if (!modal || !bodyEl) {
+        if (pl.link) window.open(pl.link, '_blank', 'noopener,noreferrer');
+        return;
+    }
+
+    if (titleEl) titleEl.innerText = pl.title || 'Playlist Player';
+    if (subEl) subEl.innerText = pl.curator || pl.genre || 'Curated Gospel Playlist';
+    if (extEl) extEl.href = pl.link || '#';
+
+    const height = embedUrl.includes('embed.music.apple.com') ? '450' : '380';
+    bodyEl.innerHTML = `<iframe src="${escapeHTML(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePlaylistPlayerModal() {
+    const modal = document.getElementById('playlist-player-modal');
+    const bodyEl = document.getElementById('player-modal-body');
+    if (bodyEl) bodyEl.innerHTML = '';
+    if (modal) {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+}
+
 function renderPlaylists() {
     const grid = document.getElementById('playlist-grid');
     if (!grid) return;
@@ -194,24 +306,76 @@ function renderPlaylists() {
 
     musicData.playlists.forEach(pl => {
         const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
+        const coverSrc = pl.image || fallbackImg;
+        const subtitle = pl.curator || pl.genre || 'SoundSpace PR';
+        const platform = getPlaylistPlatformInfo(pl.link);
+        const tracks = Array.isArray(pl.tracks) ? pl.tracks.filter(t => t && t.title) : [];
+
+        let rightContentHtml = '';
+        if (tracks.length > 0) {
+            const visibleTracks = tracks.slice(0, 5);
+            rightContentHtml = `
+                <div class="divide-y divide-slate-200/80">
+                    ${visibleTracks.map(track => `
+                        <div class="flex items-center gap-2.5 py-1.5 first:pt-0">
+                            <div class="w-7 h-7 rounded bg-white border border-slate-200/70 overflow-hidden shrink-0 flex items-center justify-center">
+                                <img src="${escapeHTML(track.image || coverSrc)}" alt="${escapeHTML(track.title)}" class="w-full h-full object-cover">
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[11px] font-semibold text-slate-900 truncate leading-tight">${escapeHTML(track.title)}</p>
+                                <p class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${escapeHTML(track.artist || subtitle)}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            rightContentHtml = `
+                <div class="space-y-2.5">
+                    <span class="inline-block bg-white border border-slate-200/80 text-slate-700 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                        ${escapeHTML(pl.genre || 'Curated Playlist')}
+                    </span>
+                    <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-5">
+                        ${escapeHTML(pl.description || 'Stream this curated gospel playlist on your favorite music platform.')}
+                    </p>
+                </div>
+            `;
+        }
+
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between";
+        card.className = "bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row min-h-[268px]";
         card.innerHTML = `
-            <div>
-                <div class="h-48 overflow-hidden bg-slate-100">
-                    <img src="${escapeHTML(pl.image || fallbackImg)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+            <div class="w-full sm:w-[46%] p-3.5 flex flex-col justify-between bg-white">
+                <div>
+                    <div class="flex items-center text-slate-800 text-[11px] mb-2">
+                        ${platform.brandHtml}
+                    </div>
+                    <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 shadow-sm">
+                        <img src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+                    </div>
+                    <div class="mt-2.5 flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <h3 class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
+                            <p class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHTML(subtitle)}</p>
+                        </div>
+                        <a href="${escapeHTML(pl.link || '#')}" target="_blank" rel="noopener noreferrer" title="Open Playlist" class="w-5 h-5 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center shrink-0 text-[9px] mt-0.5 transition-colors">
+                            <i class="fa-solid fa-ellipsis"></i>
+                        </a>
+                    </div>
                 </div>
-                <div class="p-6 space-y-2">
-                    <span class="inline-block bg-amber-50 text-accord-gold text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full">${escapeHTML(pl.genre || 'Playlist')}</span>
-                    <h3 class="serif-heading text-xl font-bold text-accord-slate">${escapeHTML(pl.title)}</h3>
-                    <p class="text-xs text-accord-muted leading-relaxed">${escapeHTML(pl.description || '')}</p>
-                </div>
+                <button type="button" onclick="openPlaylistPlayerModal('${escapeHTML(pl.id).replace(/'/g, "\\'")}')" class="mt-3 w-full bg-[#1C1C1E] hover:bg-black text-white text-[11px] font-semibold py-2 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-play text-[9px]"></i>
+                    <span>Play</span>
+                </button>
             </div>
-            <div class="px-6 pb-6 pt-2">
-                <a href="${escapeHTML(pl.link || '#')}" target="_blank" class="w-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-headphones text-[10px]"></i>
-                    <span>Open Playlist</span>
-                </a>
+            <div class="w-full sm:w-[54%] bg-[#F5F5F7] p-3.5 flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-slate-200/70">
+                ${rightContentHtml}
+                <div class="pt-3 mt-2 border-t border-slate-200/60 flex items-center justify-between">
+                    <a href="${escapeHTML(pl.link || '#')}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-semibold text-slate-900 hover:text-accord-blue inline-flex items-center gap-1 transition-colors">
+                        <span>${escapeHTML(platform.ctaLabel)}</span>
+                        <span class="text-[10px]">↗</span>
+                    </a>
+                </div>
             </div>
         `;
         grid.appendChild(card);

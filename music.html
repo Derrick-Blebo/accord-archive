@@ -228,8 +228,31 @@
         </div>
     </footer>
 
+    <!-- Playlist Player Modal -->
+    <div id="playlist-player-modal" class="fixed inset-0 z-50 bg-accord-slate/75 backdrop-blur-sm hidden items-center justify-center p-4" onclick="if(event.target===this) closePlaylistPlayerModal()">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="min-w-0 pr-4">
+                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Playlist Player</h3>
+                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Curated Gospel Playlist</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <a id="player-modal-external" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-accord-slate text-[11px] font-bold transition-colors">
+                        Open App <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="closePlaylistPlayerModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="player-modal-body" class="p-4 bg-slate-100">
+                <!-- Embedded iframe injected dynamically -->
+            </div>
+        </div>
+    </div>
+
     <!-- Script -->
     <script src="ads.js"></script>
-    <script src="music.js?v=2"></script>
+    <script src="music.js?v=3"></script>
 </body>
 </html>

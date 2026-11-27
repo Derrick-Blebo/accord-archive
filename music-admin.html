@@ -154,15 +154,25 @@
 
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Entry Type *</label>
-                        <select id="item-type" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        <select id="item-type" required onchange="togglePlaylistFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                             <option value="spotlight">Artiste Spotlight</option>
                             <option value="playlist">Curated Playlist</option>
                         </select>
                     </div>
 
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title / Artiste Name *</label>
-                        <input type="text" id="item-title" required placeholder="e.g., RichieO / AfroGospel Vol. 1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link / Embed URL (Apple Music, Spotify, Audiomack, YouTube)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="url" id="item-link" placeholder="https://music.apple.com/... or https://open.spotify.com/..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                            <button type="button" id="autofill-meta-btn" onclick="autoFillMusicMetadata()" class="px-3.5 py-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-accord-slate hover:text-emerald-700 border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all" title="Try to auto-fetch name and cover from link">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Title / Playlist Name / Artiste Name *</label>
+                        <input type="text" id="item-title" required placeholder="e.g., Party Jamz or RichieO" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -171,19 +181,40 @@
                             <input type="text" id="item-genre" placeholder="e.g., Contemporary Gospel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                         </div>
                         <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Cover Image / Photo URL</label>
-                            <input type="url" id="item-image" placeholder="https://images.unsplash.com/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Curator / Subtitle</label>
+                            <input type="text" id="item-curator" placeholder="e.g., SoundSpace PR" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link / Embed URL (Spotify, Audiomack, YouTube)</label>
-                        <input type="url" id="item-link" placeholder="https://open.spotify.com/embed/track/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Cover Photo (Upload or Paste URL)</label>
+                        <div class="flex items-start gap-3">
+                            <div class="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                                <img id="item-cover-preview" src="" alt="Cover preview" class="w-full h-full object-cover hidden">
+                                <i id="item-cover-placeholder" class="fa-solid fa-image text-slate-400 text-lg"></i>
+                            </div>
+                            <div class="flex-1 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <label for="item-cover-file" id="cover-upload-label" class="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-all">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                                        <span>Upload Cover Photo</span>
+                                    </label>
+                                    <input type="file" id="item-cover-file" accept="image/*" onchange="handleCoverFileUpload(event)" class="hidden">
+                                    <span id="cover-upload-status" class="text-[11px] text-accord-muted"></span>
+                                </div>
+                                <input type="url" id="item-image" oninput="updateCoverPreview(this.value)" placeholder="https://... (auto-filled on upload or paste URL)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="playlist-tracks-group" class="hidden">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Playlist Tracks Preview (Optional, one per line: Song - Artiste)</label>
+                        <textarea id="item-tracks" rows="4" placeholder="Big God (feat. Anderson) - Tim Godfrey&#10;Oil on My Head - EBEN&#10;Darling Jesus - S.O.N Music & Noojs" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
                     </div>
 
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Bio</label>
-                        <textarea id="item-description" rows="3" placeholder="Brief biography or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
+                        <textarea id="item-description" rows="2" placeholder="Brief biography or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
                     </div>
 
                     <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
@@ -439,6 +470,6 @@
     <script src="admin-core.js"></script>
 
     <!-- Script -->
-    <script src="music-admin.js?v=1"></script>
+    <script src="music-admin.js?v=2"></script>
 </body>
 </html>

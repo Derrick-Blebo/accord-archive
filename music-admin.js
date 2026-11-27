@@ -204,13 +204,22 @@ async function persistMusicConfig() {
         price: 0
     };
 
+    let dbError = null;
     if (existing?.id) {
-        await supabaseClient.from('books').update(payload).eq('id', existing.id);
+        const { error } = await supabaseClient.from('books').update(payload).eq('id', existing.id);
+        dbError = error;
     } else {
-        await supabaseClient.from('books').insert([payload]);
+        const { error } = await supabaseClient.from('books').insert([payload]);
+        dbError = error;
+    }
+
+    if (dbError) {
+        console.error('Failed to persist music config to Supabase:', dbError);
+        showToast(`Warning: Saved locally, but database sync failed (${dbError.message || 'permission error'}).`);
     }
 
     renderAll();
+    return !dbError;
 }
 
 // ==========================================
@@ -252,9 +261,10 @@ function renderMusicTable() {
         tr.innerHTML = `
             <td class="py-4 px-6">
                 <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-xs shrink-0">
-                        <i class="fa-solid ${item.entryType === 'spotlight' ? 'fa-microphone' : 'fa-list-music'}"></i>
-                    </div>
+                    ${item.image
+                        ? `<img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.title)}" class="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200">`
+                        : `<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-xs shrink-0"><i class="fa-solid ${item.entryType === 'spotlight' ? 'fa-microphone' : 'fa-list-music'}"></i></div>`
+                    }
                     <div>
                         <p class="font-bold text-accord-slate">${escapeHTML(item.title)}</p>
                         <p class="text-[11px] text-accord-muted truncate max-w-xs">${escapeHTML(item.description || '')}</p>
@@ -324,28 +334,216 @@ function renderPollsTable() {
 // MODAL & FORM HANDLERS
 // ==========================================
 
+function togglePlaylistFields() {
+    const type = document.getElementById('item-type')?.value;
+    const tracksGroup = document.getElementById('playlist-tracks-group');
+    if (!tracksGroup) return;
+    if (type === 'playlist') {
+        tracksGroup.classList.remove('hidden');
+    } else {
+        tracksGroup.classList.add('hidden');
+    }
+}
+
+function updateCoverPreview(url) {
+    const preview = document.getElementById('item-cover-preview');
+    const placeholder = document.getElementById('item-cover-placeholder');
+    if (!preview || !placeholder) return;
+    const clean = String(url || '').trim();
+    if (clean) {
+        preview.src = clean;
+        preview.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+    } else {
+        preview.src = '';
+        preview.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+    }
+}
+
+function compressCoverImage(file, maxDim = 800, quality = 0.84) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.onload = () => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('Invalid image file.'));
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxDim || height > maxDim) {
+                    const ratio = Math.min(maxDim / width, maxDim / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(
+                    blob => {
+                        if (!blob) return reject(new Error('Image compression failed.'));
+                        resolve({ blob, ext: 'webp', contentType: 'image/webp' });
+                    },
+                    'image/webp',
+                    quality
+                );
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleCoverFileUpload(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('cover-upload-status');
+    const labelEl = document.getElementById('cover-upload-label');
+    if (statusEl) statusEl.innerText = 'Uploading...';
+    if (labelEl) labelEl.classList.add('opacity-60', 'pointer-events-none');
+
+    try {
+        const { blob, ext, contentType } = await compressCoverImage(file);
+        const filePath = `music-covers/cover_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        const { data, error } = await supabaseClient.storage
+            .from('archive-files')
+            .upload(filePath, blob, {
+                cacheControl: '3600',
+                contentType,
+                upsert: false
+            });
+
+        if (error) throw new Error(error.message || 'Upload failed.');
+
+        const { data: pub } = supabaseClient.storage.from('archive-files').getPublicUrl(data.path);
+        const publicUrl = pub?.publicUrl || '';
+        document.getElementById('item-image').value = publicUrl;
+        updateCoverPreview(publicUrl);
+        if (statusEl) statusEl.innerText = 'Uploaded!';
+        showToast('Cover photo uploaded!');
+    } catch (err) {
+        console.error('Cover upload error:', err);
+        if (statusEl) statusEl.innerText = 'Upload failed';
+        showToast(`Cover upload failed: ${err.message}`);
+    } finally {
+        if (labelEl) labelEl.classList.remove('opacity-60', 'pointer-events-none');
+        event.target.value = '';
+    }
+}
+
+async function autoFillMusicMetadata() {
+    const linkInput = document.getElementById('item-link');
+    const btn = document.getElementById('autofill-meta-btn');
+    const rawUrl = String(linkInput?.value || '').trim();
+    if (!rawUrl) {
+        showToast('Paste a playlist or streaming link first.');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Fetching...';
+    }
+
+    try {
+        const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(rawUrl)}`);
+        if (!resp.ok) throw new Error('Could not fetch metadata from link.');
+        const meta = await resp.json();
+
+        let filledAny = false;
+        if (meta.title) {
+            document.getElementById('item-title').value = meta.title;
+            filledAny = true;
+        }
+        if (meta.image) {
+            document.getElementById('item-image').value = meta.image;
+            updateCoverPreview(meta.image);
+            filledAny = true;
+        }
+        if (meta.curator && !document.getElementById('item-curator').value.trim()) {
+            document.getElementById('item-curator').value = meta.curator;
+            filledAny = true;
+        }
+        if (meta.description && !document.getElementById('item-description').value.trim()) {
+            document.getElementById('item-description').value = meta.description;
+            filledAny = true;
+        }
+        if (Array.isArray(meta.tracks) && meta.tracks.length > 0) {
+            const formatted = meta.tracks
+                .map(t => t.artist ? `${t.title} - ${t.artist}` : t.title)
+                .join('\n');
+            document.getElementById('item-tracks').value = formatted;
+            filledAny = true;
+        }
+
+        if (filledAny) {
+            showToast('Playlist details picked up! Review and save.');
+        } else {
+            showToast('Could not auto-fetch cover/name. Please upload a cover photo and type the name.');
+        }
+    } catch (err) {
+        showToast('Could not auto-fetch from link. Please upload a cover photo and type the name.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill';
+        }
+    }
+}
+
+function parseTracksTextarea(raw) {
+    return String(raw || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+            const sepIdx = line.indexOf(' - ');
+            if (sepIdx !== -1) {
+                return {
+                    title: line.slice(0, sepIdx).trim(),
+                    artist: line.slice(sepIdx + 3).trim()
+                };
+            }
+            return { title: line, artist: '' };
+        });
+}
+
 function openMusicModal(mode = 'add', id = null) {
     const modal = document.getElementById('music-item-modal');
     const heading = document.getElementById('music-modal-heading');
     document.getElementById('music-item-form').reset();
     document.getElementById('edit-music-id').value = '';
+    const statusEl = document.getElementById('cover-upload-status');
+    if (statusEl) statusEl.innerText = '';
+    updateCoverPreview('');
 
     if (mode === 'edit' && id) {
         heading.innerText = 'Edit Spotlight or Playlist';
         const item = [...musicConfig.artistes, ...musicConfig.playlists].find(x => x.id === id);
         if (item) {
+            const isSpotlight = musicConfig.artistes.some(a => a.id === id);
             document.getElementById('edit-music-id').value = item.id;
-            document.getElementById('item-type').value = musicConfig.artistes.some(a => a.id === id) ? 'spotlight' : 'playlist';
+            document.getElementById('item-type').value = isSpotlight ? 'spotlight' : 'playlist';
             document.getElementById('item-title').value = item.title || '';
             document.getElementById('item-genre').value = item.genre || '';
+            document.getElementById('item-curator').value = item.curator || '';
             document.getElementById('item-image').value = item.image || '';
+            updateCoverPreview(item.image || '');
             document.getElementById('item-link').value = item.link || '';
             document.getElementById('item-description').value = item.description || '';
+            if (Array.isArray(item.tracks)) {
+                document.getElementById('item-tracks').value = item.tracks
+                    .map(t => (t.artist ? `${t.title} - ${t.artist}` : t.title))
+                    .join('\n');
+            }
         }
     } else {
         heading.innerText = 'Add Spotlight or Playlist';
     }
 
+    togglePlaylistFields();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
@@ -362,11 +560,13 @@ async function handleSaveMusicItem(e) {
     const type = document.getElementById('item-type').value;
     const title = document.getElementById('item-title').value.trim();
     const genre = document.getElementById('item-genre').value.trim();
+    const curator = document.getElementById('item-curator').value.trim();
     const image = document.getElementById('item-image').value.trim();
     const link = document.getElementById('item-link').value.trim();
     const description = document.getElementById('item-description').value.trim();
+    const tracks = type === 'playlist' ? parseTracksTextarea(document.getElementById('item-tracks').value) : [];
 
-    const record = { id, title, genre, image, link, description };
+    const record = { id, title, genre, curator, image, link, description, tracks };
 
     musicConfig.artistes = musicConfig.artistes.filter(x => x.id !== id);
     musicConfig.playlists = musicConfig.playlists.filter(x => x.id !== id);
@@ -378,8 +578,10 @@ async function handleSaveMusicItem(e) {
     }
 
     closeMusicModal();
-    await persistMusicConfig();
-    showToast('Music entry saved successfully!');
+    const synced = await persistMusicConfig();
+    if (synced) {
+        showToast('Music entry saved successfully!');
+    }
 }
 
 function openPollModal() {
