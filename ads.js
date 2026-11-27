@@ -314,12 +314,31 @@
         return document.querySelector('main');
     }
 
+    function isNonContentLeadingElement(el) {
+        if (!el) return true;
+        if (el.id && /(?:^|-)loading$/i.test(el.id)) return true;
+        if (el.classList.contains('animate-pulse')) return true;
+        const hasHeadingOrContent = Boolean(
+            el.querySelector('h1, h2, h3, h4, article, section, input, select, textarea, table, form')
+        );
+        if (!hasHeadingOrContent) {
+            const visibleButtons = Array.from(el.querySelectorAll('button')).filter(
+                btn => !btn.classList.contains('hidden')
+            );
+            if (visibleButtons.length === 0 && el.textContent.trim().length < 120) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function getContentAnchorChildren(container) {
         return Array.from(container.children).filter(el => {
             if (!el || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
             if (el.id === 'accord-ad-banner-slot' || el.id === 'mid-grid-banner') return false;
             if (el.classList.contains('accord-dynamic-banner-slot')) return false;
             if (el.classList.contains('hidden')) return false;
+            if (isNonContentLeadingElement(el)) return false;
             return true;
         });
     }
@@ -333,6 +352,15 @@
 
     function insertBannerAtZone(container, zone, promo) {
         const safeZone = zone === 'top' ? 'mid' : zone;
+        const anchors = getContentAnchorChildren(container);
+        const hasAnyPageContent = anchors.length > 0 || Array.from(container.children).some(el => {
+            if (!el || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
+            if (el.id === 'accord-ad-banner-slot' || el.id === 'mid-grid-banner') return false;
+            if (el.classList.contains('accord-dynamic-banner-slot')) return false;
+            return !isNonContentLeadingElement(el);
+        });
+        if (!hasAnyPageContent) return;
+
         const existing = container.querySelector(`.accord-dynamic-banner-slot[data-accord-slot-zone="${safeZone}"]`);
         if (existing) {
             existing.innerHTML = renderPromoSlotHtml(promo);
@@ -345,16 +373,14 @@
         slot.setAttribute('data-accord-slot-zone', safeZone);
         slot.innerHTML = renderPromoSlotHtml(promo);
 
-        const anchors = getContentAnchorChildren(container);
-
         if (safeZone === 'mid') {
             const bookGridBottom = document.getElementById('book-grid-bottom');
             if (bookGridBottom && bookGridBottom.parentElement === container) {
                 container.insertBefore(slot, bookGridBottom);
                 return;
             }
-            if (anchors.length >= 2) {
-                const midIdx = Math.max(1, Math.floor(anchors.length / 2));
+            if (anchors.length >= 4) {
+                const midIdx = Math.max(2, Math.floor(anchors.length / 2));
                 container.insertBefore(slot, anchors[midIdx]);
             } else {
                 container.appendChild(slot);
