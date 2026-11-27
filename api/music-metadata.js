@@ -134,6 +134,13 @@ async function fetchSpotifyMetadata(parsedUrl) {
                 const entity = nextData?.props?.pageProps?.state?.data?.entity;
                 if (entity) {
                     if (!title && entity.name) title = entity.name;
+                    if (!image && Array.isArray(entity.coverArt?.sources) && entity.coverArt.sources.length > 0) {
+                        const sortedSources = [...entity.coverArt.sources].sort((a, b) => (b.width || 0) - (a.width || 0));
+                        image = sortedSources[0]?.url || '';
+                    }
+                    if (!image && entity.visualIdentity?.image?.[0]?.url) {
+                        image = entity.visualIdentity.image[0].url;
+                    }
                     if (entity.subtitle) curator = entity.subtitle;
                     if (Array.isArray(entity.trackList)) {
                         tracks = entity.trackList.slice(0, 15).map(t => ({
@@ -143,6 +150,9 @@ async function fetchSpotifyMetadata(parsedUrl) {
                         })).filter(t => t.title);
                     }
                 }
+            }
+            if (!image) {
+                image = extractMetaTag(html, 'property', 'og:image') || extractMetaTag(html, 'name', 'twitter:image');
             }
         } catch {}
     }

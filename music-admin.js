@@ -1277,3 +1277,401 @@ function exportPollsToExcel() {
     XLSX.writeFile(workbook, 'Accord_Music_Award_Poll_Results.xlsx');
     showToast('Exported award poll results to Excel!');
 }
+
+// ==========================================
+// BULK IMPORT PLAYLISTS FROM EXCEL
+// ==========================================
+
+let excelPlaylistDrafts = [];
+
+function openExcelPlaylistImportModal() {
+    excelPlaylistDrafts = [];
+    const fileInput = document.getElementById('playlist-excel-file');
+    if (fileInput) fileInput.value = '';
+    const filenameEl = document.getElementById('excel-import-filename');
+    if (filenameEl) filenameEl.innerText = 'No file selected';
+    document.getElementById('excel-import-progress-wrap')?.classList.add('hidden');
+    document.getElementById('excel-import-preview-wrap')?.classList.add('hidden');
+    const tbody = document.getElementById('excel-import-preview-body');
+    if (tbody) tbody.innerHTML = '';
+    const confirmBtn = document.getElementById('excel-confirm-import-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i> Create Playlists';
+    }
+    const modal = document.getElementById('excel-playlist-import-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+}
+
+function closeExcelPlaylistImportModal() {
+    const modal = document.getElementById('excel-playlist-import-modal');
+    if (modal) {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+    excelPlaylistDrafts = [];
+}
+
+function downloadPlaylistExcelTemplate() {
+    const sampleRows = [
+        {
+            Title: '',
+            'Spotify Link': 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M',
+            'Apple Music Link': '',
+            'Audiomack Link': '',
+            Genre: 'Contemporary Gospel',
+            Curator: '',
+            Description: 'Uplifting gospel & worship favorites.',
+            Tracks: '',
+            'Cover URL': '',
+            Visible: 'Yes'
+        }
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(sampleRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Playlists');
+    XLSX.writeFile(workbook, 'Accord_Playlists_Import_Template.xlsx');
+    showToast('Sample Excel template downloaded!');
+}
+
+function normalizeExcelHeader(key) {
+    return String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeUrlForDupCheck(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+        const u = new URL(raw);
+        return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`;
+    } catch {
+        return raw.toLowerCase();
+    }
+}
+
+function parseExcelBooleanVisible(val, isHiddenCol = false) {
+    const str = String(val ?? '').trim().toLowerCase();
+    if (!str) return true;
+    const falsy = ['false', 'no', '0', 'hidden', 'n'];
+    const truthy = ['true', 'yes', '1', 'visible', 'y'];
+    if (isHiddenCol) {
+        return !truthy.includes(str);
+    }
+    return !falsy.includes(str);
+}
+
+function mapExcelRowToPlaylistDraft(rawRow, index) {
+    const normalized = {};
+    Object.entries(rawRow || {}).forEach(([k, v]) => {
+        normalized[normalizeExcelHeader(k)] = String(v ?? '').trim();
+    });
+
+    const pick = (...keys) => {
+        for (const k of keys) {
+            if (normalized[k]) return normalized[k];
+        }
+        return '';
+    };
+
+    const rawTracks = pick('tracks', 'tracklist', 'songs');
+    const tracks = rawTracks
+        ? parseTracksTextarea(rawTracks.includes('\n') ? rawTracks : rawTracks.split(';').join('\n'))
+        : [];
+
+    const spotifyLink = pick('spotifylink', 'spotifyurl', 'spotify', 'link', 'url');
+    const appleLink = pick('applemusiclink', 'applelink', 'applemusic', 'apple');
+    const audiomackLink = pick('audiomacklink', 'audiomackurl', 'audiomack');
+    const visible = normalized.hidden !== undefined && normalized.hidden !== ''
+        ? parseExcelBooleanVisible(normalized.hidden, true)
+        : parseExcelBooleanVisible(normalized.visible, false);
+
+    return {
+        rowIndex: index,
+        title: pick('title', 'playlistname', 'playlisttitle', 'name', 'playlist'),
+        spotifyLink,
+        appleLink,
+        audiomackLink,
+        genre: pick('genre', 'category', 'vibe') || 'Gospel',
+        curator: pick('curator', 'author', 'createdby'),
+        description: pick('description', 'desc', 'notes', 'bio'),
+        image: pick('coverurl', 'cover', 'image', 'imageurl', 'artwork'),
+        tracks,
+        visible,
+        selected: true,
+        isDuplicate: false,
+        fetchStatus: 'pending'
+    };
+}
+
+function isDuplicatePlaylistDraft(draft) {
+    const draftSpotify = normalizeUrlForDupCheck(draft.spotifyLink);
+    const draftApple = normalizeUrlForDupCheck(draft.appleLink);
+    const draftAudiomack = normalizeUrlForDupCheck(draft.audiomackLink);
+    const draftTitle = String(draft.title || '').trim().toLowerCase();
+
+    return musicConfig.playlists.some(existing => {
+        const existingTitle = String(existing.title || '').trim().toLowerCase();
+        if (draftTitle && existingTitle && draftTitle === existingTitle) return true;
+
+        const existingLinks = [
+            existing.link,
+            existing.links?.spotify,
+            existing.links?.apple,
+            existing.links?.audiomack,
+            existing.spotifyLink,
+            existing.appleMusicLink,
+            existing.audiomackLink
+        ].map(normalizeUrlForDupCheck).filter(Boolean);
+
+        return [draftSpotify, draftApple, draftAudiomack]
+            .filter(Boolean)
+            .some(u => existingLinks.includes(u));
+    });
+}
+
+function recheckExcelImportDuplicates() {
+    const skipDuplicates = document.getElementById('excel-skip-duplicates')?.checked !== false;
+    excelPlaylistDrafts.forEach(draft => {
+        draft.isDuplicate = isDuplicatePlaylistDraft(draft);
+        if (draft.isDuplicate && skipDuplicates) {
+            draft.selected = false;
+        }
+    });
+    renderExcelImportPreview();
+}
+
+function toggleAllExcelImportRows(checked) {
+    const skipDuplicates = document.getElementById('excel-skip-duplicates')?.checked !== false;
+    excelPlaylistDrafts.forEach(draft => {
+        if (checked && draft.isDuplicate && skipDuplicates) {
+            draft.selected = false;
+        } else {
+            draft.selected = Boolean(checked);
+        }
+    });
+    renderExcelImportPreview();
+}
+
+function toggleExcelImportRow(index, checked) {
+    if (!excelPlaylistDrafts[index]) return;
+    excelPlaylistDrafts[index].selected = Boolean(checked);
+    updateExcelImportSummary();
+}
+
+function updateExcelImportSummary() {
+    const selectedCount = excelPlaylistDrafts.filter(d => d.selected && d.title).length;
+    const dupCount = excelPlaylistDrafts.filter(d => d.isDuplicate).length;
+    const summaryEl = document.getElementById('excel-import-summary');
+    if (summaryEl) {
+        summaryEl.innerText = `${selectedCount} of ${excelPlaylistDrafts.length} playlists selected` +
+            (dupCount > 0 ? ` (${dupCount} duplicate${dupCount === 1 ? '' : 's'} detected)` : '');
+    }
+    const confirmBtn = document.getElementById('excel-confirm-import-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = selectedCount === 0;
+        confirmBtn.innerHTML = `<i class="fa-solid fa-check mr-1.5"></i> Create ${selectedCount || ''} Playlist${selectedCount === 1 ? '' : 's'}`;
+    }
+}
+
+function renderExcelImportPreview() {
+    const previewWrap = document.getElementById('excel-import-preview-wrap');
+    const tbody = document.getElementById('excel-import-preview-body');
+    if (!tbody || !previewWrap) return;
+
+    previewWrap.classList.remove('hidden');
+    tbody.innerHTML = '';
+
+    excelPlaylistDrafts.forEach((draft, idx) => {
+        const hasLink = Boolean(draft.spotifyLink || draft.appleLink || draft.audiomackLink);
+        let statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">Ready</span>';
+        if (draft.fetchStatus === 'loading') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching</span>';
+        } else if (draft.isDuplicate) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Duplicate</span>';
+        } else if (!draft.title) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Missing Title</span>';
+        } else if (!draft.image) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">No Cover</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = draft.isDuplicate ? 'bg-amber-50/40' : 'hover:bg-slate-50/80';
+        tr.innerHTML = `
+            <td class="py-2.5 px-3">
+                <input type="checkbox" ${draft.selected ? 'checked' : ''} onchange="toggleExcelImportRow(${idx}, this.checked)" class="w-4 h-4 accent-emerald-600 rounded">
+            </td>
+            <td class="py-2.5 px-3">
+                ${draft.image
+                    ? `<img src="${escapeHTML(draft.image)}" alt="" class="w-10 h-10 rounded-xl object-cover border border-slate-200">`
+                    : `<div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200"><i class="fa-solid fa-music"></i></div>`
+                }
+            </td>
+            <td class="py-2.5 px-3">
+                <p class="font-bold text-accord-slate">${escapeHTML(draft.title || '(Untitled Playlist)')}</p>
+                <p class="text-[11px] text-accord-muted">${escapeHTML(draft.curator || 'No curator')}</p>
+            </td>
+            <td class="py-2.5 px-3 text-accord-muted">${escapeHTML(draft.genre)}</td>
+            <td class="py-2.5 px-3">
+                <div class="flex items-center gap-1.5 text-sm">
+                    ${draft.spotifyLink ? '<i class="fa-brands fa-spotify text-[#1DB954]" title="Spotify"></i>' : ''}
+                    ${draft.appleLink ? '<i class="fa-brands fa-apple text-rose-500" title="Apple Music"></i>' : ''}
+                    ${draft.audiomackLink ? '<i class="fa-solid fa-headphones text-amber-500" title="Audiomack"></i>' : ''}
+                    ${!hasLink ? '<span class="text-[11px] text-slate-400">No links</span>' : ''}
+                </div>
+                <p class="text-[10px] text-accord-muted mt-0.5">${draft.tracks.length} track${draft.tracks.length === 1 ? '' : 's'}</p>
+            </td>
+            <td class="py-2.5 px-3">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    updateExcelImportSummary();
+}
+
+async function handlePlaylistExcelUpload(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    const filenameEl = document.getElementById('excel-import-filename');
+    if (filenameEl) filenameEl.innerText = file.name;
+
+    try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+            showToast('The uploaded file has no sheets.');
+            return;
+        }
+        const sheet = workbook.Sheets[firstSheetName];
+        const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        const drafts = rawRows
+            .map((row, idx) => mapExcelRowToPlaylistDraft(row, idx))
+            .filter(d => d.title || d.spotifyLink || d.appleLink || d.audiomackLink);
+
+        if (drafts.length === 0) {
+            showToast('No valid playlist rows found in the spreadsheet.');
+            return;
+        }
+
+        excelPlaylistDrafts = drafts;
+        recheckExcelImportDuplicates();
+        await enrichImportedPlaylistsWithMetadata();
+    } catch (err) {
+        console.error('Excel parse error:', err);
+        showToast('Could not read Excel file. Please check the format.');
+    }
+}
+
+async function enrichImportedPlaylistsWithMetadata() {
+    const progressWrap = document.getElementById('excel-import-progress-wrap');
+    const progressText = document.getElementById('excel-import-progress-text');
+    const progressCount = document.getElementById('excel-import-progress-count');
+    const progressBar = document.getElementById('excel-import-progress-bar');
+
+    const targets = excelPlaylistDrafts.filter(d => {
+        const sourceUrl = d.spotifyLink || d.appleLink || d.audiomackLink;
+        return sourceUrl && (!d.image || !d.title || !d.curator || d.tracks.length === 0);
+    });
+
+    if (targets.length === 0) return;
+
+    progressWrap?.classList.remove('hidden');
+    let completed = 0;
+    const total = targets.length;
+    const updateProgress = () => {
+        if (progressCount) progressCount.innerText = `${completed} / ${total}`;
+        if (progressBar) progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
+        if (progressText) {
+            progressText.innerText = completed < total
+                ? 'Fetching Spotify covers & metadata...'
+                : 'Metadata extraction complete!';
+        }
+    };
+    updateProgress();
+
+    const CONCURRENCY = 3;
+    let cursor = 0;
+
+    async function worker() {
+        while (cursor < targets.length) {
+            const draft = targets[cursor++];
+            const sourceUrl = draft.spotifyLink || draft.appleLink || draft.audiomackLink;
+            draft.fetchStatus = 'loading';
+            renderExcelImportPreview();
+
+            try {
+                const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(sourceUrl)}`);
+                if (resp.ok) {
+                    const meta = await resp.json();
+                    if (!draft.title && meta.title) draft.title = meta.title;
+                    if (!draft.image && meta.image) draft.image = meta.image;
+                    if (!draft.curator && meta.curator) draft.curator = meta.curator;
+                    if (!draft.description && meta.description) draft.description = meta.description;
+                    if (draft.tracks.length === 0 && Array.isArray(meta.tracks) && meta.tracks.length > 0) {
+                        draft.tracks = meta.tracks.map(t => ({
+                            title: t.title || '',
+                            artist: t.artist || ''
+                        })).filter(t => t.title);
+                    }
+                    draft.fetchStatus = 'done';
+                } else {
+                    draft.fetchStatus = 'error';
+                }
+            } catch {
+                draft.fetchStatus = 'error';
+            }
+
+            completed++;
+            updateProgress();
+            recheckExcelImportDuplicates();
+        }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker()));
+}
+
+async function confirmPlaylistExcelImport() {
+    const toCreate = excelPlaylistDrafts.filter(d => d.selected && d.title);
+    if (toCreate.length === 0) {
+        showToast('Select at least one playlist with a title to import.');
+        return;
+    }
+
+    const baseTime = Date.now();
+    toCreate.forEach((draft, idx) => {
+        const primaryLink = draft.spotifyLink || draft.appleLink || draft.audiomackLink || '';
+        const record = {
+            id: `item-${baseTime}-${idx}`,
+            title: draft.title,
+            genre: draft.genre || 'Gospel',
+            curator: draft.curator || '',
+            image: draft.image || '',
+            link: primaryLink,
+            links: {
+                spotify: draft.spotifyLink || '',
+                audiomack: draft.audiomackLink || '',
+                apple: draft.appleLink || ''
+            },
+            description: draft.description || '',
+            article: draft.description || '',
+            tracks: Array.isArray(draft.tracks) ? draft.tracks : [],
+            songs: [],
+            approved: true,
+            featured: true,
+            hidden: !draft.visible,
+            createdAt: new Date().toISOString()
+        };
+        musicConfig.playlists.push(record);
+    });
+
+    closeExcelPlaylistImportModal();
+    const synced = await persistMusicConfig();
+    if (synced) {
+        showToast(`Created ${toCreate.length} playlist${toCreate.length === 1 ? '' : 's'} from Excel!`);
+    }
+}
