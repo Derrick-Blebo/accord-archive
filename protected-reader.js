@@ -476,6 +476,7 @@
         if (!items.length) return [];
 
         let text = '';
+        let prevItem = null;
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             const str = typeof item.str === 'string' ? item.str : '';
@@ -485,13 +486,46 @@
                 }
                 continue;
             }
+
             if (text.endsWith('-\n') && /^[a-z]/.test(str)) {
                 text = text.slice(0, -2) + str;
-            } else if (text && !text.endsWith(' ') && !text.endsWith('\n')) {
-                text += ' ' + str;
             } else {
-                text += str;
+                let needsBreak = false;
+                let needsSpace = false;
+
+                if (text && !text.endsWith(' ') && !text.endsWith('\n') && !/^\s/.test(str)) {
+                    const prevT = Array.isArray(prevItem?.transform) ? prevItem.transform : null;
+                    const currT = Array.isArray(item.transform) ? item.transform : null;
+                    if (prevT && currT && typeof prevItem.width === 'number') {
+                        const fontSize = Math.max(
+                            item.height || 0,
+                            prevItem.height || 0,
+                            Math.hypot(currT[2], currT[3]) || 0,
+                            Math.hypot(prevT[2], prevT[3]) || 0
+                        ) || 12;
+                        const dy = Math.abs(currT[5] - prevT[5]);
+                        if (dy > fontSize * 0.5) {
+                            needsBreak = true;
+                        } else {
+                            const prevEndX = prevT[4] + prevItem.width;
+                            const gap = currT[4] - prevEndX;
+                            if (gap > fontSize * 0.18 || currT[4] < prevT[4] - fontSize * 0.5) {
+                                needsSpace = true;
+                            }
+                        }
+                    }
+                }
+
+                if (needsBreak) {
+                    text += '\n' + str;
+                } else if (needsSpace) {
+                    text += ' ' + str;
+                } else {
+                    text += str;
+                }
             }
+
+            prevItem = item;
             if (item.hasEOL) {
                 text += '\n';
             }
