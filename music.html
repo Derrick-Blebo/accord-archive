@@ -298,11 +298,15 @@
 
         <!-- Section 4: Poll Results (Category Leaders & Winners) -->
         <section id="poll-results" class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Poll Results &amp; Category Leaders</h2>
                     <p class="text-xs text-accord-muted">See who topped each category across our periodic gospel award polls.</p>
                 </div>
+                <a href="polls.html" class="inline-flex items-center gap-1.5 text-xs font-bold text-accord-blue hover:text-accord-darkBlue transition-colors self-start sm:self-auto">
+                    <span>View All Polls &amp; Winners</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
             </div>
 
             <div id="poll-results-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -334,7 +338,7 @@
                 </a>
             </div>
 
-            <div id="polls-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="polls-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- Populated dynamically by music.js -->
             </div>
         </section>
@@ -377,6 +381,6 @@
 
     <!-- Script -->
     <script src="ads.js"></script>
-    <script src="music.js?v=5"></script>
+    <script src="music.js?v=6"></script>
 </body>
 </html>

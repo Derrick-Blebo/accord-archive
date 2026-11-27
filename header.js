@@ -189,7 +189,7 @@ function highlightActiveNavLink() {
     } else if (path.includes('feed') || path.includes('ministry') || path.includes('post') || path.includes('user')) {
         setActive('nav-feed');
         setMobileActive('mobile-nav-feed');
-    } else if (path.includes('music')) {
+    } else if (path.includes('music') || path.includes('polls')) {
         setActive('nav-music');
         setMobileActive('mobile-nav-music');
     } else if (path.includes('saved')) {

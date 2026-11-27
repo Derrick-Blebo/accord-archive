@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Award Polls &amp; Winners — Accord Music Hub</title>
+    <link rel="icon" type="image/svg+xml" href="assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="View all Accord Music Hub gospel award polls, category winners, and full nominee standings." />
+
+    <!-- Open Graph / WhatsApp / Social Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Accord Archive & Library" />
+    <meta property="og:url" content="https://www.accordarchives.com/polls.html" />
+    <meta property="og:title" content="All Award Polls & Winners — Accord Music Hub" />
+    <meta property="og:description" content="View all Accord Music Hub gospel award polls, category winners, and full nominee standings." />
+    <meta property="og:image" content="https://www.accordarchives.com/og-cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="All Award Polls & Winners — Accord Music Hub" />
+    <meta name="twitter:description" content="View all Accord Music Hub gospel award polls, category winners, and full nominee standings." />
+    <meta name="twitter:image" content="https://www.accordarchives.com/og-cover.png" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white flex flex-col">
+
+    <!-- Header -->
+    <script src="header.js?v=4"></script>
+
+    <!-- Hero Banner -->
+    <section class="relative bg-gradient-to-br from-accord-slate via-slate-900 to-accord-darkBlue text-white overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 relative z-10">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div class="space-y-3 max-w-2xl">
+                    <a href="music.html" class="inline-flex items-center gap-1.5 text-xs font-bold text-blue-200 hover:text-white transition-colors">
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>Back to Music Hub</span>
+                    </a>
+                    <h1 class="serif-heading text-3xl sm:text-4xl font-bold tracking-tight">
+                        Award Polls &amp; <span class="text-accord-gold">Winners</span>
+                    </h1>
+                    <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        Browse every gospel award poll category, see official winners for closed polls, and check live standings for active categories.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
+                    <div class="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-3 text-center">
+                        <p id="stat-total-polls" class="text-xl sm:text-2xl font-extrabold text-white">0</p>
+                        <p class="text-[10px] uppercase tracking-wider font-bold text-slate-300">Total Polls</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-3 text-center">
+                        <p id="stat-closed-polls" class="text-xl sm:text-2xl font-extrabold text-accord-gold">0</p>
+                        <p class="text-[10px] uppercase tracking-wider font-bold text-slate-300">Winners</p>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-3 text-center">
+                        <p id="stat-total-votes" class="text-xl sm:text-2xl font-extrabold text-emerald-300">0</p>
+                        <p class="text-[10px] uppercase tracking-wider font-bold text-slate-300">Total Votes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-6 flex-1 w-full">
+
+        <!-- Filter Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2" id="polls-filter-bar">
+                <button type="button" data-filter="all" onclick="setPollsFilter('all')" class="poll-filter-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-accord-slate text-white transition-all">
+                    All Polls
+                </button>
+                <button type="button" data-filter="closed" onclick="setPollsFilter('closed')" class="poll-filter-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-muted border border-slate-200 hover:border-accord-slate hover:text-accord-slate transition-all">
+                    Winners (Closed)
+                </button>
+                <button type="button" data-filter="open" onclick="setPollsFilter('open')" class="poll-filter-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-muted border border-slate-200 hover:border-accord-slate hover:text-accord-slate transition-all">
+                    Open for Voting
+                </button>
+                <button type="button" data-filter="nominating" onclick="setPollsFilter('nominating')" class="poll-filter-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-muted border border-slate-200 hover:border-accord-slate hover:text-accord-slate transition-all">
+                    Upcoming
+                </button>
+            </div>
+            <a href="music.html#polls" class="inline-flex items-center gap-1.5 text-xs font-bold text-accord-blue hover:text-accord-darkBlue transition-colors">
+                <span>Vote in Active Polls</span>
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
+        </div>
+
+        <!-- All Polls & Winners Grid -->
+        <div id="all-polls-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div class="col-span-full py-12 text-center text-xs text-accord-muted">
+                Loading polls and winners...
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Music Hub</span>
+                <span>• Powered by SoundSpace PR &amp; Accord Media House</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="polls.js?v=1"></script>
+</body>
+</html>

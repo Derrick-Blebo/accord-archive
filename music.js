@@ -614,19 +614,19 @@ function renderPolls() {
         const hasVoted = Boolean(userVotedNominee);
 
         const statusBadge = isOpen
-            ? `<span class="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Voting Open</span>`
+            ? `<span class="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full">Open</span>`
             : isNominating
-                ? `<span class="inline-block bg-blue-50 text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Upcoming • Open for Nominations</span>`
-                : `<span class="inline-block bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Poll Closed</span>`;
+                ? `<span class="inline-block bg-blue-50 text-accord-blue text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full">Nominating</span>`
+                : `<span class="inline-block bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full">Closed</span>`;
 
         let nomineesHtml = '';
         const nominees = (poll.nominees || []).map(normalizeNominee).filter(n => n.name);
 
         if (nominees.length === 0) {
             nomineesHtml = `
-                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-accord-muted text-center space-y-2">
-                    <p>No nominees finalized yet for this upcoming category.</p>
-                    <button type="button" onclick="openNominationModal('${escapeHTML(poll.id).replace(/'/g, "\\'")}')" class="text-accord-blue font-bold hover:underline">Submit a Nomination →</button>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-accord-muted text-center space-y-1.5">
+                    <p>No nominees yet.</p>
+                    <button type="button" onclick="openNominationModal('${escapeHTML(poll.id).replace(/'/g, "\\'")}')" class="text-accord-blue font-bold hover:underline">Nominate →</button>
                 </div>
             `;
         } else {
@@ -637,43 +637,40 @@ function renderPolls() {
                 const artistPageUrl = findMatchingArtistPage(nom.name, nom.artistLink);
 
                 nomineesHtml += `
-                    <div class="space-y-2 p-3.5 rounded-2xl border ${isUserChoice ? 'border-accord-blue bg-accord-lightBlue/30' : 'border-slate-200/80 bg-slate-50/70'} hover:border-accord-blue transition-all">
+                    <div class="space-y-1.5 p-2.5 rounded-xl border ${isUserChoice ? 'border-accord-blue bg-accord-lightBlue/30' : 'border-slate-200/80 bg-slate-50/60'} hover:border-accord-blue/60 transition-all">
                         <div class="flex items-center justify-between gap-2 text-xs">
-                            <span class="font-bold text-accord-slate">${escapeHTML(nom.name)}</span>
-                            <span class="text-accord-muted font-semibold shrink-0">${votesForNom} votes (${pct}%)</span>
-                        </div>
-                        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                            <div class="bg-accord-blue h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
-                        </div>
-                        ${(nom.songLink || artistPageUrl) ? `
-                            <div class="flex flex-wrap items-center gap-2 pt-0.5">
+                            <span class="font-semibold text-accord-slate truncate">${escapeHTML(nom.name)}</span>
+                            <div class="flex items-center gap-1.5 shrink-0">
                                 ${nom.songLink ? `
-                                    <button type="button" onclick="openMediaPlayerModal('${escapeHTML(nom.name).replace(/'/g, "\\'")}', '${escapeHTML(poll.title).replace(/'/g, "\\'")}', '${escapeHTML(nom.songLink).replace(/'/g, "\\'")}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-accord-blue text-[11px] font-bold text-accord-slate hover:text-accord-blue transition-all">
-                                        <i class="fa-solid fa-play text-[9px]"></i>
-                                        <span>Play Song</span>
+                                    <button type="button" onclick="openMediaPlayerModal('${escapeHTML(nom.name).replace(/'/g, "\\'")}', '${escapeHTML(poll.title).replace(/'/g, "\\'")}', '${escapeHTML(nom.songLink).replace(/'/g, "\\'")}')" title="Play Song" class="w-5 h-5 rounded-md bg-white border border-slate-200 hover:border-accord-blue text-accord-slate hover:text-accord-blue flex items-center justify-center transition-colors">
+                                        <i class="fa-solid fa-play text-[8px]"></i>
                                     </button>
                                 ` : ''}
                                 ${artistPageUrl ? `
-                                    <a href="${escapeHTML(artistPageUrl)}" ${artistPageUrl.startsWith('http') ? 'target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:border-accord-blue text-[11px] font-bold text-accord-slate hover:text-accord-blue transition-all">
-                                        <i class="fa-solid fa-user text-[9px]"></i>
-                                        <span>Artiste Page</span>
+                                    <a href="${escapeHTML(artistPageUrl)}" ${artistPageUrl.startsWith('http') ? 'target="_blank" rel="noopener noreferrer"' : ''} title="Artiste Page" class="w-5 h-5 rounded-md bg-white border border-slate-200 hover:border-accord-blue text-accord-slate hover:text-accord-blue flex items-center justify-center transition-colors">
+                                        <i class="fa-solid fa-user text-[8px]"></i>
                                     </a>
                                 ` : ''}
+                                <span class="text-[11px] text-accord-muted font-bold tabular-nums">${pct}%</span>
                             </div>
-                        ` : ''}
+                        </div>
+                        <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-accord-blue h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                        </div>
                         ${isOpen ? (
                             !currentMusicUser ? `
-                                <a href="signin.html?next=music.html" class="mt-1.5 w-full bg-white hover:bg-accord-blue hover:text-white text-accord-slate border border-slate-200 text-[11px] font-bold py-2 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5">
-                                    <i class="fa-solid fa-right-to-bracket text-[10px]"></i>
-                                    <span>Sign In to Vote</span>
+                                <a href="signin.html?next=music.html" class="mt-1 w-full bg-white hover:bg-accord-blue hover:text-white text-accord-slate border border-slate-200 text-[11px] font-bold py-1 rounded-lg transition-all flex items-center justify-center gap-1">
+                                    <span>Sign in to vote</span>
                                 </a>
-                            ` : hasVoted ? `
-                                <div class="mt-1.5 w-full text-center py-2 rounded-xl text-[11px] font-bold ${isUserChoice ? 'bg-accord-blue text-white' : 'bg-slate-100 text-slate-400'}">
-                                    ${isUserChoice ? '<i class="fa-solid fa-check mr-1"></i> Your Vote' : 'Already Voted in This Poll'}
-                                </div>
-                            ` : `
-                                <button type="button" onclick="castVote('${escapeHTML(poll.id).replace(/'/g, "\\'")}', '${escapeHTML(nom.name).replace(/'/g, "\\'")}')" class="mt-1.5 w-full bg-white hover:bg-accord-blue hover:text-white text-accord-slate border border-slate-200 text-[11px] font-bold py-2 rounded-xl transition-all shadow-sm">
-                                    Vote for this Nominee
+                            ` : hasVoted ? (
+                                isUserChoice ? `
+                                    <div class="mt-1 w-full text-center py-1 rounded-lg text-[11px] font-bold bg-accord-blue text-white">
+                                        <i class="fa-solid fa-check mr-1"></i> Your Vote
+                                    </div>
+                                ` : ''
+                            ) : `
+                                <button type="button" onclick="castVote('${escapeHTML(poll.id).replace(/'/g, "\\'")}', '${escapeHTML(nom.name).replace(/'/g, "\\'")}')" class="mt-1 w-full bg-white hover:bg-accord-blue hover:text-white text-accord-slate border border-slate-200 text-[11px] font-bold py-1 rounded-lg transition-all">
+                                    Vote
                                 </button>
                             `
                         ) : ''}
@@ -683,15 +680,15 @@ function renderPolls() {
         }
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5 flex flex-col justify-between";
+        card.className = "bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm space-y-3 flex flex-col justify-between";
         card.innerHTML = `
-            <div class="space-y-4">
+            <div class="space-y-2.5">
                 <div class="flex items-center justify-between gap-2">
                     ${statusBadge}
-                    <span class="text-xs text-accord-muted font-bold">${totalVotes} Total Votes</span>
+                    <span class="text-[11px] text-accord-muted font-semibold">${totalVotes} votes</span>
                 </div>
-                <h3 class="serif-heading text-xl font-bold text-accord-slate">${escapeHTML(poll.title)}</h3>
-                <div class="space-y-3 pt-1">
+                <h3 class="serif-heading text-base font-bold text-accord-slate leading-snug">${escapeHTML(poll.title)}</h3>
+                <div class="space-y-2 pt-0.5">
                     ${nomineesHtml}
                 </div>
             </div>
