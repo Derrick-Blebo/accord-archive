@@ -44,6 +44,9 @@ window.onload = async function () {
         window.AccordPlaylists.registerPlaylists(musicData.playlists);
         await window.AccordPlaylists.loadSavedPlaylistIds(currentMusicUser);
     }
+    if (window.AccordPolls) {
+        window.AccordPolls.registerPolls(musicData.polls);
+    }
     renderSpotlights();
     renderSongSpotlights();
     renderPlaylists();
@@ -244,10 +247,10 @@ function renderSongSpotlights() {
     songs.forEach(song => {
         const platform = getPlaylistPlatformInfo(song.link);
         const card = document.createElement('div');
-        card.className = "bg-gradient-to-br from-accord-darkBlue to-[#004294] border border-blue-400/30 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3";
+        card.className = "bg-accord-blue border border-white/20 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3";
         card.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
-                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', 'Song Spotlight', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="w-11 h-11 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-darkBlue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm" title="Play Song">
+                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', 'Song Spotlight', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="w-11 h-11 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm" title="Play Song">
                     <i class="fa-solid fa-play text-xs ml-0.5"></i>
                 </button>
                 <div class="min-w-0">
@@ -257,7 +260,7 @@ function renderSongSpotlights() {
                     </div>
                 </div>
             </div>
-            <a href="${escapeHTML(song.link || '#')}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white text-white hover:text-accord-darkBlue border border-white/20 text-[11px] font-bold transition-colors shrink-0">
+            <a href="${escapeHTML(song.link || '#')}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 text-[11px] font-bold transition-colors shrink-0">
                 Open <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[9px]"></i>
             </a>
         `;
@@ -377,6 +380,8 @@ function renderPollResults() {
         const isClosed = poll.status === 'closed';
         const leaderNames = topCount > 0 ? leaders.map(l => l.name).join(' & ') : 'No votes yet';
         const pct = totalVotes > 0 ? Math.round((topCount / totalVotes) * 100) : 0;
+        const pollPageUrl = `poll.html?id=${encodeURIComponent(poll.id)}`;
+        const safePollId = escapeHTML(poll.id).replace(/'/g, "\\'");
 
         const card = document.createElement('div');
         card.className = "bg-gradient-to-br from-accord-blue to-accord-darkBlue border border-blue-400/40 text-white rounded-3xl p-6 shadow-md hover:shadow-lg transition-all flex flex-col justify-between space-y-4";
@@ -384,17 +389,26 @@ function renderPollResults() {
             <div class="space-y-3">
                 <div class="flex items-center justify-between gap-2">
                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isClosed ? 'bg-accord-gold text-accord-slate' : 'bg-white/15 text-white border border-white/20'}">
-                        <i class="fa-solid ${isClosed ? 'fa-trophy text-accord-slate' : 'fa-chart-line text-emerald-300'}"></i>
+                        <i class="fa-solid ${isClosed || topCount > 0 ? 'fa-trophy' : 'fa-chart-line'} ${isClosed ? 'text-accord-slate' : topCount > 0 ? 'text-accord-gold' : 'text-emerald-300'}"></i>
                         <span>${isClosed ? 'Category Winner' : 'Leading Now'}</span>
                     </span>
                     <span class="text-[11px] font-bold text-blue-100/90">${totalVotes} total votes</span>
                 </div>
                 <p class="text-xs font-bold text-blue-100/90 uppercase tracking-wider">${escapeHTML(poll.title)}</p>
-                <h3 class="serif-heading text-xl font-bold text-white">${escapeHTML(leaderNames)}</h3>
+                <div class="flex items-center gap-2.5">
+                    ${topCount > 0 ? `<span class="w-8 h-8 rounded-xl bg-accord-gold/20 border border-accord-gold/40 flex items-center justify-center shrink-0" title="Winning"><i class="fa-solid fa-trophy text-accord-gold text-sm"></i></span>` : ''}
+                    <h3 class="serif-heading text-xl font-bold text-white leading-snug">${escapeHTML(leaderNames)}</h3>
+                </div>
             </div>
-            <div class="pt-3 border-t border-white/15 flex items-center justify-between text-xs">
+            <div class="pt-3 border-t border-white/15 flex items-center justify-between gap-2 text-xs">
                 <span class="font-bold text-white">${topCount} votes (${pct}%)</span>
-                <a href="#polls" class="text-[11px] font-bold text-blue-100 hover:text-white transition-colors">View Poll →</a>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="sharePoll('${safePollId}')" title="Share Poll" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold transition-colors">
+                        <i class="fa-solid fa-share-nodes text-[10px]"></i>
+                        <span>Share</span>
+                    </button>
+                    <a href="${pollPageUrl}" class="text-[11px] font-bold text-blue-100 hover:text-white transition-colors">View Poll →</a>
+                </div>
             </div>
         `;
         grid.appendChild(card);
@@ -485,6 +499,8 @@ function renderPolls() {
             });
         }
 
+        const pollPageUrl = `poll.html?id=${encodeURIComponent(poll.id)}`;
+        const safePollId = escapeHTML(poll.id).replace(/'/g, "\\'");
         const card = document.createElement('div');
         card.className = "bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm space-y-3 flex flex-col justify-between";
         card.innerHTML = `
@@ -493,15 +509,32 @@ function renderPolls() {
                     ${statusBadge}
                     <span class="text-[11px] text-accord-muted font-semibold">${totalVotes} votes</span>
                 </div>
-                <h3 class="serif-heading text-base font-bold text-accord-slate leading-snug">${escapeHTML(poll.title)}</h3>
+                <h3 class="serif-heading text-base font-bold text-accord-slate leading-snug">
+                    <a href="${pollPageUrl}" class="hover:text-accord-blue transition-colors">${escapeHTML(poll.title)}</a>
+                </h3>
                 <div class="space-y-2 pt-0.5">
                     ${nomineesHtml}
                 </div>
+            </div>
+            <div class="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <a href="${pollPageUrl}" class="font-bold text-accord-blue hover:underline">Full Standings →</a>
+                <button type="button" onclick="sharePoll('${safePollId}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue font-bold transition-colors">
+                    <i class="fa-solid fa-share-nodes text-[10px]"></i>
+                    <span>Share</span>
+                </button>
             </div>
         `;
         container.appendChild(card);
     });
 }
+
+function sharePoll(pollId) {
+    if (window.AccordPolls) {
+        window.AccordPolls.registerPolls(musicData.polls);
+        window.AccordPolls.openShareModal(pollId);
+    }
+}
+window.sharePoll = sharePoll;
 
 async function castVote(pollId, nomineeName) {
     if (!currentMusicUser?.id) {
