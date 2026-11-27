@@ -773,19 +773,33 @@ async function handleUserSpotlightCoverUpload(event) {
     }
 }
 
+async function fetchCoverImageFromLinks(links) {
+    const seen = new Set();
+    for (const raw of (Array.isArray(links) ? links : [])) {
+        const clean = String(raw || '').trim();
+        if (!clean || !/^https?:\/\//i.test(clean) || seen.has(clean)) continue;
+        seen.add(clean);
+        try {
+            const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            const img = String(data?.image || '').trim();
+            if (img) return img;
+        } catch {
+            // try next link
+        }
+    }
+    return '';
+}
+
 async function handleSpotlightSubmission(e) {
     e.preventDefault();
     if (!currentMusicUser?.id) return;
 
     const title = document.getElementById('sub-spotlight-name').value.trim();
     const genre = document.getElementById('sub-spotlight-genre').value.trim() || 'Gospel';
-    const image = document.getElementById('sub-spotlight-image').value.trim();
+    let image = document.getElementById('sub-spotlight-image').value.trim();
     const article = document.getElementById('sub-spotlight-article').value.trim();
-
-    if (!image) {
-        showToast('Please upload an artiste cover photo.');
-        return;
-    }
 
     const songs = [];
     document.querySelectorAll('#sub-spotlight-songs-container .user-song-row').forEach(row => {
@@ -795,6 +809,39 @@ async function handleSpotlightSubmission(e) {
             songs.push({ title: sTitle || title, link: sLink || '' });
         }
     });
+
+    if (!image && songs.some(s => s.link)) {
+        const submitBtn = e.target?.querySelector('button[type="submit"]');
+        const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Pulling cover...';
+        }
+        try {
+            const pulledImage = await fetchCoverImageFromLinks(songs.map(s => s.link));
+            if (pulledImage) {
+                image = pulledImage;
+                document.getElementById('sub-spotlight-image').value = image;
+                const preview = document.getElementById('sub-spotlight-preview');
+                const placeholder = document.getElementById('sub-spotlight-placeholder');
+                if (preview && placeholder) {
+                    preview.src = image;
+                    preview.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                }
+            }
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            }
+        }
+    }
+
+    if (!image) {
+        showToast('Please upload an artiste cover photo or add a streaming link.');
+        return;
+    }
 
     musicData.spotlightSubmissions.unshift({
         id: 'subspot-' + Date.now(),

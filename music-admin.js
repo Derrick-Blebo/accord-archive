@@ -756,6 +756,11 @@ async function autoFillMusicMetadata() {
     const isPlaylist = type === 'playlist';
     const linkInput = document.getElementById('item-link');
     const btn = document.getElementById(isPlaylist ? 'playlist-autofill-meta-btn' : 'autofill-meta-btn');
+    const firstSpotlightSongLink = !isPlaylist
+        ? Array.from(document.querySelectorAll('#spotlight-songs-container .song-link-input'))
+            .map(el => el.value.trim())
+            .find(Boolean) || ''
+        : '';
     const rawUrl = isPlaylist
         ? String(
             document.getElementById('item-apple-link')?.value ||
@@ -764,7 +769,7 @@ async function autoFillMusicMetadata() {
             linkInput?.value ||
             ''
         ).trim()
-        : String(linkInput?.value || '').trim();
+        : String(linkInput?.value || firstSpotlightSongLink || '').trim();
     if (!rawUrl) {
         showToast('Paste a playlist or streaming link first.');
         return;
@@ -912,6 +917,18 @@ function closeMusicModal() {
     modal.classList.add('hidden');
 }
 
+async function fetchCoverImageFromLinks(links) {
+    const seen = new Set();
+    for (const raw of (Array.isArray(links) ? links : [])) {
+        const clean = String(raw || '').trim();
+        if (!clean || !/^https?:\/\//i.test(clean) || seen.has(clean)) continue;
+        seen.add(clean);
+        const meta = await fetchSongSpotlightMetadata(clean);
+        if (meta?.image) return meta.image;
+    }
+    return '';
+}
+
 async function handleSaveMusicItem(e) {
     e.preventDefault();
     const existingId = document.getElementById('edit-music-id').value;
@@ -920,16 +937,11 @@ async function handleSaveMusicItem(e) {
     const title = document.getElementById('item-title').value.trim();
     const genre = document.getElementById('item-genre').value.trim();
     const curator = document.getElementById('item-curator').value.trim();
-    const image = document.getElementById('item-image').value.trim();
+    let image = document.getElementById('item-image').value.trim();
     const link = document.getElementById('item-link').value.trim();
     const description = document.getElementById('item-description').value.trim();
     const featured = document.getElementById('item-featured').checked;
     const isVisible = document.getElementById('item-visible')?.checked !== false;
-
-    if (!image) {
-        showToast('Please upload a cover art photo first.');
-        return;
-    }
 
     const songs = [];
     if (type === 'spotlight') {
@@ -940,6 +952,38 @@ async function handleSaveMusicItem(e) {
                 songs.push({ title: sTitle || title, link: sLink || '' });
             }
         });
+    }
+
+    if (!image && type === 'spotlight') {
+        const candidateLinks = [link, ...songs.map(s => s.link)].filter(Boolean);
+        if (candidateLinks.length > 0) {
+            const submitBtn = e.target?.querySelector('button[type="submit"]');
+            const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Pulling cover...';
+            }
+            try {
+                const pulledImage = await fetchCoverImageFromLinks(candidateLinks);
+                if (pulledImage) {
+                    image = pulledImage;
+                    document.getElementById('item-image').value = image;
+                    updateCoverPreview(image);
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            }
+        }
+    }
+
+    if (!image) {
+        showToast(type === 'spotlight'
+            ? 'Please upload a cover art photo or add a streaming link.'
+            : 'Please upload a cover art photo first.');
+        return;
     }
 
     const tracks = type === 'playlist' ? parseTracksTextarea(document.getElementById('item-tracks').value) : [];
@@ -1249,13 +1293,18 @@ async function approveSpotlightSubmission(subId, isFeatured) {
     const sub = musicConfig.spotlightSubmissions.find(s => s.id === subId);
     if (!sub) return;
 
+    let image = String(sub.image || '').trim();
+    if (!image && Array.isArray(sub.songs) && sub.songs.length > 0) {
+        image = await fetchCoverImageFromLinks(sub.songs.map(s => s?.link));
+    }
+
     sub.status = 'approved';
     const newArtist = {
         id: 'art-' + Date.now(),
         title: sub.title,
         genre: sub.genre || 'Gospel',
         curator: sub.submittedByEmail || 'Community Submission',
-        image: sub.image || '',
+        image,
         link: (sub.songs && sub.songs[0]?.link) || '',
         description: sub.article || sub.description || '',
         article: sub.article || sub.description || '',
