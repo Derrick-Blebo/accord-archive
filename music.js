@@ -294,6 +294,65 @@ function closePlaylistPlayerModal() {
     }
 }
 
+function buildPlaylistTracksHtml(tracks, coverSrc, subtitle, pl) {
+    if (Array.isArray(tracks) && tracks.length > 0) {
+        const visibleTracks = tracks.slice(0, 5);
+        return `
+            <div class="divide-y divide-slate-200/80">
+                ${visibleTracks.map(track => `
+                    <div class="flex items-center gap-2.5 py-1.5 first:pt-0">
+                        <div class="w-7 h-7 rounded bg-white border border-slate-200/70 overflow-hidden shrink-0 flex items-center justify-center">
+                            <img src="${escapeHTML(track.image || coverSrc)}" alt="${escapeHTML(track.title)}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] font-semibold text-slate-900 truncate leading-tight">${escapeHTML(track.title)}</p>
+                            <p class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${escapeHTML(track.artist || subtitle)}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="space-y-2.5">
+            <span class="inline-block bg-white border border-slate-200/80 text-slate-700 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                ${escapeHTML(pl.genre || 'Curated Playlist')}
+            </span>
+            <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-5">
+                ${escapeHTML(pl.description || 'Stream this curated gospel playlist on your favorite music platform.')}
+            </p>
+        </div>
+    `;
+}
+
+async function hydratePlaylistTracks(pl, cardEl, coverSrc, subtitle) {
+    if (!pl?.link) return;
+    const cacheKey = `accord_pl_tracks_${pl.link}`;
+    try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const slot = cardEl.querySelector('[data-tracks-slot]');
+                if (slot) slot.innerHTML = buildPlaylistTracksHtml(parsed, coverSrc, subtitle, pl);
+                return;
+            }
+        }
+    } catch {}
+
+    try {
+        const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(pl.link)}`);
+        if (!resp.ok) return;
+        const meta = await resp.json();
+        if (Array.isArray(meta?.tracks) && meta.tracks.length > 0) {
+            try { sessionStorage.setItem(cacheKey, JSON.stringify(meta.tracks)); } catch {}
+            const slot = cardEl.querySelector('[data-tracks-slot]');
+            if (slot) slot.innerHTML = buildPlaylistTracksHtml(meta.tracks, coverSrc, subtitle, pl);
+        }
+    } catch {}
+}
+
 function renderPlaylists() {
     const grid = document.getElementById('playlist-grid');
     if (!grid) return;
@@ -310,37 +369,7 @@ function renderPlaylists() {
         const subtitle = pl.curator || pl.genre || 'SoundSpace PR';
         const platform = getPlaylistPlatformInfo(pl.link);
         const tracks = Array.isArray(pl.tracks) ? pl.tracks.filter(t => t && t.title) : [];
-
-        let rightContentHtml = '';
-        if (tracks.length > 0) {
-            const visibleTracks = tracks.slice(0, 5);
-            rightContentHtml = `
-                <div class="divide-y divide-slate-200/80">
-                    ${visibleTracks.map(track => `
-                        <div class="flex items-center gap-2.5 py-1.5 first:pt-0">
-                            <div class="w-7 h-7 rounded bg-white border border-slate-200/70 overflow-hidden shrink-0 flex items-center justify-center">
-                                <img src="${escapeHTML(track.image || coverSrc)}" alt="${escapeHTML(track.title)}" class="w-full h-full object-cover">
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[11px] font-semibold text-slate-900 truncate leading-tight">${escapeHTML(track.title)}</p>
-                                <p class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${escapeHTML(track.artist || subtitle)}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        } else {
-            rightContentHtml = `
-                <div class="space-y-2.5">
-                    <span class="inline-block bg-white border border-slate-200/80 text-slate-700 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                        ${escapeHTML(pl.genre || 'Curated Playlist')}
-                    </span>
-                    <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-5">
-                        ${escapeHTML(pl.description || 'Stream this curated gospel playlist on your favorite music platform.')}
-                    </p>
-                </div>
-            `;
-        }
+        const rightContentHtml = buildPlaylistTracksHtml(tracks, coverSrc, subtitle, pl);
 
         const card = document.createElement('div');
         card.className = "bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row min-h-[268px]";
@@ -369,7 +398,9 @@ function renderPlaylists() {
                 </button>
             </div>
             <div class="w-full sm:w-[54%] bg-[#F5F5F7] p-3.5 flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-slate-200/70">
-                ${rightContentHtml}
+                <div data-tracks-slot>
+                    ${rightContentHtml}
+                </div>
                 <div class="pt-3 mt-2 border-t border-slate-200/60 flex items-center justify-between">
                     <a href="${escapeHTML(pl.link || '#')}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-semibold text-slate-900 hover:text-accord-blue inline-flex items-center gap-1 transition-colors">
                         <span>${escapeHTML(platform.ctaLabel)}</span>
@@ -379,6 +410,10 @@ function renderPlaylists() {
             </div>
         `;
         grid.appendChild(card);
+
+        if (tracks.length === 0 && pl.link) {
+            hydratePlaylistTracks(pl, card, coverSrc, subtitle);
+        }
     });
 }
 

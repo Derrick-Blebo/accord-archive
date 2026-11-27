@@ -12,6 +12,8 @@ const ALLOWED_HOSTS = new Set([
     'www.soundcloud.com'
 ]);
 
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 function decodeHtmlEntities(str) {
     return String(str || '')
         .replace(/&amp;/g, '&')
@@ -30,6 +32,43 @@ function extractMetaTag(html, attrName, attrValue) {
     return match ? decodeHtmlEntities(match[1]) : '';
 }
 
+function findTrackLockupItems(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj.itemKind === 'trackLockup' && Array.isArray(obj.items)) {
+        return obj.items;
+    }
+    for (const key of Object.keys(obj)) {
+        const found = findTrackLockupItems(obj[key]);
+        if (found) return found;
+    }
+    return null;
+}
+
+function extractAppleMusicServerDataTracks(html) {
+    const match = html.match(/<script[^>]+id=["']serialized-server-data["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (!match) return [];
+    try {
+        const parsed = JSON.parse(match[1]);
+        const items = findTrackLockupItems(parsed);
+        if (!Array.isArray(items)) return [];
+        return items.slice(0, 15).map(item => {
+            const artist = item.artistName
+                || (Array.isArray(item.subtitleLinks) ? item.subtitleLinks.map(l => l?.title).filter(Boolean).join(', ') : '');
+            let image = item.artwork?.dictionary?.url || '';
+            if (image) {
+                image = image.replace('{w}', '100').replace('{h}', '100').replace('{f}', 'jpg');
+            }
+            return {
+                title: item.title || '',
+                artist,
+                image
+            };
+        }).filter(t => t.title);
+    } catch {
+        return [];
+    }
+}
+
 function extractAppleMusicJsonLd(html) {
     const matches = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
     for (const block of matches) {
@@ -40,9 +79,10 @@ function extractAppleMusicJsonLd(html) {
             for (const item of items) {
                 if (item && (item['@type'] === 'MusicPlaylist' || item['@type'] === 'MusicAlbum' || item.track)) {
                     const tracks = Array.isArray(item.track)
-                        ? item.track.slice(0, 12).map(t => ({
+                        ? item.track.slice(0, 15).map(t => ({
                             title: t?.name || '',
-                            artist: t?.byArtist?.name || (Array.isArray(t?.byArtist) ? t.byArtist[0]?.name : '') || ''
+                            artist: t?.byArtist?.name || (Array.isArray(t?.byArtist) ? t.byArtist[0]?.name : '') || '',
+                            image: t?.audio?.thumbnailUrl || ''
                         })).filter(t => t.title)
                         : [];
                     return {
@@ -59,6 +99,55 @@ function extractAppleMusicJsonLd(html) {
         }
     }
     return null;
+}
+
+async function fetchSpotifyMetadata(parsedUrl) {
+    const cleanUrl = parsedUrl.toString();
+    const embedUrl = cleanUrl.includes('/embed/')
+        ? cleanUrl
+        : cleanUrl.replace('open.spotify.com/', 'open.spotify.com/embed/');
+
+    const [oembedRes, embedRes] = await Promise.all([
+        fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(cleanUrl)}`).catch(() => null),
+        fetch(embedUrl, { headers: { 'User-Agent': BROWSER_UA } }).catch(() => null)
+    ]);
+
+    let title = '';
+    let image = '';
+    let curator = 'Spotify';
+    let tracks = [];
+
+    if (oembedRes?.ok) {
+        try {
+            const oembed = await oembedRes.json();
+            title = oembed.title || '';
+            image = oembed.thumbnail_url || '';
+        } catch {}
+    }
+
+    if (embedRes?.ok) {
+        try {
+            const html = await embedRes.text();
+            const nextMatch = html.match(/<script id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+            if (nextMatch) {
+                const nextData = JSON.parse(nextMatch[1]);
+                const entity = nextData?.props?.pageProps?.state?.data?.entity;
+                if (entity) {
+                    if (!title && entity.name) title = entity.name;
+                    if (entity.subtitle) curator = entity.subtitle;
+                    if (Array.isArray(entity.trackList)) {
+                        tracks = entity.trackList.slice(0, 15).map(t => ({
+                            title: t?.title || '',
+                            artist: t?.subtitle || '',
+                            image: ''
+                        })).filter(t => t.title);
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    return { title, image, curator, description: '', tracks };
 }
 
 export default async function handler(req, res) {
@@ -88,24 +177,14 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Spotify oEmbed is reliable and fast
         if (host === 'open.spotify.com') {
-            const oembedRes = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(parsedUrl.toString())}`);
-            if (oembedRes.ok) {
-                const data = await oembedRes.json();
-                return res.status(200).json({
-                    title: data.title || '',
-                    image: data.thumbnail_url || '',
-                    curator: data.provider_name || 'Spotify',
-                    description: '',
-                    tracks: []
-                });
-            }
+            const spotifyMeta = await fetchSpotifyMetadata(parsedUrl);
+            return res.status(200).json(spotifyMeta);
         }
 
         const pageRes = await fetch(parsedUrl.toString(), {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; AccordBot/1.0; +https://www.accordarchives.com)',
+                'User-Agent': BROWSER_UA,
                 'Accept-Language': 'en-US,en;q=0.9'
             }
         });
@@ -115,23 +194,26 @@ export default async function handler(req, res) {
         }
 
         const html = await pageRes.text();
-        const jsonLd = host.includes('music.apple.com') ? extractAppleMusicJsonLd(html) : null;
+        const isApple = host.includes('music.apple.com');
+        const jsonLd = isApple ? extractAppleMusicJsonLd(html) : null;
+        const serverTracks = isApple ? extractAppleMusicServerDataTracks(html) : [];
 
         let ogTitle = extractMetaTag(html, 'property', 'og:title') || extractMetaTag(html, 'name', 'twitter:title');
         const ogImage = extractMetaTag(html, 'property', 'og:image') || extractMetaTag(html, 'name', 'twitter:image');
         const ogDesc = extractMetaTag(html, 'property', 'og:description') || extractMetaTag(html, 'name', 'description');
 
-        // Clean Apple Music suffix like " - Apple Music"
         ogTitle = ogTitle.replace(/\s*[-–|]\s*Apple Music$/i, '').replace(/\s*on Apple Music$/i, '').trim();
+
+        const tracks = serverTracks.length > 0 ? serverTracks : (jsonLd?.tracks || []);
 
         return res.status(200).json({
             title: jsonLd?.title || ogTitle || '',
             image: jsonLd?.image || ogImage || '',
             curator: jsonLd?.curator || '',
             description: jsonLd?.description || ogDesc || '',
-            tracks: jsonLd?.tracks || []
+            tracks
         });
-    } catch (err) {
+    } catch {
         return res.status(200).json({
             title: '',
             image: '',
