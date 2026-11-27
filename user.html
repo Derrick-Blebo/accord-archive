@@ -236,6 +236,22 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Bio</label>
                     <textarea id="modal-profile-bio" rows="3" placeholder="Share about this ministry or account..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+                    <div>
+                        <label for="modal-profile-audio-url" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Main Audio Streaming Page Link</label>
+                        <p class="text-[11px] text-accord-muted mb-1.5">Pinned as an embed at the top of the Audio section on this public profile.</p>
+                        <input type="url" id="modal-profile-audio-url" placeholder="https://open.spotify.com/... or https://podcasts.apple.com/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                    <div>
+                        <label for="modal-profile-audio-type" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1">Audio Category</label>
+                        <select id="modal-profile-audio-type" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                            <option value="">Select category (Sermons, Music, or Podcast)</option>
+                            <option value="sermons">Sermons</option>
+                            <option value="music">Music</option>
+                            <option value="podcast">Podcast</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" onclick="closeEditProfileModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
                     <button type="submit" id="modal-profile-save-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Save Changes</button>

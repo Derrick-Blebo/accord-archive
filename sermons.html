@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accord Sermons Hub — Sermon Playlists, Pastor & Ministry Spotlights</title>
+    <link rel="canonical" href="https://www.accordarchives.com/sermons.html" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/icon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="Explore curated sermon playlists, featured sermons, pastor spotlights, and ministry spotlights on Accord Sermons Hub." />
+
+    <!-- Open Graph / WhatsApp / Social Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Accord Archive & Library" />
+    <meta property="og:url" content="https://www.accordarchives.com/sermons.html" />
+    <meta property="og:title" content="Accord Sermons Hub — Sermon Playlists, Pastor & Ministry Spotlights" />
+    <meta property="og:description" content="Explore curated sermon playlists, featured sermons, pastor spotlights, and ministry spotlights on Accord Sermons Hub." />
+    <meta property="og:image" content="https://www.accordarchives.com/og-cover.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Accord Sermons Hub" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Accord Sermons Hub — Sermon Playlists, Pastor & Ministry Spotlights" />
+    <meta name="twitter:description" content="Explore curated sermon playlists, featured sermons, pastor spotlights, and ministry spotlights on Accord Sermons Hub." />
+    <meta name="twitter:image" content="https://www.accordarchives.com/og-cover.png" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js?v=7"></script>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12 space-y-10">
+        <!-- Quick Section Navigation -->
+        <nav aria-label="Sermons Hub Sections" class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <a href="#featured-sermons" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-star text-[11px] text-accord-gold"></i>
+                <span>Featured Sermons</span>
+            </a>
+            <a href="#pastor-spotlight" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#EAF2FF]/80 hover:bg-accord-lightBlue border border-blue-200/80 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-user-tie text-[11px] text-accord-blue"></i>
+                <span>Pastor Spotlight</span>
+            </a>
+            <a href="#sermon-spotlight" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-podcast text-[11px] text-accord-blue"></i>
+                <span>Sermon Spotlight</span>
+            </a>
+            <a href="#ministry-spotlight" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#EAF2FF]/80 hover:bg-accord-lightBlue border border-blue-200/80 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-church text-[11px] text-accord-blue"></i>
+                <span>Ministry Spotlight</span>
+            </a>
+            <a href="#sermon-playlists" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-headphones text-[11px] text-accord-blue"></i>
+                <span>All Sermon Playlists</span>
+            </a>
+            <a href="artist-blog.html" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white border border-blue-200/80 text-xs font-bold shadow-sm transition-all">
+                <i class="fa-solid fa-newspaper text-[11px]"></i>
+                <span>Artiste &amp; Ministry Blog</span>
+            </a>
+        </nav>
+
+        <!-- Section 1: Featured Sermons (Featured Sermon Playlists) -->
+        <section id="featured-sermons" class="scroll-mt-24 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-gold"></span>
+                        Editor's Picks
+                    </span>
+                    <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Featured Sermons</h1>
+                    <p class="text-xs text-accord-muted">Highlighted sermon collections and teaching series curated for spiritual growth.</p>
+                </div>
+                <a href="#sermon-playlists" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all self-start sm:self-auto shrink-0">
+                    <span>Browse All Playlists</span>
+                    <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                </a>
+            </div>
+
+            <div id="featured-sermons-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Populated dynamically by sermons.js -->
+            </div>
+        </section>
+
+        <!-- Section 2: Pastor Spotlight (Circular Portraits) -->
+        <section id="pastor-spotlight" class="scroll-mt-24 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Featured Preachers &amp; Teachers
+                    </span>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Pastor Spotlight</h2>
+                    <p class="text-xs text-accord-muted">Click any featured pastor to read their story and listen to embedded sermons.</p>
+                </div>
+                <a href="artist-blog.html" class="px-4 py-2.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
+                    <span>All Artiste &amp; Ministry Articles on Blog</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+            </div>
+
+            <div id="pastor-spotlight-grid" class="flex flex-wrap items-start justify-center sm:justify-start gap-7 sm:gap-10 py-2">
+                <!-- Populated dynamically by sermons.js -->
+            </div>
+        </section>
+
+        <!-- Section 3: Sermon Spotlight (Faded Light Blue Section) -->
+        <section id="sermon-spotlight" class="scroll-mt-24 rounded-3xl bg-gradient-to-br from-[#E8F1FF]/90 via-[#F1F6FF] to-[#F7FAFF] border border-blue-200/75 p-5 sm:p-8 shadow-[0_4px_20px_-6px_rgba(0,119,254,0.08)] space-y-6">
+            <div class="flex items-center justify-between">
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Recent Messages
+                    </span>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Sermon Spotlight</h2>
+                    <p class="text-xs text-accord-muted">Featured individual sermons &amp; teachings — press play to listen.</p>
+                </div>
+            </div>
+
+            <div id="sermon-spotlight-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Populated dynamically by sermons.js -->
+            </div>
+        </section>
+
+        <!-- Section 4: Ministry Spotlight (Circular Portraits) -->
+        <section id="ministry-spotlight" class="scroll-mt-24 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Featured Ministries
+                    </span>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Ministry Spotlight</h2>
+                    <p class="text-xs text-accord-muted">Discover featured churches &amp; teaching ministries, their stories, and sermon archives.</p>
+                </div>
+                <a href="artist-blog.html?filter=ministry" class="px-4 py-2.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
+                    <span>Explore Ministry &amp; Artiste Blog</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+            </div>
+
+            <div id="ministry-spotlight-grid" class="flex flex-wrap items-start justify-center sm:justify-start gap-7 sm:gap-10 py-2">
+                <!-- Populated dynamically by sermons.js -->
+            </div>
+        </section>
+
+        <!-- Section 5: All Sermon Playlists (Well Organised by Topic/Series) -->
+        <section id="sermon-playlists" class="scroll-mt-24 space-y-6 py-2">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Complete Sermon Library
+                    </span>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">All Sermon Playlists</h2>
+                    <p class="text-xs text-accord-muted">Every sermon playlist organised by topic, series, and ministry.</p>
+                </div>
+                <div class="w-full md:w-72">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="sermon-playlist-search" oninput="handleSermonPlaylistSearch()" placeholder="Search sermon playlists..." class="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue shadow-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Topic / Category Filter Pills -->
+            <div id="sermon-playlist-filters" class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <!-- Populated dynamically -->
+            </div>
+
+            <div id="sermon-playlists-container" class="space-y-8">
+                <!-- Populated dynamically by sermons.js -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Media Player Modal (Sermon Playlists & Sermon Spotlights) -->
+    <div id="playlist-player-modal" class="fixed inset-0 z-50 bg-accord-slate/75 backdrop-blur-sm hidden items-center justify-center p-4" onclick="if(event.target===this) closePlaylistPlayerModal()">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="min-w-0 pr-4">
+                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Sermon Player</h3>
+                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Accord Sermons Hub</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <a id="player-modal-external" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-accord-slate text-[11px] font-bold transition-colors">
+                        Open App <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="closePlaylistPlayerModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="player-modal-platforms" class="hidden px-6 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center gap-2"></div>
+            <div id="player-modal-body" class="p-4 bg-slate-100">
+                <!-- Embedded iframe injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="ads.js"></script>
+    <script src="playlists-shared.js?v=2"></script>
+    <script src="sermons.js?v=1"></script>
+    <script src="footer.js?v=2"></script>
+</body>
+</html>

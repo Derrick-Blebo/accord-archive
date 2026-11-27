@@ -70,11 +70,21 @@ function showToast(message, isError = false) {
 }
 
 async function loadUnifiedProfile() {
-    const { data: profile, error } = await supabaseClient
+    let { data: profile, error } = await supabaseClient
         .from('profiles')
-        .select('id, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, created_at')
+        .select('id, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, created_at, audio_stream_url, audio_stream_type')
         .eq('id', targetUserId)
         .maybeSingle();
+
+    if (error && /audio_stream_/i.test(error.message || '')) {
+        const fallback = await supabaseClient
+            .from('profiles')
+            .select('id, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, created_at')
+            .eq('id', targetUserId)
+            .maybeSingle();
+        profile = fallback.data;
+        error = fallback.error;
+    }
 
     if (error || !profile) {
         showProfileNotFound();
@@ -466,6 +476,89 @@ function setProfileTab(tab) {
     renderProfileStream();
 }
 
+function getPublicProfileAudioEmbedUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (raw.includes('embed.podcasts.apple.com')) return raw;
+    if (raw.includes('podcasts.apple.com')) {
+        return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
+    }
+    if (raw.includes('embed.music.apple.com')) return raw;
+    if (raw.includes('music.apple.com')) {
+        return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
+    }
+    if (raw.includes('open.spotify.com/embed/')) return raw;
+    if (raw.includes('open.spotify.com/')) {
+        return raw.replace('open.spotify.com/', 'open.spotify.com/embed/');
+    }
+    if (raw.includes('audiomack.com/')) {
+        if (raw.includes('/embed/')) return raw;
+        return raw.replace('audiomack.com/', 'audiomack.com/embed/');
+    }
+    if (raw.includes('youtube.com/watch?v=')) {
+        const id = raw.split('v=')[1]?.split('&')[0];
+        return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+    if (raw.includes('youtu.be/')) {
+        const id = raw.split('youtu.be/')[1]?.split(/[?&#]/)[0];
+        return id ? `https://www.youtube.com/embed/${id}` : '';
+    }
+    return '';
+}
+
+function buildPinnedAudioStreamCard(profile) {
+    const url = String(profile?.audio_stream_url || '').trim();
+    if (!url) return null;
+
+    const categoryRaw = String(profile?.audio_stream_type || 'music').toLowerCase();
+    const categoryMeta = {
+        sermons: { label: 'Sermons', icon: 'fa-solid fa-church', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+        podcast: { label: 'Podcast', icon: 'fa-solid fa-podcast', badgeClass: 'bg-purple-50 text-purple-700 border-purple-200' },
+        music: { label: 'Music', icon: 'fa-solid fa-music', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    }[categoryRaw] || { label: 'Audio', icon: 'fa-solid fa-headphones', badgeClass: 'bg-accord-lightBlue text-accord-blue border-blue-200' };
+
+    const embedUrl = getPublicProfileAudioEmbedUrl(url);
+    const height = embedUrl.includes('embed.podcasts.apple.com') || embedUrl.includes('embed.music.apple.com') ? '450' : (embedUrl.includes('youtube.com/embed') ? '315' : '352');
+
+    const card = document.createElement('div');
+    card.className = 'bg-white border-2 border-accord-blue/25 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5';
+    card.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accord-blue text-white text-[10px] font-extrabold uppercase tracking-wider">
+                    <i class="fa-solid fa-thumbtack text-[9px]"></i>
+                    <span>Pinned Audio Page</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold uppercase tracking-wider ${categoryMeta.badgeClass}">
+                    <i class="${categoryMeta.icon} text-[10px]"></i>
+                    <span>${escapeProfileHtml(categoryMeta.label)}</span>
+                </span>
+            </div>
+            <a href="${escapeProfileHtml(url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-accord-blue hover:text-white text-accord-slate text-[11px] font-bold transition-colors">
+                <span>Open Stream</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+            </a>
+        </div>
+        ${embedUrl
+            ? `<div class="rounded-xl overflow-hidden bg-slate-50 border border-slate-200/80">
+                   <iframe src="${escapeProfileHtml(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" loading="lazy" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
+               </div>`
+            : `<a href="${escapeProfileHtml(url)}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors">
+                   <div class="flex items-center gap-3 min-w-0">
+                       <div class="w-10 h-10 rounded-xl bg-accord-lightBlue text-accord-blue flex items-center justify-center shrink-0">
+                           <i class="${categoryMeta.icon}"></i>
+                       </div>
+                       <div class="min-w-0">
+                           <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileHtml(profile.full_name || 'Main Audio Page')}</p>
+                           <p class="text-[11px] text-accord-blue truncate">${escapeProfileHtml(url)}</p>
+                       </div>
+                   </div>
+                   <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 shrink-0"></i>
+               </a>`}
+    `;
+    return card;
+}
+
 function renderProfileStream() {
     const stream = document.getElementById('profile-stream');
     if (!stream) return;
@@ -482,7 +575,9 @@ function renderProfileStream() {
             .map(p => ({ kind: 'post', sortAt: p.created_at, post: p, repost: null }));
     }
 
-    if (items.length === 0) {
+    const pinnedAudioCard = currentProfileTab === 'audio' ? buildPinnedAudioStreamCard(targetProfile) : null;
+
+    if (items.length === 0 && !pinnedAudioCard) {
         const emptyMessages = {
             all: ['fa-regular fa-newspaper', 'No posts yet', 'Posts and reposts shared by this account will appear here.'],
             testimony: ['fa-regular fa-heart', 'No testimonies yet', 'Testimonies shared by this account will appear here.'],
@@ -497,6 +592,9 @@ function renderProfileStream() {
 
     const myAvatarInitial = (viewerProfile?.full_name || viewerUser?.email || 'U').charAt(0).toUpperCase();
     stream.innerHTML = '';
+    if (pinnedAudioCard) {
+        stream.appendChild(pinnedAudioCard);
+    }
     items.forEach(item => {
         const p = item.post;
         const card = createSharedFeedCardElement(p, {
@@ -857,6 +955,10 @@ function openEditProfileModal() {
     document.getElementById('modal-profile-name').value = targetProfile.full_name || '';
     document.getElementById('modal-profile-handle').value = (targetProfile.handle || '').replace(/^@+/, '');
     document.getElementById('modal-profile-bio').value = targetProfile.bio || '';
+    const audioUrlEl = document.getElementById('modal-profile-audio-url');
+    if (audioUrlEl) audioUrlEl.value = targetProfile.audio_stream_url || '';
+    const audioTypeEl = document.getElementById('modal-profile-audio-type');
+    if (audioTypeEl) audioTypeEl.value = targetProfile.audio_stream_type || '';
     const statusEl = document.getElementById('modal-profile-handle-status');
     if (statusEl) {
         statusEl.textContent = 'Letters, numbers, and underscores only (3–30 chars).';
@@ -1015,7 +1117,14 @@ async function submitEditProfileModal(e) {
     const rawHandle = (document.getElementById('modal-profile-handle')?.value || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
     const handle = rawHandle ? `@${rawHandle}` : '';
     const bio = document.getElementById('modal-profile-bio')?.value.trim() || '';
+    const audioStreamUrl = document.getElementById('modal-profile-audio-url')?.value.trim() || null;
+    const audioStreamType = document.getElementById('modal-profile-audio-type')?.value.trim() || null;
     const btn = document.getElementById('modal-profile-save-btn');
+
+    if (audioStreamUrl && !audioStreamType) {
+        showToast('Please select whether the audio link is for Sermons, Music, or Podcast.', true);
+        return;
+    }
 
     if (!fullName) {
         showToast('Please enter a display name.', true);
@@ -1044,10 +1153,28 @@ async function submitEditProfileModal(e) {
         return;
     }
 
-    const { error } = await supabaseClient
+    const updatePayload = {
+        full_name: fullName,
+        handle,
+        bio,
+        audio_stream_url: audioStreamUrl,
+        audio_stream_type: audioStreamUrl ? audioStreamType : null
+    };
+
+    let { error } = await supabaseClient
         .from('profiles')
-        .update({ full_name: fullName, handle, bio })
+        .update(updatePayload)
         .eq('id', targetUserId);
+
+    if (error && /audio_stream_/i.test(error.message || '')) {
+        delete updatePayload.audio_stream_url;
+        delete updatePayload.audio_stream_type;
+        const retry = await supabaseClient
+            .from('profiles')
+            .update(updatePayload)
+            .eq('id', targetUserId);
+        error = retry.error;
+    }
 
     if (!error && viewerUser && viewerUser.id === targetUserId) {
         await supabaseClient.auth.updateUser({ data: { full_name: fullName, handle } });
@@ -1066,6 +1193,8 @@ async function submitEditProfileModal(e) {
     targetProfile.full_name = fullName;
     targetProfile.handle = handle;
     targetProfile.bio = bio;
+    targetProfile.audio_stream_url = audioStreamUrl;
+    targetProfile.audio_stream_type = audioStreamUrl ? audioStreamType : null;
     authorHandlesById[String(targetUserId)] = handle;
     closeEditProfileModal();
     renderProfileHeader();

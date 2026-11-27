@@ -37,6 +37,13 @@
 
     function getPlaylistPlatformInfo(url) {
         const raw = String(url || '').toLowerCase();
+        if (raw.includes('podcasts.apple.com')) {
+            return {
+                brandHtml: '<i class="fa-solid fa-podcast text-purple-600 text-[13px] mr-1"></i><span class="font-semibold tracking-tight">Podcasts</span>',
+                ctaLabel: 'View in Apple Podcasts',
+                platform: 'apple'
+            };
+        }
         if (raw.includes('music.apple.com')) {
             return {
                 brandHtml: '<i class="fa-brands fa-apple text-[13px] mr-1"></i><span class="font-semibold tracking-tight">music</span>',
@@ -76,7 +83,18 @@
         const raw = String(url || '').trim();
         if (!raw) return '';
 
+        if (raw.includes('embed.podcasts.apple.com')) return raw;
+        if (raw.includes('podcasts.apple.com')) {
+            return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
+        }
         if (raw.includes('embed.music.apple.com')) return raw;
+        if (raw.includes('podcasts.apple.com')) {
+            return {
+                brandHtml: '<i class="fa-solid fa-podcast text-purple-600 text-[13px] mr-1"></i><span class="font-semibold tracking-tight">Podcasts</span>',
+                ctaLabel: 'View in Apple Podcasts',
+                platform: 'apple'
+            };
+        }
         if (raw.includes('music.apple.com')) {
             return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
         }
@@ -111,7 +129,7 @@
 
         const spotifyUrl = String(linksObj.spotify || pl.spotifyLink || (legacyLower.includes('spotify.com') ? legacyLink : '')).trim();
         const audiomackUrl = String(linksObj.audiomack || pl.audiomackLink || (legacyLower.includes('audiomack.com') ? legacyLink : '')).trim();
-        const appleUrl = String(linksObj.apple || pl.appleMusicLink || (legacyLower.includes('music.apple.com') ? legacyLink : '')).trim();
+        const appleUrl = String(linksObj.apple || pl.appleMusicLink || ((legacyLower.includes('music.apple.com') || legacyLower.includes('podcasts.apple.com')) ? legacyLink : '')).trim();
 
         const platforms = [];
         if (spotifyUrl) {

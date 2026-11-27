@@ -16,6 +16,10 @@ function getEmbedUrl(url) {
     const raw = String(url || '').trim();
     if (!raw) return '';
 
+    if (raw.includes('embed.podcasts.apple.com')) return raw;
+    if (raw.includes('podcasts.apple.com')) {
+        return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
+    }
     if (raw.includes('embed.music.apple.com')) return raw;
     if (raw.includes('music.apple.com')) {
         return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
@@ -126,13 +130,33 @@ function renderSongs(artist) {
 window.onload = async function () {
     const params = new URLSearchParams(window.location.search);
     const artistId = params.get('id');
+    const hub = params.get('hub');
     const loadingEl = document.getElementById('artist-loading');
     const notFoundEl = document.getElementById('artist-not-found');
     const contentEl = document.getElementById('artist-content');
 
-    const config = await fetchMusicConfig();
-    const artistes = Array.isArray(config?.artistes) ? config.artistes : [];
-    const artist = artistes.find(a => a.id === artistId && a.approved !== false && !a.hidden);
+    let artist = null;
+    if (hub === 'sermons') {
+        try {
+            const { data } = await supabaseClient
+                .from('books')
+                .select('description')
+                .eq('title', '__ACCORD_SERMONS_CONFIG__')
+                .maybeSingle();
+            const parsed = data?.description ? JSON.parse(data.description) : JSON.parse(localStorage.getItem('accord_sermons_config') || '{}');
+            const pool = [
+                ...(Array.isArray(parsed?.pastors) ? parsed.pastors : []),
+                ...(Array.isArray(parsed?.ministries) ? parsed.ministries : [])
+            ];
+            artist = pool.find(a => a.id === artistId && a.approved !== false && !a.hidden) || null;
+        } catch {}
+    }
+
+    if (!artist) {
+        const config = await fetchMusicConfig();
+        const artistes = Array.isArray(config?.artistes) ? config.artistes : [];
+        artist = artistes.find(a => a.id === artistId && a.approved !== false && !a.hidden) || null;
+    }
 
     if (loadingEl) loadingEl.classList.add('hidden');
 

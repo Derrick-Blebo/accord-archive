@@ -1,6 +1,8 @@
 const ALLOWED_HOSTS = new Set([
     'music.apple.com',
     'embed.music.apple.com',
+    'podcasts.apple.com',
+    'embed.podcasts.apple.com',
     'open.spotify.com',
     'audiomack.com',
     'www.audiomack.com',
@@ -77,7 +79,7 @@ function extractAppleMusicJsonLd(html) {
             const parsed = JSON.parse(inner);
             const items = Array.isArray(parsed) ? parsed : [parsed];
             for (const item of items) {
-                if (item && (item['@type'] === 'MusicPlaylist' || item['@type'] === 'MusicAlbum' || item.track)) {
+                if (item && (item['@type'] === 'MusicPlaylist' || item['@type'] === 'MusicAlbum' || item['@type'] === 'PodcastSeries' || item['@type'] === 'PodcastEpisode' || item.track)) {
                     const tracks = Array.isArray(item.track)
                         ? item.track.slice(0, 15).map(t => ({
                             title: t?.name || '',
@@ -204,15 +206,20 @@ export default async function handler(req, res) {
         }
 
         const html = await pageRes.text();
-        const isApple = host.includes('music.apple.com');
+        const isApple = host.includes('music.apple.com') || host.includes('podcasts.apple.com');
         const jsonLd = isApple ? extractAppleMusicJsonLd(html) : null;
-        const serverTracks = isApple ? extractAppleMusicServerDataTracks(html) : [];
+        const serverTracks = host.includes('music.apple.com') ? extractAppleMusicServerDataTracks(html) : [];
 
         let ogTitle = extractMetaTag(html, 'property', 'og:title') || extractMetaTag(html, 'name', 'twitter:title');
         const ogImage = extractMetaTag(html, 'property', 'og:image') || extractMetaTag(html, 'name', 'twitter:image');
         const ogDesc = extractMetaTag(html, 'property', 'og:description') || extractMetaTag(html, 'name', 'description');
 
-        ogTitle = ogTitle.replace(/\s*[-–|]\s*Apple Music$/i, '').replace(/\s*on Apple Music$/i, '').trim();
+        ogTitle = ogTitle
+            .replace(/\s*[-–|]\s*Apple Music$/i, '')
+            .replace(/\s*on Apple Music$/i, '')
+            .replace(/\s*[-–|]\s*Apple Podcasts?$/i, '')
+            .replace(/\s*on Apple Podcasts?$/i, '')
+            .trim();
 
         const tracks = serverTracks.length > 0 ? serverTracks : (jsonLd?.tracks || []);
 

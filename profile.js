@@ -76,9 +76,18 @@ async function loadUserProfileData() {
 
     let { data: profile } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch')
+        .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch, audio_stream_url, audio_stream_type')
         .eq('id', currentProfileUser.id)
         .maybeSingle();
+
+    if (!profile) {
+        const fallbackRes = await supabaseClient
+            .from('profiles')
+            .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch')
+            .eq('id', currentProfileUser.id)
+            .maybeSingle();
+        profile = fallbackRes.data || null;
+    }
 
     const metaName = currentProfileUser.user_metadata?.full_name || currentProfileUser.user_metadata?.name || '';
     const resolvedName = profile?.full_name || metaName || currentProfileUser.email.split('@')[0];
@@ -88,6 +97,10 @@ async function loadUserProfileData() {
     if (handleInput) handleInput.value = (profile?.handle || '').replace(/^@+/, '');
     const bioInput = document.getElementById('profile-bio-input');
     if (bioInput) bioInput.value = profile?.bio || '';
+    const audioUrlInput = document.getElementById('profile-audio-stream-url');
+    if (audioUrlInput) audioUrlInput.value = profile?.audio_stream_url || '';
+    const audioTypeSelect = document.getElementById('profile-audio-stream-type');
+    if (audioTypeSelect) audioTypeSelect.value = profile?.audio_stream_type || '';
     const publicLink = document.getElementById('view-public-profile-btn');
     if (publicLink) publicLink.href = `user.html?id=${encodeURIComponent(currentProfileUser.id)}`;
     if (authNavLabel) authNavLabel.textContent = resolvedName;
@@ -293,6 +306,13 @@ async function handleProfileUpdate(e) {
     const rawHandle = (handleInput?.value || '').trim().toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_]/g, '');
     const handle = rawHandle ? `@${rawHandle}` : '';
     const bio = bioInput?.value.trim() || '';
+    const audioStreamUrl = document.getElementById('profile-audio-stream-url')?.value.trim() || null;
+    const audioStreamType = document.getElementById('profile-audio-stream-type')?.value.trim() || null;
+
+    if (audioStreamUrl && !audioStreamType) {
+        showToast('Please select whether your audio streaming link is for Sermons, Music, or Podcast.');
+        return;
+    }
 
     if (!fullName) {
         showToast('Please enter your full name.');
@@ -322,20 +342,32 @@ async function handleProfileUpdate(e) {
         return;
     }
 
-    const [authRes, profileRes] = await Promise.all([
+    const profileUpsertPayload = {
+        id: currentProfileUser.id,
+        email: currentProfileUser.email,
+        full_name: fullName,
+        handle,
+        bio,
+        audio_stream_url: audioStreamUrl,
+        audio_stream_type: audioStreamUrl ? audioStreamType : null
+    };
+
+    let [authRes, profileRes] = await Promise.all([
         supabaseClient.auth.updateUser({
             data: { full_name: fullName, handle }
         }),
         supabaseClient
             .from('profiles')
-            .upsert({
-                id: currentProfileUser.id,
-                email: currentProfileUser.email,
-                full_name: fullName,
-                handle,
-                bio
-            }, { onConflict: 'id' })
+            .upsert(profileUpsertPayload, { onConflict: 'id' })
     ]);
+
+    if (profileRes.error && /audio_stream_/i.test(profileRes.error.message || '')) {
+        delete profileUpsertPayload.audio_stream_url;
+        delete profileUpsertPayload.audio_stream_type;
+        profileRes = await supabaseClient
+            .from('profiles')
+            .upsert(profileUpsertPayload, { onConflict: 'id' });
+    }
 
     if (saveBtn) {
         saveBtn.disabled = false;

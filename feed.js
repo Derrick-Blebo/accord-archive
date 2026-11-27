@@ -1084,8 +1084,58 @@ function clearCreatePostError() {
     if (box) box.classList.add('hidden');
 }
 
+let _pendingAudioPostMeta = null;
+let _audioMetaPreviewTimer = null;
+
+function resetAudioPostMetaPreview() {
+    _pendingAudioPostMeta = null;
+    clearTimeout(_audioMetaPreviewTimer);
+    document.getElementById('audio-post-meta-preview')?.classList.add('hidden');
+}
+
+function scheduleAudioPostMetaPreview() {
+    const type = document.getElementById('post-type')?.value;
+    const url = document.getElementById('post-url')?.value.trim() || '';
+    const box = document.getElementById('audio-post-meta-preview');
+    const titleEl = document.getElementById('audio-post-meta-title');
+    const statusEl = document.getElementById('audio-post-meta-status');
+    const thumbEl = document.getElementById('audio-post-meta-thumb');
+
+    if (type !== 'audio' || !url || !/^https?:\/\//i.test(url)) {
+        resetAudioPostMetaPreview();
+        return;
+    }
+
+    clearTimeout(_audioMetaPreviewTimer);
+    _audioMetaPreviewTimer = setTimeout(async () => {
+        if (!box) return;
+        box.classList.remove('hidden');
+        if (statusEl) statusEl.textContent = 'Pulling title & thumbnail...';
+        if (titleEl) titleEl.textContent = url;
+        if (thumbEl) thumbEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        const meta = typeof fetchSharedAudioMetadata === 'function' ? await fetchSharedAudioMetadata(url) : null;
+        _pendingAudioPostMeta = meta ? { url, ...meta } : null;
+
+        if (meta && (meta.title || meta.image)) {
+            if (statusEl) statusEl.textContent = 'Auto-pulled from source';
+            if (titleEl) titleEl.textContent = meta.title || 'Audio Stream';
+            if (thumbEl) {
+                thumbEl.innerHTML = meta.image
+                    ? `<img src="${escapeHtml(meta.image)}" alt="Audio thumbnail" class="w-full h-full object-cover">`
+                    : '<i class="fa-solid fa-circle-play"></i>';
+            }
+        } else {
+            if (statusEl) statusEl.textContent = 'Audio link attached';
+            if (titleEl) titleEl.textContent = 'Thumbnail & title will load if supported by platform';
+            if (thumbEl) thumbEl.innerHTML = '<i class="fa-solid fa-circle-play"></i>';
+        }
+    }, 350);
+}
+
 function openCreatePostModal(defaultType = 'testimony') {
     clearCreatePostError();
+    resetAudioPostMetaPreview();
     const typeSelect = document.getElementById('post-type');
     if (typeSelect) typeSelect.value = defaultType;
     togglePostTypeFields();
@@ -1098,6 +1148,7 @@ function openCreatePostModal(defaultType = 'testimony') {
 
 function closeCreatePostModal() {
     clearCreatePostError();
+    resetAudioPostMetaPreview();
     const modal = document.getElementById('create-post-modal');
     modal?.classList.remove('flex');
     modal?.classList.add('hidden');
@@ -1142,7 +1193,23 @@ function togglePostTypeFields() {
 
     const needsUrl = type === 'video' || type === 'audio';
     urlGroup?.classList.toggle('hidden', !needsUrl);
-    if (urlInput) urlInput.required = needsUrl;
+    if (urlInput) {
+        urlInput.required = needsUrl;
+        urlInput.placeholder = type === 'audio'
+            ? 'Paste Spotify, Audiomack, Apple Music, or Apple Podcasts link...'
+            : 'https://www.youtube.com/watch?v=...';
+    }
+    const urlLabel = document.getElementById('post-url-label');
+    if (urlLabel) {
+        urlLabel.textContent = type === 'audio'
+            ? 'Audio Source URL * (Spotify, Audiomack, Apple Music, Apple Podcasts)'
+            : 'Video URL *';
+    }
+    if (type !== 'audio') {
+        resetAudioPostMetaPreview();
+    } else if (urlInput?.value.trim()) {
+        scheduleAudioPostMetaPreview();
+    }
 
     // Anonymous toggle applies to testimonies when posting as self
     idBox?.classList.toggle('hidden', type !== 'testimony' || Boolean(selectedPage));
@@ -1224,11 +1291,23 @@ async function handleCreatePostSubmit(e) {
             ? (isMinistryOrMinister(currentProfile) ? 'ministry_minister' : (currentProfile?.account_type || 'normal_user'))
             : 'guest');
 
+    let pulledAudioTitle = null;
+    let pulledAudioThumb = null;
+    if (postType === 'audio' && mediaUrl) {
+        let meta = (_pendingAudioPostMeta && _pendingAudioPostMeta.url === mediaUrl) ? _pendingAudioPostMeta : null;
+        if (!meta && typeof fetchSharedAudioMetadata === 'function') {
+            meta = await fetchSharedAudioMetadata(mediaUrl);
+        }
+        pulledAudioTitle = meta?.title || null;
+        pulledAudioThumb = meta?.image || null;
+    }
+
     const payload = {
         post_type: postType,
         title: '',
         body,
         media_url: (postType === 'video' || postType === 'audio') ? mediaUrl : null,
+        ...(postType === 'audio' ? { media_title: pulledAudioTitle, media_thumbnail: pulledAudioThumb } : {}),
         author_id: selectedPage ? selectedPage.id : (currentUser ? currentUser.id : null),
         author_name: authorName,
         author_role: resolvedRole,
@@ -1236,11 +1315,23 @@ async function handleCreatePostSubmit(e) {
         is_approved: true
     };
 
-    const { data, error } = await supabaseClient
+    let { data, error } = await supabaseClient
         .from('feed_posts')
         .insert([payload])
         .select()
         .single();
+
+    if (error && /media_title|media_thumbnail/i.test(error.message || '')) {
+        delete payload.media_title;
+        delete payload.media_thumbnail;
+        const retry = await supabaseClient
+            .from('feed_posts')
+            .insert([payload])
+            .select()
+            .single();
+        data = retry.data;
+        error = retry.error;
+    }
 
     if (submitBtn) {
         submitBtn.disabled = false;

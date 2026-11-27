@@ -186,9 +186,18 @@
                     </div>
                 </div>
 
-                <div id="post-url-group" class="hidden">
-                    <label id="post-url-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Media URL *</label>
-                    <input type="url" id="post-url" placeholder="https://www.youtube.com/watch?v=... or audio stream link" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                <div id="post-url-group" class="hidden space-y-2.5">
+                    <label id="post-url-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Media URL *</label>
+                    <input type="url" id="post-url" oninput="scheduleAudioPostMetaPreview()" placeholder="https://www.youtube.com/watch?v=... or Spotify / Audiomack / Apple link" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue">
+                    <div id="audio-post-meta-preview" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+                        <div id="audio-post-meta-thumb" class="w-12 h-12 rounded-lg bg-accord-goldLight text-accord-gold flex items-center justify-center overflow-hidden shrink-0">
+                            <i class="fa-solid fa-music"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p id="audio-post-meta-status" class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Auto-pulled Audio Info</p>
+                            <p id="audio-post-meta-title" class="text-xs font-bold text-accord-slate truncate">Waiting for link...</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="post-content-group">

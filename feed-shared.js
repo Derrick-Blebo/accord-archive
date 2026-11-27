@@ -315,6 +315,66 @@ function extractSharedBookId(text) {
     return m ? m[1] : null;
 }
 
+function getSharedAudioPlatformInfo(url) {
+    const raw = String(url || '').toLowerCase();
+    if (raw.includes('podcasts.apple.com')) {
+        return { key: 'apple_podcasts', label: 'Apple Podcasts', icon: 'fa-solid fa-podcast', color: 'text-purple-600 bg-purple-50' };
+    }
+    if (raw.includes('music.apple.com')) {
+        return { key: 'apple_music', label: 'Apple Music', icon: 'fa-brands fa-apple', color: 'text-rose-600 bg-rose-50' };
+    }
+    if (raw.includes('open.spotify.com') || raw.includes('spotify.com')) {
+        return { key: 'spotify', label: 'Spotify', icon: 'fa-brands fa-spotify', color: 'text-emerald-600 bg-emerald-50' };
+    }
+    if (raw.includes('audiomack.com')) {
+        return { key: 'audiomack', label: 'Audiomack', icon: 'fa-solid fa-headphones', color: 'text-amber-600 bg-amber-50' };
+    }
+    return { key: 'audio', label: 'Audio Stream', icon: 'fa-solid fa-circle-play', color: 'text-accord-gold bg-accord-goldLight' };
+}
+
+const _sharedAudioMetaCache = new Map();
+async function fetchSharedAudioMetadata(url) {
+    const clean = String(url || '').trim();
+    if (!clean) return null;
+    if (_sharedAudioMetaCache.has(clean)) return _sharedAudioMetaCache.get(clean);
+    try {
+        const res = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const meta = {
+            title: String(data?.title || '').trim(),
+            image: String(data?.image || '').trim(),
+            curator: String(data?.curator || '').trim()
+        };
+        _sharedAudioMetaCache.set(clean, meta);
+        return meta;
+    } catch {
+        return null;
+    }
+}
+
+async function hydrateSharedAudioLinkPreviews(rootEl = document) {
+    const slots = Array.from(rootEl.querySelectorAll('[data-audio-meta-url]'));
+    if (slots.length === 0) return;
+
+    await Promise.all(slots.map(async slot => {
+        const url = slot.getAttribute('data-audio-meta-url');
+        if (!url || slot.dataset.audioHydrated === '1') return;
+        slot.dataset.audioHydrated = '1';
+        const meta = await fetchSharedAudioMetadata(url);
+        if (!meta) return;
+
+        const titleEl = slot.querySelector('[data-audio-title]');
+        const thumbWrap = slot.querySelector('[data-audio-thumb]');
+        if (meta.title && titleEl) {
+            titleEl.textContent = meta.title;
+        }
+        if (meta.image && thumbWrap) {
+            thumbWrap.innerHTML = `<img src="${escapeShareHtml(meta.image)}" alt="${escapeShareHtml(meta.title || 'Audio cover')}" class="w-full h-full object-cover">`;
+        }
+    }));
+}
+
 const _sharedBookPreviewCache = new Map();
 async function hydrateSharedBookLinkPreviews(rootEl = document) {
     const client = window.supabaseClient;
@@ -472,19 +532,33 @@ function createSharedFeedCardElement(post, options = {}) {
         `;
     } else if (post.post_type === 'audio' && post.media_url) {
         const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
-        mediaHtml = isDirectAudio
-            ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+        if (isDirectAudio) {
+            mediaHtml = `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                   ${post.media_title ? `<p class="text-xs font-bold text-accord-slate truncate">${escapeShareHtml(post.media_title)}</p>` : ''}
                    <audio controls src="${escapeShareHtml(post.media_url)}" class="w-full"></audio>
-               </div>`
-            : `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5 transition-colors">
-                   <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
-                       <i class="fa-solid fa-circle-play text-lg"></i>
+               </div>`;
+        } else {
+            const pInfo = getSharedAudioPlatformInfo(post.media_url);
+            const pulledTitle = String(post.media_title || '').trim();
+            const pulledThumb = String(post.media_thumbnail || '').trim();
+            const needsHydrate = !pulledTitle || !pulledThumb;
+            mediaHtml = `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" ${needsHydrate ? `data-audio-meta-url="${escapeShareHtml(post.media_url)}"` : ''} class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-center space-x-3.5 transition-colors group">
+                   <div data-audio-thumb class="w-14 h-14 rounded-xl overflow-hidden ${pInfo.color} flex items-center justify-center shrink-0 border border-slate-200/70">
+                       ${pulledThumb
+                           ? `<img src="${escapeShareHtml(pulledThumb)}" alt="${escapeShareHtml(pulledTitle || pInfo.label)}" class="w-full h-full object-cover">`
+                           : `<i class="${pInfo.icon} text-xl"></i>`}
                    </div>
                    <div class="flex-grow min-w-0">
-                       <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
-                       <span class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</span>
+                       <p class="text-[10px] font-extrabold uppercase tracking-wider text-accord-muted flex items-center gap-1.5">
+                           <i class="${pInfo.icon}"></i>
+                           <span>${escapeShareHtml(pInfo.label)}</span>
+                       </p>
+                       <p data-audio-title class="text-xs sm:text-sm font-bold text-accord-slate truncate mt-0.5">${escapeShareHtml(pulledTitle || pInfo.label)}</p>
+                       <span class="text-[11px] text-accord-blue font-semibold group-hover:underline truncate block mt-0.5">Listen on ${escapeShareHtml(pInfo.label)} →</span>
                    </div>
+                   <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 group-hover:text-accord-blue shrink-0 pr-1"></i>
                </a>`;
+        }
     }
 
     const bodyText = String(post.body || '');
@@ -641,6 +715,10 @@ function createSharedFeedCardElement(post, options = {}) {
         </div>
     `;
 
+    if (card.querySelector('[data-audio-meta-url]')) {
+        hydrateSharedAudioLinkPreviews(card);
+    }
+
     return card;
 }
 
@@ -738,12 +816,33 @@ async function submitSharedEditPost(e) {
     }
 
     const edited_at = new Date().toISOString();
-    const { data, error } = await client
+    let updatePayload = { title: '', body, media_url, edited_at };
+    if (_editPostTarget.post_type === 'audio' && media_url) {
+        const meta = await fetchSharedAudioMetadata(media_url);
+        if (meta) {
+            updatePayload.media_title = meta.title || null;
+            updatePayload.media_thumbnail = meta.image || null;
+        }
+    }
+
+    let { data, error } = await client
         .from('feed_posts')
-        .update({ title: '', body, media_url, edited_at })
+        .update(updatePayload)
         .eq('id', _editPostTarget.id)
         .select()
         .single();
+
+    if (error && /media_title|media_thumbnail/i.test(error.message || '')) {
+        const fallbackPayload = { title: '', body, media_url, edited_at };
+        const retry = await client
+            .from('feed_posts')
+            .update(fallbackPayload)
+            .eq('id', _editPostTarget.id)
+            .select()
+            .single();
+        data = retry.data;
+        error = retry.error;
+    }
 
     if (btn) {
         btn.disabled = false;

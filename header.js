@@ -121,6 +121,7 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                     <a href="index.html" id="nav-library" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Digital Library</a>
                     <a href="feed.html" id="nav-feed" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Feed</a>
                     <a href="music.html" id="nav-music" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Music</a>
+                    <a href="sermons.html" id="nav-sermons" class="text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors">Sermons</a>
                     <a href="saved.html" id="nav-saved" class="relative text-sm font-semibold text-accord-slate hover:text-accord-blue transition-colors flex items-center space-x-1.5" title="Saved">
                         <i class="fa-solid fa-bookmark text-accord-gold"></i>
                         <span>Saved</span>
@@ -137,7 +138,7 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
             </div>
 
             <!-- Facebook-style Mobile Icon Navigation Bar -->
-            <nav class="md:hidden grid grid-cols-4 border-t border-slate-100 bg-white/95" aria-label="Mobile Navigation">
+            <nav class="md:hidden grid grid-cols-5 border-t border-slate-100 bg-white/95" aria-label="Mobile Navigation">
                 <a href="index.html" id="mobile-nav-library" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Digital Library" title="Digital Library">
                     <i class="fa-solid fa-book-open text-lg"></i>
                 </a>
@@ -146,6 +147,9 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                 </a>
                 <a href="music.html" id="mobile-nav-music" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Music" title="Music">
                     <i class="fa-solid fa-music text-lg"></i>
+                </a>
+                <a href="sermons.html" id="mobile-nav-sermons" class="h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Sermons" title="Sermons">
+                    <i class="fa-solid fa-church text-lg"></i>
                 </a>
                 <a href="saved.html" id="mobile-nav-saved" class="relative h-11 flex items-center justify-center text-slate-500 hover:text-accord-blue border-b-2 border-transparent transition-colors" aria-label="Saved" title="Saved">
                     <span class="relative inline-flex items-center justify-center">
@@ -189,6 +193,9 @@ function highlightActiveNavLink() {
     } else if (path.includes('feed') || path.includes('ministry') || path.includes('post') || path.includes('user')) {
         setActive('nav-feed');
         setMobileActive('mobile-nav-feed');
+    } else if (path.includes('sermons')) {
+        setActive('nav-sermons');
+        setMobileActive('mobile-nav-sermons');
     } else if (path.includes('music') || path.includes('polls')) {
         setActive('nav-music');
         setMobileActive('mobile-nav-music');
