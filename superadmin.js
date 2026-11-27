@@ -1044,6 +1044,8 @@ function renderSuperadminPromotionsList() {
         const views = Number(p.impressions_count || 0);
         const clicks = Number(p.clicks_count || 0);
         const ctr = views > 0 ? ((clicks / views) * 100).toFixed(1) : '0.0';
+        const dailyUsd = Number(p.daily_budget_usd || 0) || (Number(p.budget_amount || 0) > 0 ? Number(p.budget_amount) / Math.max(1, Number(p.duration_days || 1)) : 0);
+        const priorityBadge = dailyUsd > 0 ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">$${dailyUsd.toFixed(2)}/day</span>` : '';
         const scheduleLabel = p.ends_at
             ? `Ends ${new Date(p.ends_at).toLocaleDateString()}`
             : (p.duration_days === 0 ? 'Always Live' : `${p.duration_days || 7}d`);
@@ -1052,7 +1054,7 @@ function renderSuperadminPromotionsList() {
             <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                 <div class="flex items-start gap-3.5 min-w-0 flex-1">
                     ${thumbUrl
-                        ? `<img src="${escapeSuperHtml(thumbUrl)}" alt="${escapeSuperHtml(p.title)}" class="w-24 h-16 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-100">`
+                        ? `<img src="${escapeSuperHtml(thumbUrl)}" alt="${p.promo_type === 'banner' ? 'Banner ad' : escapeSuperHtml(p.title)}" class="w-24 h-16 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-100">`
                         : `<div class="w-24 h-16 rounded-xl bg-gradient-to-br from-accord-slate to-accord-darkBlue text-white flex items-center justify-center shrink-0 text-[10px] font-bold px-2 text-center">Text Banner</div>`
                     }
                     <div class="space-y-1 min-w-0">
@@ -1060,9 +1062,13 @@ function renderSuperadminPromotionsList() {
                             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeSuperHtml((p.status || '').replace('_', ' '))}</span>
                             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeSuperHtml(p.promo_type)}</span>
                             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700">${escapeSuperHtml(slotLabels[slotPos] || 'Dynamic Auto')}</span>
+                            ${priorityBadge}
                             <span class="text-[11px] font-semibold text-accord-muted">${escapeSuperHtml(scheduleLabel)}</span>
                         </div>
-                        <h3 class="text-sm font-bold text-accord-slate truncate">${escapeSuperHtml(p.title)}</h3>
+                        ${p.promo_type === 'banner'
+                            ? `<p class="text-xs font-semibold text-accord-slate truncate">${escapeSuperHtml(p.body || p.cta_url || 'Display Banner')}</p>`
+                            : `<h3 class="text-sm font-bold text-accord-slate truncate">${escapeSuperHtml(p.title)}</h3>`
+                        }
                         <p class="text-[11px] text-accord-muted">Locations: <strong class="text-accord-slate">${escapeSuperHtml(placements.join(', '))}</strong> • Countries: ${escapeSuperHtml((p.target_countries || ['GLOBAL']).join(', '))}</p>
                         <p class="text-[11px] text-slate-600">By ${escapeSuperHtml(p.advertiser_name || 'Superadmin')} • Views: <strong>${views}</strong> • Clicks: <strong>${clicks}</strong> (${ctr}% CTR)</p>
                     </div>
@@ -1210,6 +1216,18 @@ async function handleSuperadminAdImageUpload(input, variant) {
     }
 }
 
+function handleSuperadminAdTypeChange() {
+    const type = document.getElementById('superadmin-ad-type')?.value || 'banner';
+    const isBanner = type === 'banner';
+    const titleWrap = document.getElementById('superadmin-ad-title-wrap');
+    const titleInput = document.getElementById('superadmin-ad-title');
+    if (titleWrap) titleWrap.classList.toggle('hidden', isBanner);
+    if (titleInput) {
+        titleInput.required = !isBanner;
+        if (isBanner) titleInput.value = '';
+    }
+}
+
 function openSuperadminAdModal(promoId = null) {
     const modal = document.getElementById('superadmin-ad-modal');
     const form = document.getElementById('superadmin-ad-form');
@@ -1242,6 +1260,7 @@ function openSuperadminAdModal(promoId = null) {
 
     updateSuperadminAdImagePreview('desktop');
     updateSuperadminAdImagePreview('mobile');
+    handleSuperadminAdTypeChange();
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -1259,8 +1278,9 @@ async function handleSuperadminAdSubmit(e) {
     const submitBtn = document.getElementById('superadmin-ad-submit-btn');
     const editId = document.getElementById('superadmin-ad-id').value.trim();
     const promoType = document.getElementById('superadmin-ad-type').value;
+    const isBanner = promoType === 'banner';
     const slotPosition = document.getElementById('superadmin-ad-slot-position').value || 'dynamic';
-    const title = document.getElementById('superadmin-ad-title').value.trim();
+    const title = isBanner ? '' : document.getElementById('superadmin-ad-title').value.trim();
     const body = document.getElementById('superadmin-ad-body').value.trim() || null;
     const desktopUrl = document.getElementById('superadmin-ad-desktop-url').value.trim() || null;
     const mobileUrl = document.getElementById('superadmin-ad-mobile-url').value.trim() || null;
@@ -1275,8 +1295,12 @@ async function handleSuperadminAdSubmit(e) {
     const allChecked = document.getElementById('superadmin-ad-place-all')?.checked;
     const placements = (allChecked || specificPlacements.length === 0) ? ['all'] : specificPlacements;
 
-    if (!title) {
+    if (!isBanner && !title) {
         showToast('Please enter an ad title.', true);
+        return;
+    }
+    if (isBanner && !desktopUrl && !mobileUrl && !body) {
+        showToast('Please upload a banner image or enter short banner text.', true);
         return;
     }
 

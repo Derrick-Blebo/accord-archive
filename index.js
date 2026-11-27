@@ -728,7 +728,17 @@ function renderBooks() {
 
     topBooks.forEach(book => gridTop.appendChild(buildBookCardElement(book)));
     renderMidGridBanner(filtered.length > splitIndex);
-    bottomBooks.forEach(book => gridBottom.appendChild(buildBookCardElement(book)));
+    const adChunkSize = 6;
+    bottomBooks.forEach((book, idx) => {
+        gridBottom.appendChild(buildBookCardElement(book));
+        if ((idx + 1) % adChunkSize === 0 && idx < bottomBooks.length - 1) {
+            const adSlot = document.createElement('div');
+            adSlot.className = 'accord-library-inline-ad col-span-full my-3 hidden';
+            adSlot.setAttribute('data-ad-chunk-index', String(Math.floor((idx + 1) / adChunkSize)));
+            gridBottom.appendChild(adSlot);
+        }
+    });
+    window.populateAccordLibraryInlineAds?.();
 }
 
 // ==========================================

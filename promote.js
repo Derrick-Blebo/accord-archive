@@ -40,6 +40,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.getElementById('promo-workspace')?.classList.remove('hidden');
+    if (window.AccordCurrency?.init) {
+        await window.AccordCurrency.init();
+    }
+    updatePromoPriceDisplay();
     await Promise.all([loadPromoteChoices(), loadMyPromotions()]);
 
     const params = new URLSearchParams(window.location.search);
@@ -148,9 +152,18 @@ async function loadPromoteChoices() {
 
 function handlePromoTypeChange() {
     const type = document.getElementById('promo-type')?.value || 'post';
+    const isBanner = type === 'banner';
     document.getElementById('promo-post-select-wrap')?.classList.toggle('hidden', type !== 'post');
     document.getElementById('promo-book-select-wrap')?.classList.toggle('hidden', type !== 'book');
-    document.getElementById('promo-banner-fields')?.classList.toggle('hidden', type !== 'banner');
+    document.getElementById('promo-banner-fields')?.classList.toggle('hidden', !isBanner);
+
+    const titleWrap = document.getElementById('promo-title-wrap');
+    const titleInput = document.getElementById('promo-title');
+    if (titleWrap) titleWrap.classList.toggle('hidden', isBanner);
+    if (titleInput) {
+        titleInput.required = !isBanner;
+        if (isBanner) titleInput.value = '';
+    }
 }
 
 function prefillFromSelectedPost() {
@@ -171,16 +184,131 @@ function prefillFromSelectedBook() {
     document.getElementById('promo-cta-url').value = `book.html?id=${encodeURIComponent(book.id)}`;
 }
 
+let _dailyBudgetUsd = 1;
+let _durationDays = 7;
+
+function syncDailyBudget(val, source = 'slider') {
+    const parsed = Math.max(1, Math.round(Number(val) || 1));
+    _dailyBudgetUsd = parsed;
+
+    const slider = document.getElementById('promo-daily-slider');
+    const input = document.getElementById('promo-daily-input');
+    if (slider && source !== 'slider') slider.value = String(Math.min(100, parsed));
+    if (input && source !== 'input') input.value = String(parsed);
+
+    document.querySelectorAll('[data-daily-preset]').forEach(btn => {
+        const isActive = Number(btn.getAttribute('data-daily-preset')) === parsed;
+        btn.className = isActive
+            ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue'
+            : 'px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100';
+    });
+
+    updatePromoPriceDisplay();
+}
+
+function syncDurationDays(val) {
+    const parsed = Math.max(1, Math.min(30, Math.round(Number(val) || 7)));
+    _durationDays = parsed;
+
+    const slider = document.getElementById('promo-duration-slider');
+    if (slider) slider.value = String(parsed);
+
+    document.querySelectorAll('[data-duration-preset]').forEach(btn => {
+        const isActive = Number(btn.getAttribute('data-duration-preset')) === parsed;
+        btn.className = isActive
+            ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue'
+            : 'px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100';
+    });
+
+    updatePromoPriceDisplay();
+}
+
+function estimateDailyViews(_dailyUsd) {
+    // Future hook: once site traffic reaches calibration threshold, return { available: true, minViews, maxViews }
+    return { available: false };
+}
+
 function getSelectedPackage() {
-    const raw = document.getElementById('promo-package')?.value || '7:10';
-    const [days, price] = raw.split(':').map(Number);
-    return { duration_days: days || 7, budget_amount: price || 10 };
+    const daily_budget_usd = Math.max(1, Number(_dailyBudgetUsd || 1));
+    const duration_days = Math.max(1, Number(_durationDays || 7));
+    return {
+        daily_budget_usd,
+        duration_days,
+        budget_amount: Number((daily_budget_usd * duration_days).toFixed(2))
+    };
 }
 
 function updatePromoPriceDisplay() {
-    const { budget_amount } = getSelectedPackage();
-    const el = document.getElementById('promo-price-display');
-    if (el) el.textContent = `USD ${budget_amount.toFixed(2)}`;
+    const { daily_budget_usd, duration_days, budget_amount } = getSelectedPackage();
+    const curr = window.AccordCurrency?.getInfo ? window.AccordCurrency.getInfo() : { code: 'USD', symbol: '$', rate: 1, decimals: 2 };
+    const fmtLocal = (usd) => window.AccordCurrency?.formatLocalFromUsd
+        ? window.AccordCurrency.formatLocalFromUsd(usd)
+        : `USD ${Number(usd).toFixed(2)}`;
+
+    const badge = document.getElementById('promo-currency-badge');
+    if (badge) badge.textContent = `${curr.code} (${curr.symbol})`;
+
+    const dailyLocalEl = document.getElementById('promo-daily-local');
+    if (dailyLocalEl) dailyLocalEl.textContent = `${fmtLocal(daily_budget_usd)} / day`;
+
+    const dailyUsdNoteEl = document.getElementById('promo-daily-usd-note');
+    if (dailyUsdNoteEl) {
+        if (curr.code !== 'USD') {
+            dailyUsdNoteEl.textContent = `(USD ${daily_budget_usd.toFixed(2)}/day)`;
+            dailyUsdNoteEl.classList.remove('hidden');
+        } else {
+            dailyUsdNoteEl.classList.add('hidden');
+        }
+    }
+
+    const durLabel = document.getElementById('promo-duration-label');
+    if (durLabel) durLabel.textContent = `${duration_days} ${duration_days === 1 ? 'day' : 'days'}`;
+
+    const endDateEl = document.getElementById('promo-end-date-label');
+    if (endDateEl) {
+        const endDate = new Date(Date.now() + duration_days * 86400000);
+        endDateEl.textContent = `Runs until ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    const priorityBadge = document.getElementById('promo-priority-badge');
+    if (priorityBadge) {
+        if (daily_budget_usd >= 20) {
+            priorityBadge.textContent = `Top Priority (${daily_budget_usd}×)`;
+            priorityBadge.className = 'px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 shrink-0';
+        } else if (daily_budget_usd >= 10) {
+            priorityBadge.textContent = `High Priority (${daily_budget_usd}×)`;
+            priorityBadge.className = 'px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-50 text-amber-700 shrink-0';
+        } else if (daily_budget_usd >= 5) {
+            priorityBadge.textContent = `Boosted Priority (${daily_budget_usd}×)`;
+            priorityBadge.className = 'px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-accord-lightBlue text-accord-blue shrink-0';
+        } else {
+            priorityBadge.textContent = `Standard Priority (${daily_budget_usd}×)`;
+            priorityBadge.className = 'px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-slate-200/80 text-accord-slate shrink-0';
+        }
+    }
+
+    // Update preset pill labels to local currency if non-USD
+    document.querySelectorAll('[data-daily-preset]').forEach(btn => {
+        const usd = Number(btn.getAttribute('data-daily-preset'));
+        btn.textContent = `${fmtLocal(usd)}/day`;
+    });
+
+    const estViewsEl = document.getElementById('promo-estimated-views');
+    if (estViewsEl) {
+        const est = estimateDailyViews(daily_budget_usd);
+        estViewsEl.textContent = est.available
+            ? ` ~${est.minViews.toLocaleString()} – ${est.maxViews.toLocaleString()} views/day`
+            : " Coming soon — as site traffic grows, we'll show estimated daily views for your chosen daily budget.";
+    }
+
+    const priceEl = document.getElementById('promo-price-display');
+    if (priceEl) priceEl.textContent = fmtLocal(budget_amount);
+
+    const subEl = document.getElementById('promo-price-usd-sub');
+    if (subEl) {
+        const usdSummary = `${duration_days} ${duration_days === 1 ? 'day' : 'days'} × USD ${daily_budget_usd.toFixed(2)}/day = USD ${budget_amount.toFixed(2)}`;
+        subEl.textContent = usdSummary;
+    }
 }
 
 async function handlePromotionSubmit(e) {
@@ -188,7 +316,8 @@ async function handlePromotionSubmit(e) {
     if (!promoUser) return;
 
     const promoType = document.getElementById('promo-type').value;
-    const title = document.getElementById('promo-title').value.trim();
+    const isBanner = promoType === 'banner';
+    const title = isBanner ? '' : document.getElementById('promo-title').value.trim();
     const body = document.getElementById('promo-body').value.trim();
     const ctaUrl = document.getElementById('promo-cta-url').value.trim();
     const ctaText = document.getElementById('promo-cta-text').value.trim() || 'Learn More';
@@ -199,9 +328,16 @@ async function handlePromotionSubmit(e) {
         : [];
     const targetPostId = promoType === 'post' ? (document.getElementById('promo-post-id').value || null) : null;
     const targetBookId = promoType === 'book' ? (Number(document.getElementById('promo-book-id').value) || null) : null;
-    const desktopImg = promoType === 'banner' ? (document.getElementById('promo-desktop-img').value.trim() || null) : null;
-    const mobileImg = promoType === 'banner' ? (document.getElementById('promo-mobile-img').value.trim() || null) : null;
-    const { duration_days, budget_amount } = getSelectedPackage();
+    const desktopImg = isBanner ? (document.getElementById('promo-desktop-img').value.trim() || null) : null;
+    const mobileImg = isBanner ? (document.getElementById('promo-mobile-img').value.trim() || null) : null;
+    const { daily_budget_usd, duration_days, budget_amount } = getSelectedPackage();
+    const localInfo = window.AccordCurrency?.getInfo ? window.AccordCurrency.getInfo() : { code: 'USD' };
+    const localBudgetAmount = window.AccordCurrency?.fromUsd ? window.AccordCurrency.fromUsd(budget_amount, localInfo.code) : budget_amount;
+
+    if (isBanner && !desktopImg && !mobileImg && !body) {
+        showToast('Please provide a banner image URL or short description.', true);
+        return;
+    }
 
     if (/^(javascript|data|vbscript):/i.test(ctaUrl)) {
         showToast('Please enter a valid destination URL.', true);
@@ -249,13 +385,34 @@ async function handlePromotionSubmit(e) {
     const btn = document.getElementById('promo-pay-btn');
     if (btn) btn.disabled = true;
 
+    let paystackCurrency = 'GHS';
+    try {
+        const cfgResp = await fetch('/api/paystack-verify');
+        if (cfgResp.ok) {
+            const cfgData = await cfgResp.json();
+            if (cfgData?.currency) paystackCurrency = String(cfgData.currency).toUpperCase();
+        }
+    } catch (_) {}
+
+    const chargeAmount = window.AccordCurrency?.fromUsd
+        ? window.AccordCurrency.fromUsd(budget_amount, paystackCurrency)
+        : budget_amount;
+
     window.launchAccordPaystackCheckout({
         email: promoUser.email,
-        amount: budget_amount,
-        currency: 'GHS',
-        metadata: { type: 'paid_promotion', promo_type: promoType, user_id: promoUser.id },
+        amount: chargeAmount,
+        currency: paystackCurrency,
+        metadata: {
+            type: 'paid_promotion',
+            promo_type: promoType,
+            user_id: promoUser.id,
+            daily_budget_usd,
+            duration_days,
+            total_usd: budget_amount,
+            local_currency: localInfo.code
+        },
         onVerified: async (tx) => {
-            const { error } = await supabaseClient.from('promotions').insert([{
+            const insertPayload = {
                 advertiser_id: promoUser.id,
                 advertiser_name: promoUser.user_metadata?.full_name || promoUser.email?.split('@')[0] || 'Member',
                 advertiser_email: promoUser.email,
@@ -272,12 +429,21 @@ async function handlePromotionSubmit(e) {
                 target_countries: targetCountries,
                 duration_days,
                 budget_amount,
-                currency: tx.currency || 'GHS',
+                daily_budget_usd,
+                local_currency: localInfo.code,
+                local_budget_amount: localBudgetAmount,
+                currency: tx.currency || paystackCurrency,
                 payment_provider: 'paystack',
                 payment_reference: tx.reference,
                 payment_status: 'paid',
                 status: 'pending_approval'
-            }]);
+            };
+
+            let { error } = await supabaseClient.from('promotions').insert([insertPayload]);
+            if (error && /(daily_budget_usd|local_currency|local_budget_amount)/i.test(error.message || '')) {
+                const { daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, ...fallbackPayload } = insertPayload;
+                ({ error } = await supabaseClient.from('promotions').insert([fallbackPayload]));
+            }
 
             if (btn) btn.disabled = false;
             if (error) {
@@ -286,7 +452,9 @@ async function handlePromotionSubmit(e) {
             }
             showToast('Payment verified! Promotion submitted for Admin approval.');
             document.getElementById('promote-form')?.reset();
-            updatePromoPriceDisplay();
+            syncDailyBudget(1, 'reset');
+            syncDurationDays(7);
+            handlePromoTypeChange();
             await loadMyPromotions();
         },
         onError: (msg) => {
@@ -323,18 +491,31 @@ async function loadMyPromotions() {
         expired: 'bg-slate-100 text-slate-500'
     };
 
-    listEl.innerHTML = data.map(p => `
+    listEl.innerHTML = data.map(p => {
+        const displayTitle = p.promo_type === 'banner'
+            ? (p.body ? p.body.slice(0, 70) : 'Display Ad Banner')
+            : (p.title || 'Promotion');
+        const totalUsd = Number(p.budget_amount || 0);
+        const dailyUsd = Number(p.daily_budget_usd || 0) || (totalUsd > 0 ? totalUsd / Math.max(1, Number(p.duration_days || 1)) : 0);
+        const localLabel = window.AccordCurrency?.formatLocalFromUsd
+            ? window.AccordCurrency.formatLocalFromUsd(totalUsd)
+            : `USD ${totalUsd.toFixed(2)}`;
+        const dailyLabel = window.AccordCurrency?.formatLocalFromUsd
+            ? window.AccordCurrency.formatLocalFromUsd(dailyUsd)
+            : `USD ${dailyUsd.toFixed(2)}`;
+        return `
         <div class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-1.5">
             <div class="flex items-center justify-between gap-2">
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml(p.status.replace('_', ' '))}</span>
-                <span class="text-[11px] font-semibold text-accord-muted">${p.duration_days}d · USD ${Number(p.budget_amount || 0).toFixed(2)}</span>
+                <span class="text-[11px] font-semibold text-accord-muted">${p.duration_days}d · ${escapePromoHtml(localLabel)} (${escapePromoHtml(dailyLabel)}/day)</span>
             </div>
-            <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(p.title)}</p>
+            <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(displayTitle)}</p>
             <div class="flex items-center gap-3 text-[11px] text-accord-muted">
                 <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
                 <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
             </div>
             ${p.admin_notes ? `<p class="text-[11px] text-accord-blue">Admin note: ${escapePromoHtml(p.admin_notes)}</p>` : ''}
         </div>
-    `).join('');
+        `;
+    }).join('');
 }

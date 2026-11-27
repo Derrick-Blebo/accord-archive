@@ -90,13 +90,74 @@
                                 <option value="banner">Display Ad Banner</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Duration &amp; Package *</label>
-                            <select id="promo-package" onchange="updatePromoPriceDisplay()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                                <option value="7:10">7 Days — USD 10.00</option>
-                                <option value="14:18">14 Days — USD 18.00</option>
-                                <option value="30:35">30 Days — USD 35.00</option>
-                            </select>
+                        <div class="flex items-end">
+                            <div class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Local Currency</span>
+                                <span id="promo-currency-badge" class="text-xs font-extrabold text-accord-blue">USD ($)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Facebook-Style Daily Budget & Duration Sliding Scale -->
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Daily Budget &amp; Duration</p>
+                                <p class="text-[11px] text-accord-muted">Starts from $1 USD/day. Higher daily spend gives your ad higher priority across the site.</p>
+                            </div>
+                            <span id="promo-priority-badge" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-accord-lightBlue text-accord-blue shrink-0">Standard Priority</span>
+                        </div>
+
+                        <!-- Daily Spend Slider -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <label for="promo-daily-slider" class="text-xs font-bold text-accord-slate">Daily Spend</label>
+                                <div class="flex items-center gap-2">
+                                    <span id="promo-daily-local" class="text-sm font-extrabold text-accord-slate">$1.00 / day</span>
+                                    <span id="promo-daily-usd-note" class="hidden text-[11px] font-semibold text-accord-muted"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="range" id="promo-daily-slider" min="1" max="100" step="1" value="1" oninput="syncDailyBudget(this.value, 'slider')" class="w-full accent-accord-blue cursor-pointer">
+                                <div class="flex items-center bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
+                                    <span class="text-[11px] font-bold text-accord-muted mr-1">$</span>
+                                    <input type="number" id="promo-daily-input" min="1" max="1000" step="1" value="1" oninput="syncDailyBudget(this.value, 'input')" class="w-12 text-xs font-bold text-accord-slate focus:outline-none bg-transparent">
+                                </div>
+                            </div>
+                            <div id="promo-daily-presets" class="flex flex-wrap gap-1.5">
+                                <button type="button" onclick="syncDailyBudget(1, 'preset')" data-daily-preset="1" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">$1/day</button>
+                                <button type="button" onclick="syncDailyBudget(5, 'preset')" data-daily-preset="5" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$5/day</button>
+                                <button type="button" onclick="syncDailyBudget(10, 'preset')" data-daily-preset="10" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$10/day</button>
+                                <button type="button" onclick="syncDailyBudget(25, 'preset')" data-daily-preset="25" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$25/day</button>
+                                <button type="button" onclick="syncDailyBudget(50, 'preset')" data-daily-preset="50" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$50/day</button>
+                            </div>
+                        </div>
+
+                        <!-- Duration Slider -->
+                        <div class="space-y-2 pt-1 border-t border-slate-200/80">
+                            <div class="flex items-center justify-between gap-2">
+                                <label for="promo-duration-slider" class="text-xs font-bold text-accord-slate">Duration</label>
+                                <span id="promo-duration-label" class="text-xs font-extrabold text-accord-slate">7 days</span>
+                            </div>
+                            <input type="range" id="promo-duration-slider" min="1" max="30" step="1" value="7" oninput="syncDurationDays(this.value)" class="w-full accent-accord-blue cursor-pointer">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap gap-1.5">
+                                    <button type="button" onclick="syncDurationDays(3)" data-duration-preset="3" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">3 days</button>
+                                    <button type="button" onclick="syncDurationDays(7)" data-duration-preset="7" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">7 days</button>
+                                    <button type="button" onclick="syncDurationDays(14)" data-duration-preset="14" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">14 days</button>
+                                    <button type="button" onclick="syncDurationDays(30)" data-duration-preset="30" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">30 days</button>
+                                </div>
+                                <span id="promo-end-date-label" class="text-[11px] text-accord-muted font-medium"></span>
+                            </div>
+                        </div>
+
+                        <!-- Future Estimated Views Placeholder -->
+                        <div class="rounded-xl bg-white border border-slate-200/90 px-3.5 py-2.5 flex items-start gap-2.5">
+                            <i class="fa-solid fa-chart-line text-accord-blue text-xs mt-0.5"></i>
+                            <div class="text-[11px]">
+                                <span class="font-bold text-accord-slate">Estimated Daily Views:</span>
+                                <span id="promo-estimated-views" class="text-accord-muted"> Coming soon — as site traffic grows, we'll show estimated daily views for your chosen daily budget.</span>
+                            </div>
                         </div>
                     </div>
 
@@ -114,7 +175,7 @@
                         </select>
                     </div>
 
-                    <div>
+                    <div id="promo-title-wrap">
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Headline / Title *</label>
                         <input type="text" id="promo-title" required maxlength="140" placeholder="Catchy headline for your promotion" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                     </div>
@@ -162,12 +223,13 @@
                         </div>
                     </div>
 
-                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Promotion Fee</p>
-                            <p id="promo-price-display" class="text-lg font-extrabold text-accord-slate">USD 10.00</p>
+                            <p id="promo-price-display" class="text-lg font-extrabold text-accord-slate">$7.00</p>
+                            <p id="promo-price-usd-sub" class="text-[11px] text-accord-muted">7 days × $1.00 USD/day</p>
                         </div>
-                        <button type="submit" id="promo-pay-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2">
+                        <button type="submit" id="promo-pay-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
                             <i class="fa-solid fa-credit-card"></i>
                             <span>Pay with Paystack &amp; Submit</span>
                         </button>
@@ -190,6 +252,7 @@
 
     <div id="accord-footer"></div>
     <script src="footer.js"></script>
+    <script src="currency.js"></script>
     <script src="paystack-helper.js"></script>
     <script src="promote.js"></script>
 </body>

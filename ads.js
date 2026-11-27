@@ -7,6 +7,7 @@
 (function () {
     let _activePromotionsCache = null;
     let _adImpressionObserver = null;
+    let _lastMidPromoId = null;
     const _trackedImpressions = new Set();
 
     const MAIN_PAGE_PLACEMENTS = {
@@ -171,8 +172,8 @@
             return `
                 <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" data-promo-id="${promo.id}" class="block relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-md group bg-white">
                     <span class="absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 rounded-full bg-accord-slate/80 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">Sponsored</span>
-                    ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${escapeAdHtml(promo.title)}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
-                    ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${escapeAdHtml(promo.title)}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
+                    ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="Sponsored banner" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
+                    ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="Sponsored banner" class="sm:hidden w-full max-h-80 object-cover">` : ''}
                 </a>
             `;
         }
@@ -183,7 +184,6 @@
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accord-gold/20 text-accord-gold text-[10px] font-extrabold uppercase tracking-wider">
                         <i class="fa-solid fa-bullhorn text-[9px]"></i> Sponsored
                     </span>
-                    <h3 class="text-base sm:text-xl font-bold leading-snug">${escapeAdHtml(promo.title)}</h3>
                     ${promo.body ? `<p class="text-xs sm:text-sm text-slate-200 line-clamp-2">${escapeAdHtml(promo.body)}</p>` : ''}
                 </div>
                 <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="px-5 py-2.5 rounded-xl bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold shrink-0 transition-all shadow">
@@ -260,6 +260,76 @@
         container.appendChild(slot);
     }
 
+    function getPromoDailyUsd(promo) {
+        const explicitDaily = Number(promo?.daily_budget_usd || 0);
+        if (explicitDaily > 0) return explicitDaily;
+        const totalBudget = Number(promo?.budget_amount || 0);
+        if (totalBudget > 0) {
+            const days = Math.max(1, Number(promo?.duration_days || 1));
+            return totalBudget / days;
+        }
+        return 1;
+    }
+
+    function shufflePromos(list) {
+        if (!Array.isArray(list) || list.length <= 1) return [...(list || [])];
+        // Weighted random sampling (Efraimidis-Spirakis): higher daily spenders get higher priority
+        return list
+            .map(item => {
+                const weight = Math.max(0.25, getPromoDailyUsd(item));
+                const r = Math.max(1e-9, Math.random());
+                return { item, score: Math.pow(r, 1 / weight) };
+            })
+            .sort((a, b) => b.score - a.score)
+            .map(entry => entry.item);
+    }
+
+    window.createAccordInlineAdElement = function (promo) {
+        if (promo && promo.promo_type === 'banner') {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'accord-inline-banner-ad w-full';
+            wrapper.innerHTML = buildBannerSlideHtml(promo);
+            return wrapper;
+        }
+        return window.createAccordSponsoredCardElement(promo);
+    };
+
+    window.populateAccordLibraryInlineAds = async function () {
+        if (getCurrentPagePlacement() !== 'library') return;
+        const slots = Array.from(document.querySelectorAll('.accord-library-inline-ad'));
+        if (slots.length === 0) return;
+
+        const promos = await fetchActivePromotions();
+        if (!promos || promos.length === 0) {
+            slots.forEach(slot => slot.remove());
+            return;
+        }
+
+        // Prefer non-top/non-bottom promos for inline chunks, falling back to all promos if needed
+        let pool = promos.filter(p => {
+            const pos = getPromoSlotPosition(p);
+            return pos === 'dynamic' || pos === 'mid';
+        });
+        if (pool.length === 0) {
+            pool = [...promos];
+        }
+
+        let ordered = shufflePromos(pool);
+        // Avoid repeating the mid-zone banner right in the first inline chunk if alternatives exist
+        if (_lastMidPromoId && ordered.length > 1 && String(ordered[0].id) === String(_lastMidPromoId)) {
+            ordered.push(ordered.shift());
+        }
+
+        slots.forEach((slot, idx) => {
+            const promo = ordered[idx % ordered.length];
+            slot.innerHTML = '';
+            slot.appendChild(window.createAccordInlineAdElement(promo));
+            slot.classList.remove('hidden');
+        });
+
+        setupAdImpressionObserver();
+    };
+
     window.renderAccordCentralAdBanners = async function (containerId) {
         if (!isMainSitePage() && !containerId) return;
 
@@ -272,14 +342,23 @@
 
         const promos = await fetchActivePromotions();
         const currentPlacement = getCurrentPagePlacement();
-        // On feed.html, feed.js already renders 'post' and 'book' promos inline in the feed stream.
+        // On feed.html, feed.js renders inline ads (including banners) directly between posts in #feed-stream;
+        // only render explicitly top/bottom-pinned banners as page-level zones on feed.html.
         const banners = currentPlacement === 'feed'
-            ? promos.filter(p => p.promo_type === 'banner')
+            ? promos.filter(p => {
+                if (p.promo_type !== 'banner') return false;
+                const pos = getPromoSlotPosition(p);
+                return pos === 'top' || pos === 'bottom';
+            })
             : promos;
 
         document.querySelectorAll('.accord-dynamic-banner-slot').forEach(el => el.remove());
+        _lastMidPromoId = null;
 
         if (banners.length === 0) {
+            if (currentPlacement === 'library') {
+                await window.populateAccordLibraryInlineAds();
+            }
             return;
         }
 
@@ -302,7 +381,7 @@
         });
 
         // Distribute dynamic banners across available zones (rotating randomly so they don't stay hardcoded)
-        const shuffledDynamic = [...dynamicQueue].sort(() => Math.random() - 0.5);
+        const shuffledDynamic = shufflePromos(dynamicQueue);
         const startOffset = Math.floor(Math.random() * zoneOrder.length);
         shuffledDynamic.forEach((b, idx) => {
             const chosenZone = zoneOrder[(startOffset + idx) % zoneOrder.length];
@@ -310,19 +389,37 @@
             zoneAssignments[chosenZone].push(b);
         });
 
-        // Render up to 1 banner per zone (pick randomly if multiple target the same zone)
+        // Render up to 1 banner per zone (avoiding duplicate picks across zones when possible)
+        const usedIds = new Set();
         Object.entries(zoneAssignments).forEach(([zone, list]) => {
             if (!list || list.length === 0) return;
-            const chosen = list[Math.floor(Math.random() * list.length)];
+            const unused = list.filter(item => !usedIds.has(String(item.id)));
+            const candidates = unused.length > 0 ? unused : list;
+            const chosen = shufflePromos(candidates)[0];
+            usedIds.add(String(chosen.id));
+            if (zone === 'mid') _lastMidPromoId = chosen.id;
             insertBannerAtZone(container, zone, chosen);
         });
+
+        if (currentPlacement === 'library') {
+            await window.populateAccordLibraryInlineAds();
+        }
 
         setupAdImpressionObserver();
     };
 
     window.getAccordSponsoredFeedCards = async function () {
         const promos = await fetchActivePromotions();
-        return promos.filter(p => p.promo_type === 'post' || p.promo_type === 'book');
+        // Include post, book, and non-edge-pinned banner promos so different ads appear throughout the feed stream
+        const eligible = promos.filter(p => {
+            if (p.promo_type === 'post' || p.promo_type === 'book') return true;
+            if (p.promo_type === 'banner') {
+                const pos = getPromoSlotPosition(p);
+                return pos === 'dynamic' || pos === 'mid';
+            }
+            return false;
+        });
+        return shufflePromos(eligible);
     };
 
     window.createAccordSponsoredCardElement = function (promo) {

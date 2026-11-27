@@ -401,20 +401,26 @@ async function renderFeedStream() {
         ? await window.getAccordSponsoredFeedCards()
         : [];
     let adIdx = 0;
+    const postAdChunkSize = 4;
     const suggestionsAfterPosts = 3;
     const suggestionsTargetIdx = Math.min(suggestionsAfterPosts, visibleItems.length) - 1;
+    const createFeedAdEl = typeof window.createAccordInlineAdElement === 'function'
+        ? window.createAccordInlineAdElement
+        : window.createAccordSponsoredCardElement;
 
     visibleItems.forEach((item, idx) => {
         streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
         if (idx === suggestionsTargetIdx && suggestionsSection) {
             streamContainer.appendChild(suggestionsSection);
         }
-        if ((idx + 1) % 4 === 0 && adIdx < sponsoredCards.length && typeof window.createAccordSponsoredCardElement === 'function') {
-            streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[adIdx++]));
+        if ((idx + 1) % postAdChunkSize === 0 && sponsoredCards.length > 0 && typeof createFeedAdEl === 'function') {
+            const promo = sponsoredCards[adIdx % sponsoredCards.length];
+            adIdx++;
+            streamContainer.appendChild(createFeedAdEl(promo));
         }
     });
-    if (adIdx === 0 && sponsoredCards.length > 0 && typeof window.createAccordSponsoredCardElement === 'function') {
-        streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[0]));
+    if (adIdx === 0 && sponsoredCards.length > 0 && typeof createFeedAdEl === 'function') {
+        streamContainer.appendChild(createFeedAdEl(sponsoredCards[0]));
     }
     renderFeedSuggestions();
     window.observeAccordAds?.();
