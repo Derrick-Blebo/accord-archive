@@ -549,8 +549,12 @@ function toggleMusicTypeFields() {
     const type = document.getElementById('item-type')?.value;
     const tracksGroup = document.getElementById('playlist-tracks-group');
     const spotlightGroup = document.getElementById('spotlight-extra-group');
+    const spotlightLinkGroup = document.getElementById('spotlight-link-group');
+    const playlistLinksGroup = document.getElementById('playlist-links-group');
     if (tracksGroup) tracksGroup.classList.toggle('hidden', type !== 'playlist');
     if (spotlightGroup) spotlightGroup.classList.toggle('hidden', type !== 'spotlight');
+    if (spotlightLinkGroup) spotlightLinkGroup.classList.toggle('hidden', type === 'playlist');
+    if (playlistLinksGroup) playlistLinksGroup.classList.toggle('hidden', type !== 'playlist');
 }
 
 function addSpotlightSongRow(title = '', link = '') {
@@ -667,9 +671,19 @@ async function handleCoverFileUpload(event) {
 }
 
 async function autoFillMusicMetadata() {
+    const type = document.getElementById('item-type')?.value;
+    const isPlaylist = type === 'playlist';
     const linkInput = document.getElementById('item-link');
-    const btn = document.getElementById('autofill-meta-btn');
-    const rawUrl = String(linkInput?.value || '').trim();
+    const btn = document.getElementById(isPlaylist ? 'playlist-autofill-meta-btn' : 'autofill-meta-btn');
+    const rawUrl = isPlaylist
+        ? String(
+            document.getElementById('item-apple-link')?.value ||
+            document.getElementById('item-spotify-link')?.value ||
+            document.getElementById('item-audiomack-link')?.value ||
+            linkInput?.value ||
+            ''
+        ).trim()
+        : String(linkInput?.value || '').trim();
     if (!rawUrl) {
         showToast('Paste a playlist or streaming link first.');
         return;
@@ -778,10 +792,25 @@ function openMusicModal(mode = 'add', id = null) {
                 } else {
                     addSpotlightSongRow();
                 }
-            } else if (Array.isArray(item.tracks)) {
-                document.getElementById('item-tracks').value = item.tracks
-                    .map(t => (t.artist ? `${t.title} - ${t.artist}` : t.title))
-                    .join('\n');
+            } else {
+                const linksObj = item.links && typeof item.links === 'object' ? item.links : {};
+                const legacyLink = String(item.link || '').trim();
+                const legacyLower = legacyLink.toLowerCase();
+                const spotifyVal = linksObj.spotify || item.spotifyLink || (legacyLower.includes('spotify.com') ? legacyLink : '');
+                const audiomackVal = linksObj.audiomack || item.audiomackLink || (legacyLower.includes('audiomack.com') ? legacyLink : '');
+                const appleVal = linksObj.apple || item.appleMusicLink || (legacyLower.includes('music.apple.com') ? legacyLink : '');
+                const spotifyInput = document.getElementById('item-spotify-link');
+                const audiomackInput = document.getElementById('item-audiomack-link');
+                const appleInput = document.getElementById('item-apple-link');
+                if (spotifyInput) spotifyInput.value = spotifyVal;
+                if (audiomackInput) audiomackInput.value = audiomackVal;
+                if (appleInput) appleInput.value = appleVal;
+
+                if (Array.isArray(item.tracks)) {
+                    document.getElementById('item-tracks').value = item.tracks
+                        .map(t => (t.artist ? `${t.title} - ${t.artist}` : t.title))
+                        .join('\n');
+                }
             }
         }
     } else {
@@ -834,13 +863,24 @@ async function handleSaveMusicItem(e) {
 
     const tracks = type === 'playlist' ? parseTracksTextarea(document.getElementById('item-tracks').value) : [];
 
+    const spotifyLink = type === 'playlist' ? (document.getElementById('item-spotify-link')?.value.trim() || '') : '';
+    const audiomackLink = type === 'playlist' ? (document.getElementById('item-audiomack-link')?.value.trim() || '') : '';
+    const appleLink = type === 'playlist' ? (document.getElementById('item-apple-link')?.value.trim() || '') : '';
+    const playlistLinks = type === 'playlist'
+        ? { spotify: spotifyLink, audiomack: audiomackLink, apple: appleLink }
+        : undefined;
+    const primaryLink = type === 'playlist'
+        ? (spotifyLink || appleLink || audiomackLink || link)
+        : link;
+
     const record = {
         id,
         title,
         genre,
         curator,
         image,
-        link,
+        link: primaryLink,
+        ...(playlistLinks ? { links: playlistLinks } : {}),
         description,
         article: description,
         tracks,

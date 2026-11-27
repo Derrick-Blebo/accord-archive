@@ -166,13 +166,45 @@
                         </select>
                     </div>
 
-                    <div>
+                    <div id="spotlight-link-group">
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link / Embed URL (Apple Music, Spotify, Audiomack, YouTube)</label>
                         <div class="flex items-center gap-2">
                             <input type="url" id="item-link" placeholder="https://music.apple.com/... or https://open.spotify.com/..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                             <button type="button" id="autofill-meta-btn" onclick="autoFillMusicMetadata()" class="px-3.5 py-3 rounded-xl bg-slate-100 hover:bg-emerald-50 text-accord-slate hover:text-emerald-700 border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all" title="Try to auto-fetch name and cover from link">
                                 <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill
                             </button>
+                        </div>
+                    </div>
+
+                    <div id="playlist-links-group" class="hidden space-y-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Playlist Platform Links</p>
+                                <p class="text-[11px] text-accord-muted">Add links for each platform so listeners can choose where to stream.</p>
+                            </div>
+                            <button type="button" id="playlist-autofill-meta-btn" onclick="autoFillMusicMetadata()" class="px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 text-accord-slate hover:text-emerald-700 border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all shrink-0" title="Auto-fill title, cover, and tracks from one of the links">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill
+                            </button>
+                        </div>
+                        <div class="space-y-2.5">
+                            <div>
+                                <label for="item-spotify-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                    <i class="fa-brands fa-spotify text-[#1DB954]"></i> Spotify Link
+                                </label>
+                                <input type="url" id="item-spotify-link" placeholder="https://open.spotify.com/playlist/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label for="item-audiomack-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                    <i class="fa-solid fa-headphones text-amber-500"></i> Audiomack Link
+                                </label>
+                                <input type="url" id="item-audiomack-link" placeholder="https://audiomack.com/.../playlist/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label for="item-apple-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                    <i class="fa-brands fa-apple text-slate-800"></i> Apple Music Link
+                                </label>
+                                <input type="url" id="item-apple-link" placeholder="https://music.apple.com/.../playlist/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-emerald-500">
+                            </div>
                         </div>
                     </div>
 
@@ -688,6 +720,6 @@
     <script src="admin-core.js"></script>
 
     <!-- Script -->
-    <script src="music-admin.js?v=4"></script>
+    <script src="music-admin.js?v=5"></script>
 </body>
 </html>
