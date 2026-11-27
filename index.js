@@ -676,42 +676,9 @@ function renderMidGridBanner(showBanner) {
         return;
     }
 
-    // 2. Fallback Default Banner if no Image Slides have been uploaded yet
-    let ctaHtml = '';
-    if (bannerConfig.actionType === 'forum') {
-        ctaHtml = `<a href="feed.html" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-                       <span>${escapeHTML(bannerConfig.btnText || 'Explore Feed')}</span>
-                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
-                   </a>`;
-    } else if (bannerConfig.actionType === 'custom') {
-        ctaHtml = `<a href="${escapeHTML(bannerConfig.customUrl || 'feed.html')}" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-                       <span>${escapeHTML(bannerConfig.btnText || 'Learn More')}</span>
-                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
-                   </a>`;
-    } else {
-        ctaHtml = `<button type="button" onclick="openContributeModal()" class="bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all inline-flex items-center space-x-2 shrink-0">
-                       <span>${escapeHTML(bannerConfig.btnText || 'Submit a Manuscript')}</span>
-                       <i class="fa-solid fa-arrow-right text-[11px]"></i>
-                   </button>`;
-    }
-
-    bannerEl.innerHTML = `
-        <div class="bg-gradient-to-r from-accord-slate via-blue-950 to-accord-darkBlue rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-blue-900/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-            <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px]"></div>
-            <div class="relative z-10 space-y-1.5 max-w-2xl">
-                <span class="inline-flex items-center space-x-1.5 bg-white/10 text-accord-gold px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                    <i class="fa-solid fa-sparkles"></i>
-                    <span>${escapeHTML(bannerConfig.badge || 'ACCORD HERITAGE INITIATIVE')}</span>
-                </span>
-                <h3 class="serif-heading text-xl sm:text-2xl font-bold leading-snug">${escapeHTML(bannerConfig.headline)}</h3>
-                <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${escapeHTML(bannerConfig.subtext)}</p>
-            </div>
-            <div class="relative z-10">
-                ${ctaHtml}
-            </div>
-        </div>
-    `;
-    bannerEl.classList.remove('hidden');
+    // 2. No uploaded slides: keep mid-grid-banner hidden (centralized dynamic banner ads in ads.js handle site-wide banners)
+    bannerEl.classList.add('hidden');
+    bannerEl.innerHTML = '';
 }
 
 function renderBooks() {

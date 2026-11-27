@@ -9,6 +9,7 @@ const SUPERADMIN_MASTER_EMAIL = (typeof MASTER_ADMIN_EMAIL !== 'undefined' && MA
 let rolesRegistry = getDefaultRolesRegistry();
 let ministryUpgradeRequests = [];
 let revokeTargetEmail = null;
+let currentSuperadminUser = null;
 
 function getDefaultRolesRegistry() {
     return [
@@ -102,6 +103,7 @@ async function handleSuperadminLogin(e) {
 }
 
 function unlockSuperadminDashboard(user) {
+    currentSuperadminUser = user || null;
     document.getElementById('auth-gate').classList.add('hidden');
     document.getElementById('dashboard-wrapper').classList.remove('hidden');
     const emailEl = document.getElementById('superadmin-user-email');
@@ -858,8 +860,96 @@ function exportRolesToExcel() {
 }
 
 // ==========================================
-// PAID PROMOTIONS, AUDIENCE GEO & PAYSTACK PAYOUTS
+// PAID PROMOTIONS, SITE BANNERS & AD CREATOR
 // ==========================================
+
+const SITE_BANNER_LOCATIONS = [
+    { key: 'all', label: 'Every Main Page', page: 'All 12 pages', icon: 'fa-globe' },
+    { key: 'library', label: 'Library', page: 'index.html', icon: 'fa-book-open' },
+    { key: 'feed', label: 'Fellowship Feed', page: 'feed.html', icon: 'fa-comments' },
+    { key: 'music', label: 'Music Hub', page: 'music.html', icon: 'fa-music' },
+    { key: 'book', label: 'Book Detail', page: 'book.html', icon: 'fa-book' },
+    { key: 'post', label: 'Post Detail', page: 'post.html', icon: 'fa-newspaper' },
+    { key: 'author', label: 'Author Studio', page: 'author.html', icon: 'fa-feather-pointed' },
+    { key: 'artist', label: 'Artist Hub', page: 'artist.html', icon: 'fa-microphone-lines' },
+    { key: 'ministry', label: 'Ministry Page', page: 'ministry.html', icon: 'fa-church' },
+    { key: 'polls', label: 'Polls & Awards', page: 'polls.html', icon: 'fa-square-poll-vertical' },
+    { key: 'saved', label: 'Saved Library', page: 'saved.html', icon: 'fa-bookmark' },
+    { key: 'user', label: 'User Profile', page: 'user.html', icon: 'fa-user' }
+];
+
+let cachedSuperadminPromos = [];
+let currentAdFilter = 'all';
+let currentLocationFilter = 'all_filter';
+let cachedLibraryLayoutRow = null;
+
+function getPromoSlotPositionMeta(promo) {
+    const raw = String(promo?.slot_position || '').trim().toLowerCase();
+    if (raw === 'top' || raw === 'mid' || raw === 'bottom' || raw === 'dynamic') return raw;
+    const notes = String(promo?.admin_notes || '');
+    const m = notes.match(/\[slot:(top|mid|bottom|dynamic)\]/i);
+    return m ? m[1].toLowerCase() : 'dynamic';
+}
+
+function setSuperadminAdFilter(filterKey) {
+    currentAdFilter = filterKey || 'all';
+    document.querySelectorAll('.ad-filter-btn').forEach(btn => {
+        const active = btn.getAttribute('data-ad-filter') === currentAdFilter;
+        btn.className = active
+            ? 'ad-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-accord-blue text-white'
+            : 'ad-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-50';
+    });
+    renderSuperadminPromotionsList();
+}
+
+function setSuperadminLocationFilter(locKey) {
+    currentLocationFilter = (currentLocationFilter === locKey && locKey !== 'all_filter') ? 'all_filter' : (locKey || 'all_filter');
+    const clearBtn = document.getElementById('clear-location-filter-btn');
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', currentLocationFilter === 'all_filter');
+    }
+    renderSuperadminBannerLocations();
+    renderSuperadminPromotionsList();
+}
+
+function renderSuperadminBannerLocations() {
+    const grid = document.getElementById('superadmin-banner-locations');
+    if (!grid) return;
+
+    const nowIso = new Date().toISOString();
+    const liveBanners = cachedSuperadminPromos.filter(p => {
+        if (p.status !== 'approved') return false;
+        if (p.starts_at && p.starts_at > nowIso) return false;
+        if (p.ends_at && p.ends_at < nowIso) return false;
+        return true;
+    });
+
+    grid.innerHTML = SITE_BANNER_LOCATIONS.map(loc => {
+        const count = liveBanners.filter(p => {
+            const placements = Array.isArray(p.placements) && p.placements.length > 0
+                ? p.placements.map(x => String(x).toLowerCase())
+                : ['all'];
+            if (loc.key === 'all') return placements.includes('all');
+            return placements.includes('all') || placements.includes(loc.key);
+        }).length;
+
+        const isSelected = currentLocationFilter === loc.key;
+        const cardClass = isSelected
+            ? 'border-accord-blue bg-accord-lightBlue/60 ring-2 ring-accord-blue/20'
+            : 'border-slate-200 bg-slate-50/60 hover:border-accord-blue/50 hover:bg-white';
+
+        return `
+            <button type="button" onclick="setSuperadminLocationFilter('${loc.key}')" class="text-left rounded-xl border p-2.5 transition-all ${cardClass}">
+                <div class="flex items-center justify-between gap-1">
+                    <i class="fa-solid ${loc.icon} text-[11px] ${isSelected ? 'text-accord-blue' : 'text-accord-muted'}"></i>
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${count > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${count} live</span>
+                </div>
+                <p class="text-xs font-bold text-accord-slate mt-1.5 truncate">${escapeSuperHtml(loc.label)}</p>
+                <p class="text-[10px] text-accord-muted truncate">${escapeSuperHtml(loc.page)}</p>
+            </button>
+        `;
+    }).join('');
+}
 
 async function loadSuperadminPromotions() {
     const listEl = document.getElementById('superadmin-promotions-list');
@@ -867,9 +957,10 @@ async function loadSuperadminPromotions() {
     const badgeEl = document.getElementById('pending-promotions-badge');
     if (!listEl) return;
 
-    const [promosRes, signalsRes] = await Promise.all([
-        supabaseClient.from('promotions').select('*').order('created_at', { ascending: false }).limit(60),
-        supabaseClient.from('user_audience_signals').select('country, device_type').order('created_at', { ascending: false }).limit(500)
+    const [promosRes, signalsRes, layoutRes] = await Promise.all([
+        supabaseClient.from('promotions').select('*').order('created_at', { ascending: false }).limit(100),
+        supabaseClient.from('user_audience_signals').select('country, device_type').order('created_at', { ascending: false }).limit(500),
+        supabaseClient.from('books').select('id, description').eq('title', '__ACCORD_LAYOUT_CONFIG__').limit(1).maybeSingle()
     ]);
 
     if (geoEl && !signalsRes.error && Array.isArray(signalsRes.data)) {
@@ -888,13 +979,16 @@ async function loadSuperadminPromotions() {
         `).join('');
     }
 
+    cachedLibraryLayoutRow = layoutRes?.data || null;
+    renderSuperadminLibraryBanners();
+
     if (promosRes.error) {
         listEl.innerHTML = `<p class="text-xs text-red-600 py-6 text-center bg-white border border-slate-200 rounded-2xl">Could not load promotions: ${escapeSuperHtml(promosRes.error.message)}</p>`;
         return;
     }
 
-    const promos = promosRes.data || [];
-    const pendingCount = promos.filter(p => p.status === 'pending_approval').length;
+    cachedSuperadminPromos = promosRes.data || [];
+    const pendingCount = cachedSuperadminPromos.filter(p => p.status === 'pending_approval').length;
     if (badgeEl) badgeEl.textContent = `${pendingCount} Pending`;
     const tabBadge = document.getElementById('tab-badge-promotions');
     if (tabBadge) {
@@ -904,50 +998,377 @@ async function loadSuperadminPromotions() {
     const overviewCount = document.getElementById('overview-pending-promotions');
     if (overviewCount) overviewCount.textContent = pendingCount;
 
-    if (promos.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">No paid promotion requests yet.</p>`;
+    renderSuperadminBannerLocations();
+    renderSuperadminPromotionsList();
+}
+
+function renderSuperadminPromotionsList() {
+    const listEl = document.getElementById('superadmin-promotions-list');
+    if (!listEl) return;
+
+    const filtered = cachedSuperadminPromos.filter(p => {
+        if (currentAdFilter === 'banner' && p.promo_type !== 'banner') return false;
+        if (currentAdFilter === 'approved' && p.status !== 'approved') return false;
+        if (currentAdFilter === 'pending_approval' && p.status !== 'pending_approval') return false;
+        if (currentAdFilter === 'paused' && p.status !== 'paused' && p.status !== 'rejected' && p.status !== 'expired') return false;
+
+        if (currentLocationFilter !== 'all_filter') {
+            const placements = Array.isArray(p.placements) && p.placements.length > 0
+                ? p.placements.map(x => String(x).toLowerCase())
+                : ['all'];
+            if (currentLocationFilter === 'all') {
+                if (!placements.includes('all')) return false;
+            } else if (!placements.includes('all') && !placements.includes(currentLocationFilter)) {
+                return false;
+            }
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">No banners or ads match the current filter. Click <strong>Create Banner / Ad</strong> above to publish one.</p>`;
         return;
     }
 
-    listEl.innerHTML = promos.map(p => {
+    listEl.innerHTML = filtered.map(p => {
         const badgeClass = p.status === 'approved'
             ? 'bg-emerald-50 text-emerald-700'
             : p.status === 'pending_approval'
                 ? 'bg-amber-50 text-amber-700'
                 : 'bg-red-50 text-red-600';
 
+        const slotPos = getPromoSlotPositionMeta(p);
+        const slotLabels = { dynamic: 'Dynamic Auto', top: 'Top Slot', mid: 'Mid-Page', bottom: 'Bottom Slot' };
+        const placements = Array.isArray(p.placements) && p.placements.length > 0 ? p.placements : ['all'];
+        const thumbUrl = p.desktop_image_url || p.mobile_image_url || '';
+        const views = Number(p.impressions_count || 0);
+        const clicks = Number(p.clicks_count || 0);
+        const ctr = views > 0 ? ((clicks / views) * 100).toFixed(1) : '0.0';
+        const scheduleLabel = p.ends_at
+            ? `Ends ${new Date(p.ends_at).toLocaleDateString()}`
+            : (p.duration_days === 0 ? 'Always Live' : `${p.duration_days || 7}d`);
+
         return `
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-                <div class="space-y-1 min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeSuperHtml((p.status || '').replace('_', ' '))}</span>
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeSuperHtml(p.promo_type)}</span>
-                        <span class="text-[11px] font-semibold text-accord-muted">Placement: ${escapeSuperHtml((p.placements || ['all']).join(', '))}</span>
-                        <span class="text-[11px] font-bold text-accord-slate">${escapeSuperHtml(p.currency || 'USD')} ${Number(p.budget_amount || 0).toFixed(2)} (${p.duration_days}d)</span>
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                <div class="flex items-start gap-3.5 min-w-0 flex-1">
+                    ${thumbUrl
+                        ? `<img src="${escapeSuperHtml(thumbUrl)}" alt="${escapeSuperHtml(p.title)}" class="w-24 h-16 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-100">`
+                        : `<div class="w-24 h-16 rounded-xl bg-gradient-to-br from-accord-slate to-accord-darkBlue text-white flex items-center justify-center shrink-0 text-[10px] font-bold px-2 text-center">Text Banner</div>`
+                    }
+                    <div class="space-y-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${badgeClass}">${escapeSuperHtml((p.status || '').replace('_', ' '))}</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue uppercase">${escapeSuperHtml(p.promo_type)}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700">${escapeSuperHtml(slotLabels[slotPos] || 'Dynamic Auto')}</span>
+                            <span class="text-[11px] font-semibold text-accord-muted">${escapeSuperHtml(scheduleLabel)}</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-accord-slate truncate">${escapeSuperHtml(p.title)}</h3>
+                        <p class="text-[11px] text-accord-muted">Locations: <strong class="text-accord-slate">${escapeSuperHtml(placements.join(', '))}</strong> • Countries: ${escapeSuperHtml((p.target_countries || ['GLOBAL']).join(', '))}</p>
+                        <p class="text-[11px] text-slate-600">By ${escapeSuperHtml(p.advertiser_name || 'Superadmin')} • Views: <strong>${views}</strong> • Clicks: <strong>${clicks}</strong> (${ctr}% CTR)</p>
                     </div>
-                    <h3 class="text-sm font-bold text-accord-slate">${escapeSuperHtml(p.title)}</h3>
-                    <p class="text-[11px] text-accord-muted">By ${escapeSuperHtml(p.advertiser_name || 'Member')} (${escapeSuperHtml(p.advertiser_email || '')}) • Ref: ${escapeSuperHtml(p.payment_reference || 'N/A')}</p>
-                    <p class="text-[11px] text-slate-600">Views: <strong>${p.impressions_count || 0}</strong> • Clicks: <strong>${p.clicks_count || 0}</strong></p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 shrink-0">
-                    ${p.status !== 'approved' ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'approved', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Approve &amp; Go Live</button>` : `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'paused', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">Pause</button>`}
-                    ${p.status !== 'rejected' ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'rejected', ${p.duration_days || 7})" class="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold">Reject</button>` : ''}
+                    <button type="button" onclick="openSuperadminAdModal('${p.id}')" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Edit</button>
+                    ${p.status !== 'approved'
+                        ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'approved', ${p.duration_days || 0})" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Go Live</button>`
+                        : `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'paused', ${p.duration_days || 0})" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">Pause</button>`
+                    }
+                    ${p.status === 'pending_approval' ? `<button type="button" onclick="reviewSuperadminPromotion('${p.id}', 'rejected', ${p.duration_days || 7})" class="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold">Reject</button>` : ''}
+                    <button type="button" onclick="deleteSuperadminPromotion('${p.id}')" class="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold" title="Delete Ad"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             </div>
         `;
     }).join('');
 }
 
-async function reviewSuperadminPromotion(promoId, newStatus, durationDays = 7) {
+function renderSuperadminLibraryBanners() {
+    const container = document.getElementById('superadmin-library-banners-list');
+    if (!container) return;
+
+    if (!cachedLibraryLayoutRow?.description) {
+        container.innerHTML = `<p class="text-xs text-accord-muted">No legacy Library slider config found. Dynamic banners above will appear on Library (<code>index.html</code>) automatically.</p>`;
+        return;
+    }
+
+    let parsed = {};
+    try {
+        parsed = JSON.parse(cachedLibraryLayoutRow.description);
+    } catch (_) {
+        container.innerHTML = `<p class="text-xs text-accord-muted">Could not parse Library slider config.</p>`;
+        return;
+    }
+
+    const bannerCfg = parsed.banner || {};
+    const slides = Array.isArray(bannerCfg.slides) ? bannerCfg.slides : [];
+    const isEnabled = bannerCfg.enabled !== false;
+
+    const toggleHtml = `
+        <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 mb-2">
+            <div class="text-xs">
+                <span class="font-bold text-accord-slate">Library Mid-Grid Slider Status:</span>
+                <span class="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${isEnabled ? 'Enabled' : 'Disabled'}</span>
+                <span class="text-accord-muted ml-2">(${slides.length} slide${slides.length === 1 ? '' : 's'})</span>
+            </div>
+            <button type="button" onclick="toggleLibrarySliderEnabled(${!isEnabled})" class="px-3 py-1.5 rounded-lg text-[11px] font-bold ${isEnabled ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'}">
+                ${isEnabled ? 'Disable Legacy Slider' : 'Enable Legacy Slider'}
+            </button>
+        </div>
+    `;
+
+    if (slides.length === 0) {
+        container.innerHTML = toggleHtml + `<p class="text-xs text-accord-muted">No custom slides uploaded in Library Admin.</p>`;
+        return;
+    }
+
+    container.innerHTML = toggleHtml + slides.map((s, idx) => `
+        <div class="flex items-center justify-between gap-3 border border-slate-200 rounded-xl p-2.5 text-xs">
+            <div class="flex items-center gap-3 min-w-0">
+                ${s.desktopUrl || s.mobileUrl ? `<img src="${escapeSuperHtml(s.desktopUrl || s.mobileUrl)}" alt="${escapeSuperHtml(s.alt || 'Slide')}" class="w-16 h-10 object-cover rounded-lg border border-slate-200 shrink-0">` : ''}
+                <div class="min-w-0">
+                    <p class="font-bold text-accord-slate truncate">${escapeSuperHtml(s.alt || `Slide ${idx + 1}`)}</p>
+                    <p class="text-[11px] text-accord-muted truncate">Location: Library (<code>index.html #mid-grid-banner</code>) • Action: ${escapeSuperHtml(s.actionType || 'link')} ${s.linkUrl ? `(${escapeSuperHtml(s.linkUrl)})` : ''}</p>
+                </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${s.enabled !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${s.enabled !== false ? 'Active' : 'Hidden'}</span>
+        </div>
+    `).join('');
+}
+
+async function toggleLibrarySliderEnabled(enable) {
+    if (!cachedLibraryLayoutRow) return;
+    try {
+        const parsed = JSON.parse(cachedLibraryLayoutRow.description || '{}');
+        if (!parsed.banner) parsed.banner = {};
+        parsed.banner.enabled = Boolean(enable);
+        const { error } = await supabaseClient
+            .from('books')
+            .update({ description: JSON.stringify(parsed) })
+            .eq('id', cachedLibraryLayoutRow.id);
+        if (error) throw error;
+        showToast(`Library legacy slider ${enable ? 'enabled' : 'disabled'}.`);
+        loadSuperadminPromotions();
+    } catch (err) {
+        showToast(`Could not update library slider: ${err.message}`, true);
+    }
+}
+
+function toggleSuperadminAllPlacements(allCheckbox) {
+    const isAll = allCheckbox.checked;
+    document.querySelectorAll('#superadmin-ad-placements-grid input[name="superadmin-ad-placement"]').forEach(cb => {
+        if (isAll) cb.checked = false;
+    });
+}
+
+function syncSuperadminSpecificPlacement() {
+    const anySpecific = Array.from(document.querySelectorAll('#superadmin-ad-placements-grid input[name="superadmin-ad-placement"]')).some(cb => cb.checked);
+    const allCb = document.getElementById('superadmin-ad-place-all');
+    if (allCb) {
+        allCb.checked = !anySpecific;
+    }
+}
+
+function updateSuperadminAdImagePreview(variant) {
+    const urlInput = document.getElementById(`superadmin-ad-${variant}-url`);
+    const previewEl = document.getElementById(`superadmin-ad-${variant}-preview`);
+    if (!urlInput || !previewEl) return;
+    const url = urlInput.value.trim();
+    if (!url) {
+        previewEl.classList.add('hidden');
+        previewEl.innerHTML = '';
+        return;
+    }
+    previewEl.innerHTML = `<img src="${escapeSuperHtml(url)}" alt="${variant} preview" class="w-full h-24 object-cover">`;
+    previewEl.classList.remove('hidden');
+}
+
+async function handleSuperadminAdImageUpload(input, variant) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    try {
+        showToast(`Uploading ${variant} banner image...`);
+        const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+        const fileName = `banners/superadmin_${variant}_${Date.now()}.${ext}`;
+        const { data, error } = await supabaseClient.storage
+            .from('archive-files')
+            .upload(fileName, file, {
+                contentType: file.type || 'image/png',
+                cacheControl: '3600',
+                upsert: false
+            });
+        if (error) throw error;
+        const { data: pubData } = supabaseClient.storage
+            .from('archive-files')
+            .getPublicUrl(data.path);
+        const urlInput = document.getElementById(`superadmin-ad-${variant}-url`);
+        if (urlInput && pubData?.publicUrl) {
+            urlInput.value = pubData.publicUrl;
+            updateSuperadminAdImagePreview(variant);
+            showToast(`${variant} image uploaded!`);
+        }
+    } catch (err) {
+        showToast(`Image upload failed: ${err.message}`, true);
+    }
+}
+
+function openSuperadminAdModal(promoId = null) {
+    const modal = document.getElementById('superadmin-ad-modal');
+    const form = document.getElementById('superadmin-ad-form');
+    if (!modal || !form) return;
+    form.reset();
+
+    const promo = promoId ? cachedSuperadminPromos.find(p => p.id === promoId) : null;
+    document.getElementById('superadmin-ad-id').value = promo ? promo.id : '';
+    document.getElementById('superadmin-ad-modal-title').textContent = promo ? 'Edit Site Banner / Ad' : 'Create Site Banner / Ad';
+    document.getElementById('superadmin-ad-type').value = promo?.promo_type || 'banner';
+    document.getElementById('superadmin-ad-slot-position').value = promo ? getPromoSlotPositionMeta(promo) : 'dynamic';
+    document.getElementById('superadmin-ad-title').value = promo?.title || '';
+    document.getElementById('superadmin-ad-body').value = promo?.body || '';
+    document.getElementById('superadmin-ad-desktop-url').value = promo?.desktop_image_url || '';
+    document.getElementById('superadmin-ad-mobile-url').value = promo?.mobile_image_url || '';
+    document.getElementById('superadmin-ad-cta-text').value = promo?.cta_text || 'Learn More';
+    document.getElementById('superadmin-ad-cta-url').value = promo?.cta_url || '';
+    document.getElementById('superadmin-ad-countries').value = (promo?.target_countries && promo.target_countries.length > 0)
+        ? promo.target_countries.join(', ')
+        : 'GLOBAL';
+    document.getElementById('superadmin-ad-duration').value = promo ? String(promo.duration_days ?? 30) : '30';
+    document.getElementById('superadmin-ad-status').value = promo?.status === 'paused' ? 'paused' : 'approved';
+
+    const placements = Array.isArray(promo?.placements) && promo.placements.length > 0 ? promo.placements : ['all'];
+    const allCb = document.getElementById('superadmin-ad-place-all');
+    if (allCb) allCb.checked = placements.includes('all');
+    document.querySelectorAll('#superadmin-ad-placements-grid input[name="superadmin-ad-placement"]').forEach(cb => {
+        cb.checked = !placements.includes('all') && placements.includes(cb.value);
+    });
+
+    updateSuperadminAdImagePreview('desktop');
+    updateSuperadminAdImagePreview('mobile');
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeSuperadminAdModal() {
+    const modal = document.getElementById('superadmin-ad-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+async function handleSuperadminAdSubmit(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('superadmin-ad-submit-btn');
+    const editId = document.getElementById('superadmin-ad-id').value.trim();
+    const promoType = document.getElementById('superadmin-ad-type').value;
+    const slotPosition = document.getElementById('superadmin-ad-slot-position').value || 'dynamic';
+    const title = document.getElementById('superadmin-ad-title').value.trim();
+    const body = document.getElementById('superadmin-ad-body').value.trim() || null;
+    const desktopUrl = document.getElementById('superadmin-ad-desktop-url').value.trim() || null;
+    const mobileUrl = document.getElementById('superadmin-ad-mobile-url').value.trim() || null;
+    const ctaText = document.getElementById('superadmin-ad-cta-text').value.trim() || 'Learn More';
+    const ctaUrl = document.getElementById('superadmin-ad-cta-url').value.trim() || 'index.html';
+    const countriesRaw = document.getElementById('superadmin-ad-countries').value.trim() || 'GLOBAL';
+    const targetCountries = countriesRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    const durationDays = Number(document.getElementById('superadmin-ad-duration').value || 0);
+    const status = document.getElementById('superadmin-ad-status').value || 'approved';
+
+    const specificPlacements = Array.from(document.querySelectorAll('#superadmin-ad-placements-grid input[name="superadmin-ad-placement"]:checked')).map(cb => cb.value);
+    const allChecked = document.getElementById('superadmin-ad-place-all')?.checked;
+    const placements = (allChecked || specificPlacements.length === 0) ? ['all'] : specificPlacements;
+
+    if (!title) {
+        showToast('Please enter an ad title.', true);
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+    }
+
     const now = new Date();
-    const ends = new Date(now.getTime() + Number(durationDays || 7) * 86400000);
+    const endsAt = durationDays > 0 ? new Date(now.getTime() + durationDays * 86400000).toISOString() : null;
+
+    const payload = {
+        promo_type: promoType,
+        title,
+        body,
+        desktop_image_url: desktopUrl,
+        mobile_image_url: mobileUrl,
+        cta_text: ctaText,
+        cta_url: ctaUrl,
+        placements,
+        slot_position: slotPosition,
+        target_countries: targetCountries.length > 0 ? targetCountries : ['GLOBAL'],
+        duration_days: durationDays,
+        status,
+        admin_notes: `[slot:${slotPosition}] Created via Superadmin`,
+        starts_at: status === 'approved' ? now.toISOString() : null,
+        ends_at: status === 'approved' ? endsAt : null
+    };
+
+    try {
+        let res;
+        if (editId) {
+            res = await supabaseClient.from('promotions').update(payload).eq('id', editId);
+            if (res.error && /slot_position/i.test(res.error.message || '')) {
+                const { slot_position: _omit, ...fallbackPayload } = payload;
+                res = await supabaseClient.from('promotions').update(fallbackPayload).eq('id', editId);
+            }
+        } else {
+            const insertPayload = {
+                ...payload,
+                advertiser_id: currentSuperadminUser?.id || null,
+                advertiser_name: 'Accord Archive',
+                advertiser_email: currentSuperadminUser?.email || SUPERADMIN_MASTER_EMAIL,
+                budget_amount: 0,
+                currency: 'USD',
+                payment_provider: 'superadmin',
+                payment_status: 'waived'
+            };
+            res = await supabaseClient.from('promotions').insert(insertPayload);
+            if (res.error && /slot_position/i.test(res.error.message || '')) {
+                const { slot_position: _omit, ...fallbackInsert } = insertPayload;
+                res = await supabaseClient.from('promotions').insert(fallbackInsert);
+            }
+        }
+
+        if (res.error) throw res.error;
+
+        closeSuperadminAdModal();
+        showToast(editId ? 'Banner / Ad updated!' : 'Banner / Ad created and published!');
+        loadSuperadminPromotions();
+    } catch (err) {
+        showToast(`Could not save ad: ${err.message}`, true);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save & Publish Ad';
+        }
+    }
+}
+
+async function deleteSuperadminPromotion(promoId) {
+    if (!promoId || !confirm('Permanently delete this banner / ad?')) return;
+    const { error } = await supabaseClient.from('promotions').delete().eq('id', promoId);
+    if (error) {
+        showToast(`Could not delete ad: ${error.message}. Run the latest SQL migration or use Pause instead.`, true);
+        return;
+    }
+    showToast('Banner / Ad deleted.');
+    loadSuperadminPromotions();
+}
+
+async function reviewSuperadminPromotion(promoId, newStatus, durationDays = 0) {
+    const now = new Date();
+    const days = Number(durationDays || 0);
+    const ends = days > 0 ? new Date(now.getTime() + days * 86400000).toISOString() : null;
     const updates = {
         status: newStatus,
         reviewed_at: now.toISOString()
     };
     if (newStatus === 'approved') {
         updates.starts_at = now.toISOString();
-        updates.ends_at = ends.toISOString();
+        updates.ends_at = ends;
     }
 
     const { error } = await supabaseClient.from('promotions').update(updates).eq('id', promoId);
