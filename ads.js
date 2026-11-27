@@ -13,7 +13,7 @@
     const MAIN_PAGE_PLACEMENTS = {
         library: ['index.html', ''],
         feed: ['feed.html'],
-        music: ['music.html'],
+        music: ['music.html', 'playlists.html'],
         book: ['book.html'],
         post: ['post.html'],
         author: ['author.html'],

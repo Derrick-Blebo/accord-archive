@@ -39,6 +39,11 @@ window.onload = async function () {
     updatePollsAuthBanner();
 
     await fetchMusicData();
+    window.musicData = musicData;
+    if (window.AccordPlaylists) {
+        window.AccordPlaylists.registerPlaylists(musicData.playlists);
+        await window.AccordPlaylists.loadSavedPlaylistIds(currentMusicUser);
+    }
     renderSpotlights();
     renderSongSpotlights();
     renderPlaylists();
@@ -239,20 +244,20 @@ function renderSongSpotlights() {
     songs.forEach(song => {
         const platform = getPlaylistPlatformInfo(song.link);
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-3";
+        card.className = "bg-gradient-to-br from-accord-darkBlue to-[#004294] border border-blue-400/30 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3";
         card.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
-                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', 'Song Spotlight', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="w-11 h-11 rounded-2xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white flex items-center justify-center transition-all shrink-0 shadow-sm" title="Play Song">
+                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', 'Song Spotlight', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="w-11 h-11 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-darkBlue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm" title="Play Song">
                     <i class="fa-solid fa-play text-xs ml-0.5"></i>
                 </button>
                 <div class="min-w-0">
-                    <h3 class="text-sm font-bold text-accord-slate truncate">${escapeHTML(song.title)}</h3>
-                    <div class="text-[11px] text-accord-muted flex items-center gap-1 mt-0.5">
+                    <h3 class="text-sm font-bold text-white truncate">${escapeHTML(song.title)}</h3>
+                    <div class="text-[10px] text-slate-800 inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white/95">
                         ${platform.brandHtml}
                     </div>
                 </div>
             </div>
-            <a href="${escapeHTML(song.link || '#')}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-colors shrink-0">
+            <a href="${escapeHTML(song.link || '#')}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white text-white hover:text-accord-darkBlue border border-white/20 text-[11px] font-bold transition-colors shrink-0">
                 Open <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[9px]"></i>
             </a>
         `;
@@ -265,291 +270,16 @@ function renderSongSpotlights() {
 // ==========================================
 
 function getPlaylistPlatformInfo(url) {
-    const raw = String(url || '').toLowerCase();
-    if (raw.includes('music.apple.com')) {
-        return {
-            brandHtml: '<i class="fa-brands fa-apple text-[13px] mr-1"></i><span class="font-semibold tracking-tight">music</span>',
-            ctaLabel: 'View in Apple Music',
-            platform: 'apple'
-        };
-    }
-    if (raw.includes('spotify.com')) {
-        return {
-            brandHtml: '<i class="fa-brands fa-spotify text-[#1DB954] text-[13px] mr-1"></i><span class="font-semibold tracking-tight">Spotify</span>',
-            ctaLabel: 'View in Spotify',
-            platform: 'spotify'
-        };
-    }
-    if (raw.includes('audiomack.com')) {
-        return {
-            brandHtml: '<i class="fa-solid fa-headphones text-amber-500 text-[12px] mr-1"></i><span class="font-semibold tracking-tight">Audiomack</span>',
-            ctaLabel: 'View on Audiomack',
-            platform: 'audiomack'
-        };
-    }
-    if (raw.includes('youtube.com') || raw.includes('youtu.be')) {
-        return {
-            brandHtml: '<i class="fa-brands fa-youtube text-red-600 text-[13px] mr-1"></i><span class="font-semibold tracking-tight">YouTube</span>',
-            ctaLabel: 'View on YouTube',
-            platform: 'youtube'
-        };
-    }
-    return {
-        brandHtml: '<i class="fa-solid fa-music text-accord-blue text-[11px] mr-1"></i><span class="font-semibold tracking-tight">music</span>',
-        ctaLabel: 'Open Link',
-        platform: 'other'
-    };
+    return window.AccordPlaylists.getPlaylistPlatformInfo(url);
 }
 
-function getEmbedUrl(url) {
-    const raw = String(url || '').trim();
-    if (!raw) return '';
-
-    if (raw.includes('embed.music.apple.com')) return raw;
-    if (raw.includes('music.apple.com')) {
-        return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
+function shufflePlaylists(list) {
+    const arr = [...list];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    if (raw.includes('open.spotify.com/embed/')) return raw;
-    if (raw.includes('open.spotify.com/')) {
-        return raw.replace('open.spotify.com/', 'open.spotify.com/embed/');
-    }
-    if (raw.includes('youtube.com/watch?v=')) {
-        const id = raw.split('v=')[1]?.split('&')[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    if (raw.includes('youtu.be/')) {
-        const id = raw.split('youtu.be/')[1]?.split(/[?&#]/)[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    if (raw.includes('youtube.com/playlist?list=')) {
-        const listId = raw.split('list=')[1]?.split('&')[0];
-        return listId ? `https://www.youtube.com/embed/videoseries?list=${listId}` : '';
-    }
-    if (raw.includes('audiomack.com/')) {
-        if (raw.includes('/embed/')) return raw;
-        return raw.replace('audiomack.com/', 'audiomack.com/embed/');
-    }
-    return '';
-}
-
-function getPlaylistPlatformLinks(pl) {
-    if (!pl) return [];
-    const linksObj = pl.links && typeof pl.links === 'object' ? pl.links : {};
-    const legacyLink = String(pl.link || '').trim();
-    const legacyLower = legacyLink.toLowerCase();
-
-    const spotifyUrl = String(linksObj.spotify || pl.spotifyLink || (legacyLower.includes('spotify.com') ? legacyLink : '')).trim();
-    const audiomackUrl = String(linksObj.audiomack || pl.audiomackLink || (legacyLower.includes('audiomack.com') ? legacyLink : '')).trim();
-    const appleUrl = String(linksObj.apple || pl.appleMusicLink || (legacyLower.includes('music.apple.com') ? legacyLink : '')).trim();
-
-    const platforms = [];
-    if (spotifyUrl) {
-        platforms.push({
-            key: 'spotify',
-            label: 'Spotify',
-            url: spotifyUrl,
-            iconHtml: '<i class="fa-brands fa-spotify text-[#1DB954] text-[13px]"></i>'
-        });
-    }
-    if (audiomackUrl) {
-        platforms.push({
-            key: 'audiomack',
-            label: 'Audiomack',
-            url: audiomackUrl,
-            iconHtml: '<i class="fa-solid fa-headphones text-amber-500 text-[12px]"></i>'
-        });
-    }
-    if (appleUrl) {
-        platforms.push({
-            key: 'apple',
-            label: 'Apple Music',
-            url: appleUrl,
-            iconHtml: '<i class="fa-brands fa-apple text-slate-900 text-[13px]"></i>'
-        });
-    }
-
-    if (platforms.length === 0 && legacyLink) {
-        const info = getPlaylistPlatformInfo(legacyLink);
-        platforms.push({
-            key: info.platform || 'other',
-            label: info.platform === 'youtube' ? 'YouTube' : 'Listen',
-            url: legacyLink,
-            iconHtml: '<i class="fa-solid fa-music text-accord-blue text-[11px]"></i>'
-        });
-    }
-
-    return platforms;
-}
-
-function renderPlayerModalBody(url, platformLabel = 'Platform') {
-    const bodyEl = document.getElementById('player-modal-body');
-    const extEl = document.getElementById('player-modal-external');
-    if (extEl) {
-        extEl.href = url || '#';
-        extEl.innerHTML = `Open ${escapeHTML(platformLabel)} <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>`;
-    }
-    if (!bodyEl) return;
-
-    const embedUrl = getEmbedUrl(url);
-    if (!embedUrl) {
-        bodyEl.innerHTML = `
-            <div class="py-10 px-4 text-center space-y-3 bg-white rounded-2xl border border-slate-200">
-                <p class="text-xs font-semibold text-accord-slate">Embedded player is unavailable for this link.</p>
-                <a href="${escapeHTML(url || '#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all">
-                    <span>Listen on ${escapeHTML(platformLabel)}</span>
-                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                </a>
-            </div>
-        `;
-        return;
-    }
-
-    const height = embedUrl.includes('embed.music.apple.com') ? '420' : '380';
-    bodyEl.innerHTML = `<iframe src="${escapeHTML(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
-}
-
-function openMediaPlayerModal(title, subtitle, link, platformLinks = null) {
-    const hasPlatforms = Array.isArray(platformLinks) && platformLinks.length > 0;
-    const activeUrl = hasPlatforms ? platformLinks[0].url : link;
-    const activeLabel = hasPlatforms ? platformLinks[0].label : 'App';
-    const embedUrl = getEmbedUrl(activeUrl);
-
-    if (!hasPlatforms && !embedUrl) {
-        if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
-        return;
-    }
-
-    const modal = document.getElementById('playlist-player-modal');
-    const titleEl = document.getElementById('player-modal-title');
-    const subEl = document.getElementById('player-modal-subtitle');
-    const platformsEl = document.getElementById('player-modal-platforms');
-    const bodyEl = document.getElementById('player-modal-body');
-
-    if (!modal || !bodyEl) {
-        if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
-        return;
-    }
-
-    if (titleEl) titleEl.innerText = title || 'Music Player';
-    if (subEl) subEl.innerText = subtitle || 'Accord Music Hub';
-
-    if (platformsEl) {
-        if (hasPlatforms) {
-            platformsEl.classList.remove('hidden');
-            platformsEl.innerHTML = `<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Choose Platform:</span>` +
-                platformLinks.map((p, idx) => `
-                    <button type="button" data-platform-url="${escapeHTML(p.url)}" data-platform-label="${escapeHTML(p.label)}" class="player-platform-tab inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${idx === 0 ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">
-                        ${p.iconHtml}
-                        <span>${escapeHTML(p.label)}</span>
-                    </button>
-                `).join('');
-
-            platformsEl.querySelectorAll('.player-platform-tab').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    platformsEl.querySelectorAll('.player-platform-tab').forEach(other => {
-                        other.className = 'player-platform-tab inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
-                    });
-                    btn.className = 'player-platform-tab inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all bg-slate-900 text-white border-slate-900 shadow-xs';
-                    renderPlayerModalBody(btn.dataset.platformUrl, btn.dataset.platformLabel);
-                });
-            });
-        } else {
-            platformsEl.classList.add('hidden');
-            platformsEl.innerHTML = '';
-        }
-    }
-
-    renderPlayerModalBody(activeUrl, activeLabel);
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function openPlaylistPlayerModal(playlistId) {
-    const pl = musicData.playlists.find(p => p.id === playlistId);
-    if (!pl) return;
-    const platformLinks = getPlaylistPlatformLinks(pl);
-    openMediaPlayerModal(
-        pl.title || 'Playlist Player',
-        pl.curator || pl.genre || 'Curated Gospel Playlist',
-        platformLinks[0]?.url || pl.link,
-        platformLinks
-    );
-}
-
-function closePlaylistPlayerModal() {
-    const modal = document.getElementById('playlist-player-modal');
-    const bodyEl = document.getElementById('player-modal-body');
-    const platformsEl = document.getElementById('player-modal-platforms');
-    if (bodyEl) bodyEl.innerHTML = '';
-    if (platformsEl) {
-        platformsEl.classList.add('hidden');
-        platformsEl.innerHTML = '';
-    }
-    if (modal) {
-        modal.classList.remove('flex');
-        modal.classList.add('hidden');
-    }
-}
-
-function buildPlaylistTracksHtml(tracks, coverSrc, subtitle, pl) {
-    if (Array.isArray(tracks) && tracks.length > 0) {
-        const visibleTracks = tracks.slice(0, 5);
-        return `
-            <div class="divide-y divide-slate-200/80">
-                ${visibleTracks.map(track => `
-                    <div class="flex items-center gap-2.5 py-1.5 first:pt-0">
-                        <div class="w-7 h-7 rounded bg-white border border-slate-200/70 overflow-hidden shrink-0 flex items-center justify-center">
-                            <img src="${escapeHTML(track.image || coverSrc)}" alt="${escapeHTML(track.title)}" class="w-full h-full object-cover">
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="text-[11px] font-semibold text-slate-900 truncate leading-tight">${escapeHTML(track.title)}</p>
-                            <p class="text-[10px] text-slate-500 truncate leading-tight mt-0.5">${escapeHTML(track.artist || subtitle)}</p>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    return `
-        <div class="space-y-2.5">
-            <span class="inline-block bg-white border border-slate-200/80 text-slate-700 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                ${escapeHTML(pl.genre || 'Curated Playlist')}
-            </span>
-            <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-5">
-                ${escapeHTML(pl.description || 'Stream this curated gospel playlist on your favorite music platform.')}
-            </p>
-        </div>
-    `;
-}
-
-async function hydratePlaylistTracks(pl, cardEl, coverSrc, subtitle) {
-    const metaUrl = pl?.links?.apple || pl?.links?.spotify || pl?.links?.audiomack || pl?.link;
-    if (!metaUrl) return;
-    const cacheKey = `accord_pl_tracks_${metaUrl}`;
-    try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                const slot = cardEl.querySelector('[data-tracks-slot]');
-                if (slot) slot.innerHTML = buildPlaylistTracksHtml(parsed, coverSrc, subtitle, pl);
-                return;
-            }
-        }
-    } catch {}
-
-    try {
-        const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(metaUrl)}`);
-        if (!resp.ok) return;
-        const meta = await resp.json();
-        if (Array.isArray(meta?.tracks) && meta.tracks.length > 0) {
-            try { sessionStorage.setItem(cacheKey, JSON.stringify(meta.tracks)); } catch {}
-            const slot = cardEl.querySelector('[data-tracks-slot]');
-            if (slot) slot.innerHTML = buildPlaylistTracksHtml(meta.tracks, coverSrc, subtitle, pl);
-        }
-    } catch {}
+    return arr;
 }
 
 function renderPlaylists() {
@@ -557,81 +287,21 @@ function renderPlaylists() {
     if (!grid) return;
 
     grid.innerHTML = '';
-    const visiblePlaylists = (musicData.playlists || []).filter(p => !p.hidden);
-    if (visiblePlaylists.length === 0) {
-        grid.innerHTML = `<p class="text-xs text-accord-muted col-span-full">No curated playlists currently available.</p>`;
+    const allVisible = (musicData.playlists || []).filter(p => !p.hidden);
+    const featuredPlaylists = allVisible.filter(p => p.featured !== false);
+    if (featuredPlaylists.length === 0) {
+        grid.innerHTML = `<p class="text-xs text-accord-muted col-span-full">No featured playlists currently selected. <a href="playlists.html" class="text-accord-blue font-bold hover:underline">Browse all playlists</a>.</p>`;
         return;
     }
 
-    visiblePlaylists.forEach(pl => {
-        const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
-        const coverSrc = pl.image || fallbackImg;
-        const subtitle = pl.curator || pl.genre || 'SoundSpace PR';
-        const platformLinks = getPlaylistPlatformLinks(pl);
-        const primaryPlatform = getPlaylistPlatformInfo(platformLinks[0]?.url || pl.link);
-        const tracks = Array.isArray(pl.tracks) ? pl.tracks.filter(t => t && t.title) : [];
-        const rightContentHtml = buildPlaylistTracksHtml(tracks, coverSrc, subtitle, pl);
+    if (window.AccordPlaylists) {
+        window.AccordPlaylists.registerPlaylists(allVisible);
+    }
 
-        const brandBadgeHtml = platformLinks.length > 1
-            ? `<div class="flex items-center gap-1.5 text-slate-700 text-[11px]">${platformLinks.map(p => p.iconHtml).join('')}<span class="font-semibold tracking-tight text-slate-600 ml-0.5">${platformLinks.length} Platforms</span></div>`
-            : `<div class="flex items-center text-slate-800 text-[11px]">${primaryPlatform.brandHtml}</div>`;
-
-        const platformButtonsHtml = platformLinks.length > 0
-            ? `
-                <div class="space-y-1.5 w-full">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Listen on</p>
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        ${platformLinks.map(p => `
-                            <a href="${escapeHTML(p.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white hover:bg-slate-900 hover:text-white border border-slate-200/90 text-[11px] font-semibold text-slate-800 shadow-xs transition-all">
-                                ${p.iconHtml}
-                                <span>${escapeHTML(p.label)}</span>
-                            </a>
-                        `).join('')}
-                    </div>
-                </div>
-            `
-            : `<span class="text-[11px] text-slate-400">Streaming links coming soon</span>`;
-
-        const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row min-h-[268px]";
-        card.innerHTML = `
-            <div class="w-full sm:w-[46%] p-3.5 flex flex-col justify-between bg-white">
-                <div>
-                    <div class="mb-2">
-                        ${brandBadgeHtml}
-                    </div>
-                    <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 shadow-sm">
-                        <img src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
-                    </div>
-                    <div class="mt-2.5 flex items-start justify-between gap-2">
-                        <div class="min-w-0">
-                            <h3 class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
-                            <p class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHTML(subtitle)}</p>
-                        </div>
-                        <button type="button" onclick="openPlaylistPlayerModal('${escapeHTML(pl.id).replace(/'/g, "\\'")}')" title="Choose Platform / Play" class="w-5 h-5 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center shrink-0 text-[9px] mt-0.5 transition-colors">
-                            <i class="fa-solid fa-ellipsis"></i>
-                        </button>
-                    </div>
-                </div>
-                <button type="button" onclick="openPlaylistPlayerModal('${escapeHTML(pl.id).replace(/'/g, "\\'")}')" class="mt-3 w-full bg-[#1C1C1E] hover:bg-black text-white text-[11px] font-semibold py-2 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm">
-                    <i class="fa-solid fa-play text-[9px]"></i>
-                    <span>Play</span>
-                </button>
-            </div>
-            <div class="w-full sm:w-[54%] bg-[#F5F5F7] p-3.5 flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-slate-200/70">
-                <div data-tracks-slot>
-                    ${rightContentHtml}
-                </div>
-                <div class="pt-3 mt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    ${platformButtonsHtml}
-                </div>
-            </div>
-        `;
+    const randomizedThree = shufflePlaylists(featuredPlaylists).slice(0, 3);
+    randomizedThree.forEach(pl => {
+        const card = window.AccordPlaylists.createPlaylistCardElement(pl, { pageSource: 'music' });
         grid.appendChild(card);
-
-        if (tracks.length === 0 && platformLinks.length > 0) {
-            hydratePlaylistTracks(pl, card, coverSrc, subtitle);
-        }
     });
 }
 

@@ -120,6 +120,79 @@ function unlockDashboard(user) {
     if (emailEl && user?.email) emailEl.innerText = user.email;
 
     renderAll();
+    loadAndRenderPlaylistInsights();
+}
+
+async function loadAndRenderPlaylistInsights() {
+    const savedEl = document.getElementById('insights-most-saved');
+    const engagedEl = document.getElementById('insights-most-engaged');
+    if (!savedEl || !engagedEl) return;
+
+    let stats = [];
+    try {
+        const { data, error } = await supabaseClient
+            .from('playlist_stats')
+            .select('playlist_id, playlist_title, save_count, play_count, platform_click_count, engagement_count, last_engaged_at')
+            .order('engagement_count', { ascending: false })
+            .limit(50);
+
+        if (!error && Array.isArray(data)) {
+            stats = data;
+        }
+    } catch {}
+
+    if (stats.length === 0) {
+        try {
+            const localRaw = localStorage.getItem('accord_playlist_analytics_local');
+            if (localRaw) stats = Object.values(JSON.parse(localRaw));
+        } catch {}
+    }
+
+    const titleById = new Map((musicConfig.playlists || []).map(p => [String(p.id), p.title]));
+    const normalized = stats.map(row => ({
+        playlist_id: String(row.playlist_id),
+        playlist_title: titleById.get(String(row.playlist_id)) || row.playlist_title || row.playlist_id,
+        save_count: Number(row.save_count || 0),
+        play_count: Number(row.play_count || 0),
+        platform_click_count: Number(row.platform_click_count || 0),
+        engagement_count: Number(row.engagement_count || 0)
+    }));
+
+    const mostSaved = [...normalized].sort((a, b) => b.save_count - a.save_count).slice(0, 6);
+    const mostEngaged = [...normalized].sort((a, b) => b.engagement_count - a.engagement_count).slice(0, 6);
+
+    const renderRows = (rows, emptyMsg, metricRenderer) => {
+        if (rows.length === 0) {
+            return `<p class="text-accord-muted py-4">${emptyMsg}</p>`;
+        }
+        return rows.map((row, idx) => `
+            <div class="py-2.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-5 h-5 rounded-full bg-slate-100 text-accord-slate text-[10px] font-extrabold flex items-center justify-center shrink-0">${idx + 1}</span>
+                    <span class="font-semibold text-accord-slate truncate">${escapeHTML(row.playlist_title)}</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 text-[11px]">
+                    ${metricRenderer(row)}
+                </div>
+            </div>
+        `).join('');
+    };
+
+    savedEl.innerHTML = renderRows(
+        mostSaved,
+        'No playlist saves recorded yet.',
+        row => `<span class="px-2.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue font-bold">${row.save_count} saves</span>`
+    );
+
+    engagedEl.innerHTML = renderRows(
+        mostEngaged,
+        'No playlist engagement recorded yet.',
+        row => `
+            <span class="text-accord-muted">${row.play_count} plays</span>
+            <span class="text-accord-muted">• ${row.platform_click_count} clicks</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">${row.engagement_count} total</span>
+        `
+    );
 }
 
 async function handleLogout() {
@@ -323,11 +396,9 @@ function renderMusicTable() {
             <td class="py-4 px-6"><span class="bg-slate-100 text-accord-slate text-[10px] font-bold px-2.5 py-1 rounded-lg">${item.typeLabel}</span></td>
             <td class="py-4 px-6 text-accord-muted">${escapeHTML(item.genre || 'General')}</td>
             <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
-                ${isSpotlight ? `
-                    <button type="button" onclick="toggleSpotlightFeatured('${safeId}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isFeatured ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
-                        <i class="fa-solid fa-star mr-1"></i>${isFeatured ? 'Featured' : 'Blog Only'}
-                    </button>
-                ` : '<span class="text-[11px] text-slate-400">—</span>'}
+                <button type="button" onclick="toggleMusicItemFeatured('${safeId}', '${item.entryType}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isFeatured ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                    <i class="fa-solid fa-star mr-1"></i>${isFeatured ? 'Featured' : (isSpotlight ? 'Blog Only' : 'All Playlists Only')}
+                </button>
             </td>
             <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
                 <button type="button" onclick="toggleMusicItemVisibility('${safeId}', '${item.entryType}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isHidden ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}" title="${isHidden ? 'Show on public pages' : 'Hide from public pages'}">
@@ -886,7 +957,7 @@ async function handleSaveMusicItem(e) {
         tracks,
         songs,
         approved: true,
-        featured: type === 'spotlight' ? featured : true,
+        featured,
         hidden: !isVisible,
         createdAt: new Date().toISOString()
     };
@@ -907,12 +978,18 @@ async function handleSaveMusicItem(e) {
     }
 }
 
-async function toggleSpotlightFeatured(id) {
-    const artist = musicConfig.artistes.find(a => a.id === id);
-    if (!artist) return;
-    artist.featured = artist.featured === false;
+async function toggleMusicItemFeatured(id, entryType = 'spotlight') {
+    const list = entryType === 'playlist' ? musicConfig.playlists : musicConfig.artistes;
+    const item = list.find(x => x.id === id);
+    if (!item) return;
+    item.featured = item.featured === false;
     await persistMusicConfig();
-    showToast(`${artist.title} is now ${artist.featured ? 'Featured on Music Hub' : 'Blog Only'}.`);
+    const offLabel = entryType === 'playlist' ? 'All Playlists Only' : 'Blog Only';
+    showToast(`${item.title} is now ${item.featured ? 'Featured on Music Hub' : offLabel}.`);
+}
+
+async function toggleSpotlightFeatured(id) {
+    return toggleMusicItemFeatured(id, 'spotlight');
 }
 
 async function toggleMusicItemVisibility(id, entryType) {

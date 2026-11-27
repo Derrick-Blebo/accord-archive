@@ -269,13 +269,15 @@ function renderMessagesStream() {
             const isVideoPost = meta.post_type === 'video';
             const badgeLabel = msg.message_type === 'shared_book'
                 ? 'Shared Book'
-                : msg.message_type === 'shared_testimony'
-                    ? 'Shared Testimony'
-                    : msg.message_type === 'shared_profile'
-                        ? 'Shared Profile'
-                        : isVideoPost
-                            ? 'Shared Video'
-                            : 'Shared Post';
+                : msg.message_type === 'shared_playlist'
+                    ? 'Shared Playlist'
+                    : msg.message_type === 'shared_testimony'
+                        ? 'Shared Testimony'
+                        : msg.message_type === 'shared_profile'
+                            ? 'Shared Profile'
+                            : isVideoPost
+                                ? 'Shared Video'
+                                : 'Shared Post';
             const resolvedThumb = meta.image_url || (isVideoPost ? getChatVideoThumbnailUrl(meta.media_url) : '');
             let mediaThumbHtml = '';
             if (isVideoPost) {

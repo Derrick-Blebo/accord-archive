@@ -6,8 +6,10 @@ const supabaseClient = window.supabaseClient;
 let currentUser = null;
 let allBooks = [];
 let allTestimonies = [];
+let allPlaylists = [];
 let savedBookmarks = [];
 let savedTestimonyIds = [];
+let savedPlaylistIds = [];
 let purchasedBookIds = [];
 let currentFilter = 'all';
 
@@ -35,12 +37,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadSavedData() {
-    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes] = await Promise.all([
+    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes, musicConfigRes, playlistBookmarksRes] = await Promise.all([
         supabaseClient.from('books').select('*').is('deleted_at', null).eq('is_visible', true),
         supabaseClient.from('testimonies').select('*').eq('is_approved', true),
         supabaseClient.from('user_bookmarks').select('book_title').eq('user_id', currentUser.id),
         supabaseClient.from('user_testimony_bookmarks').select('testimony_id').eq('user_id', currentUser.id),
-        supabaseClient.from('user_purchases').select('book_id').eq('user_id', currentUser.id)
+        supabaseClient.from('user_purchases').select('book_id').eq('user_id', currentUser.id),
+        supabaseClient.from('books').select('description').eq('title', '__ACCORD_MUSIC_CONFIG__').maybeSingle(),
+        supabaseClient.from('user_playlist_bookmarks').select('playlist_id').eq('user_id', currentUser.id)
     ]);
 
     document.getElementById('saved-loading').classList.add('hidden');
@@ -51,12 +55,31 @@ async function loadSavedData() {
     savedTestimonyIds = testimonyBookmarksRes.data ? testimonyBookmarksRes.data.map(t => Number(t.testimony_id)) : [];
     purchasedBookIds = purchasesRes.data ? purchasesRes.data.map(p => Number(p.book_id)) : [];
 
+    allPlaylists = [];
+    try {
+        if (musicConfigRes.data?.description) {
+            const parsed = JSON.parse(musicConfigRes.data.description);
+            allPlaylists = Array.isArray(parsed?.playlists) ? parsed.playlists : [];
+        }
+    } catch {}
+
+    let localPlaylistIds = [];
+    try {
+        const raw = localStorage.getItem('accord_saved_playlists');
+        const arr = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(arr)) localPlaylistIds = arr.map(String);
+    } catch {}
+    const remotePlaylistIds = !playlistBookmarksRes.error && Array.isArray(playlistBookmarksRes.data)
+        ? playlistBookmarksRes.data.map(p => String(p.playlist_id))
+        : [];
+    savedPlaylistIds = Array.from(new Set([...remotePlaylistIds, ...localPlaylistIds]));
+
     renderSavedPages();
 }
 
 function setSavedFilter(filter) {
     currentFilter = filter;
-    ['all', 'purchased', 'books', 'testimonies'].forEach(f => {
+    ['all', 'purchased', 'books', 'testimonies', 'playlists'].forEach(f => {
         const btn = document.getElementById(`sfilter-${f}`);
         if (btn) {
             btn.className = f === filter
@@ -70,14 +93,17 @@ function setSavedFilter(filter) {
 function renderSavedPages() {
     const booksGrid = document.getElementById('saved-books-grid');
     const testimoniesGrid = document.getElementById('saved-testimonies-grid');
+    const playlistsGrid = document.getElementById('saved-playlists-grid');
     const booksSection = document.getElementById('saved-books-section');
     const testimoniesSection = document.getElementById('saved-testimonies-section');
+    const playlistsSection = document.getElementById('saved-playlists-section');
     const headingBooks = document.getElementById('heading-books');
     const emptyState = document.getElementById('saved-empty-state');
     const subtitle = document.getElementById('saved-subtitle');
 
     booksGrid.innerHTML = '';
     testimoniesGrid.innerHTML = '';
+    if (playlistsGrid) playlistsGrid.innerHTML = '';
 
     const purchasedBooks = allBooks.filter(b => purchasedBookIds.includes(Number(b.id)));
     const bookmarkedBooks = allBooks.filter(b => savedBookmarks.includes(b.title));
@@ -89,9 +115,10 @@ function renderSavedPages() {
         ? purchasedBooks
         : (currentFilter === 'books' ? bookmarkedBooks : allSavedAndPurchasedBooks);
     const matchedTestimonies = allTestimonies.filter(t => savedTestimonyIds.includes(Number(t.id)));
+    const matchedPlaylists = allPlaylists.filter(p => savedPlaylistIds.includes(String(p.id)));
 
     if (subtitle) {
-        subtitle.innerText = `You have ${purchasedBooks.length} purchased book(s), ${bookmarkedBooks.length} bookmarked publication(s), and ${matchedTestimonies.length} saved testimony(ies).`;
+        subtitle.innerText = `You have ${purchasedBooks.length} purchased book(s), ${bookmarkedBooks.length} bookmarked publication(s), ${matchedTestimonies.length} saved testimony(ies), and ${matchedPlaylists.length} saved playlist(s).`;
     }
     if (headingBooks) {
         headingBooks.innerText = currentFilter === 'purchased'
@@ -101,11 +128,15 @@ function renderSavedPages() {
 
     const showBooks = currentFilter === 'all' || currentFilter === 'purchased' || currentFilter === 'books';
     const showTestimonies = currentFilter === 'all' || currentFilter === 'testimonies';
+    const showPlaylists = currentFilter === 'all' || currentFilter === 'playlists';
 
     booksSection.style.display = showBooks && matchedBooks.length > 0 ? 'block' : 'none';
     testimoniesSection.style.display = showTestimonies && matchedTestimonies.length > 0 ? 'block' : 'none';
+    if (playlistsSection) {
+        playlistsSection.style.display = showPlaylists && matchedPlaylists.length > 0 ? 'block' : 'none';
+    }
 
-    if ((showBooks && matchedBooks.length > 0) || (showTestimonies && matchedTestimonies.length > 0)) {
+    if ((showBooks && matchedBooks.length > 0) || (showTestimonies && matchedTestimonies.length > 0) || (showPlaylists && matchedPlaylists.length > 0)) {
         emptyState.classList.add('hidden');
     } else {
         emptyState.classList.remove('hidden');
@@ -213,6 +244,38 @@ function renderSavedPages() {
             testimoniesGrid.appendChild(card);
         });
     }
+
+    // Render Saved Playlists
+    if (showPlaylists && playlistsGrid) {
+        const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
+        matchedPlaylists.forEach(pl => {
+            const safeId = escapeHTML(pl.id).replace(/'/g, "\\'");
+            const plLink = pl.links?.spotify || pl.links?.apple || pl.links?.audiomack || pl.link || 'playlists.html';
+            const card = document.createElement('div');
+            card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-center";
+            card.innerHTML = `
+                <div class="w-20 h-20 rounded-2xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200/80">
+                    <img src="${escapeHTML(pl.image || fallbackImg)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover">
+                </div>
+                <div class="flex-1 min-w-0 space-y-1.5">
+                    <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full">${escapeHTML(pl.genre || 'Curated Playlist')}</span>
+                    <h3 class="font-bold text-accord-slate text-sm leading-snug truncate">${escapeHTML(pl.title)}</h3>
+                    <p class="text-[11px] text-accord-muted truncate">${escapeHTML(pl.curator || 'SoundSpace PR')}</p>
+                    <div class="flex items-center gap-2 pt-1">
+                        <a href="${escapeHTML(plLink)}" target="${plLink.startsWith('http') ? '_blank' : '_self'}" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold transition-all">
+                            <i class="fa-solid fa-play text-[9px]"></i>
+                            <span>Listen</span>
+                        </a>
+                        <a href="playlists.html" class="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-all">All Playlists</a>
+                        <button type="button" onclick="removePlaylistBookmark('${safeId}')" class="ml-auto text-red-500 hover:text-red-600 p-1.5" title="Remove Saved Playlist">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            playlistsGrid.appendChild(card);
+        });
+    }
 }
 
 async function removeBookBookmark(title) {
@@ -228,6 +291,22 @@ async function removeTestimonyBookmark(testimonyId) {
     savedTestimonyIds = savedTestimonyIds.filter(id => id !== Number(testimonyId));
     if (currentUser) {
         await supabaseClient.from('user_testimony_bookmarks').delete().eq('user_id', currentUser.id).eq('testimony_id', Number(testimonyId));
+    }
+    loadSavedData();
+}
+
+async function removePlaylistBookmark(playlistId) {
+    const id = String(playlistId);
+    savedPlaylistIds = savedPlaylistIds.filter(pid => pid !== id);
+    localStorage.setItem('accord_saved_playlists', JSON.stringify(savedPlaylistIds));
+    if (currentUser) {
+        await supabaseClient.from('user_playlist_bookmarks').delete().eq('user_id', currentUser.id).eq('playlist_id', id);
+        supabaseClient.rpc('record_playlist_event', {
+            p_playlist_id: id,
+            p_playlist_title: allPlaylists.find(p => String(p.id) === id)?.title || '',
+            p_event_type: 'unsave',
+            p_page_source: 'saved'
+        }).then(() => {});
     }
     loadSavedData();
 }
