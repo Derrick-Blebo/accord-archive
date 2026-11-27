@@ -47,7 +47,9 @@
     }
 
     function getCurrentFileName() {
-        return (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        let file = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        if (file && !file.includes('.')) file += '.html';
+        return file;
     }
 
     function isMainSitePage() {
@@ -105,12 +107,13 @@
             return [];
         }
 
+        const nowMs = Date.now();
         const placement = getCurrentPagePlacement();
         const userCountry = getUserGeoCountry();
 
         _activePromotionsCache = data.filter(p => {
-            if (p.starts_at && p.starts_at > nowIso) return false;
-            if (p.ends_at && p.ends_at < nowIso) return false;
+            if (p.starts_at && Date.parse(p.starts_at) > nowMs) return false;
+            if (p.ends_at && Date.parse(p.ends_at) < nowMs) return false;
 
             const placements = Array.isArray(p.placements) && p.placements.length > 0
                 ? p.placements.map(pl => String(pl).toLowerCase())
@@ -168,8 +171,8 @@
             return `
                 <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" data-promo-id="${promo.id}" class="block relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-md group bg-white">
                     <span class="absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 rounded-full bg-accord-slate/80 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">Sponsored</span>
-                    ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${escapeAdHtml(promo.title)}" class="hidden sm:block w-full max-h-56 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
-                    ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${escapeAdHtml(promo.title)}" class="sm:hidden w-full max-h-60 object-cover">` : ''}
+                    ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${escapeAdHtml(promo.title)}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
+                    ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${escapeAdHtml(promo.title)}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
                 </a>
             `;
         }
@@ -208,10 +211,17 @@
         });
     }
 
+    function renderPromoSlotHtml(promo) {
+        if (promo.promo_type === 'banner') {
+            return buildBannerSlideHtml(promo);
+        }
+        return window.createAccordSponsoredCardElement(promo).outerHTML;
+    }
+
     function insertBannerAtZone(container, zone, promo) {
         const existing = container.querySelector(`.accord-dynamic-banner-slot[data-accord-slot-zone="${zone}"]`);
         if (existing) {
-            existing.innerHTML = buildBannerSlideHtml(promo);
+            existing.innerHTML = renderPromoSlotHtml(promo);
             existing.classList.remove('hidden');
             return;
         }
@@ -219,7 +229,7 @@
         const slot = document.createElement('div');
         slot.className = 'accord-dynamic-banner-slot my-5 w-full';
         slot.setAttribute('data-accord-slot-zone', zone);
-        slot.innerHTML = buildBannerSlideHtml(promo);
+        slot.innerHTML = renderPromoSlotHtml(promo);
 
         const anchors = getContentAnchorChildren(container);
 
@@ -261,7 +271,11 @@
         }
 
         const promos = await fetchActivePromotions();
-        const banners = promos.filter(p => p.promo_type === 'banner');
+        const currentPlacement = getCurrentPagePlacement();
+        // On feed.html, feed.js already renders 'post' and 'book' promos inline in the feed stream.
+        const banners = currentPlacement === 'feed'
+            ? promos.filter(p => p.promo_type === 'banner')
+            : promos;
 
         document.querySelectorAll('.accord-dynamic-banner-slot').forEach(el => el.remove());
 
@@ -319,8 +333,16 @@
         const href = promo.cta_url || (promo.target_book_id ? `book.html?id=${promo.target_book_id}` : promo.target_post_id ? `post.html?id=${promo.target_post_id}` : 'promote.html');
         const isExternal = /^https?:\/\//i.test(href);
         const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
-        const imgUrl = promo.desktop_image_url || promo.mobile_image_url || '';
+        const desktopImg = promo.desktop_image_url || promo.mobile_image_url || '';
+        const mobileImg = promo.mobile_image_url || promo.desktop_image_url || '';
         const typeLabel = promo.promo_type === 'book' ? 'Promoted Book' : 'Sponsored Post';
+
+        const mediaHtml = (desktopImg || mobileImg) ? `
+            <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="block rounded-xl overflow-hidden border border-slate-200/80 bg-slate-50 group">
+                ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${escapeAdHtml(promo.title)}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
+                ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${escapeAdHtml(promo.title)}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
+            </a>
+        ` : '';
 
         card.innerHTML = `
             <div class="flex items-center justify-between gap-2">
@@ -332,18 +354,16 @@
                 </div>
                 <a href="promote.html" class="text-[10px] font-semibold text-slate-400 hover:text-accord-blue">Advertise</a>
             </div>
-            <div class="flex flex-col sm:flex-row gap-3.5 items-start">
-                ${imgUrl ? `<img src="${escapeAdHtml(imgUrl)}" alt="${escapeAdHtml(promo.title)}" class="w-full sm:w-28 h-36 sm:h-28 object-cover rounded-xl border border-slate-200 shrink-0">` : ''}
-                <div class="flex-1 min-w-0 space-y-1.5">
-                    <h3 class="text-[15px] font-bold text-slate-900 leading-snug">${escapeAdHtml(promo.title)}</h3>
-                    ${promo.body ? `<p class="text-xs sm:text-[13px] text-slate-700 leading-relaxed line-clamp-3">${escapeAdHtml(promo.body)}</p>` : ''}
-                    <div class="pt-1">
-                        <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all">
-                            <span>${escapeAdHtml(promo.cta_text || 'View Details')}</span>
-                            <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                        </a>
-                    </div>
+            ${mediaHtml}
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
+                <div class="flex-1 min-w-0 space-y-1">
+                    <h3 class="text-[15px] sm:text-base font-bold text-slate-900 leading-snug">${escapeAdHtml(promo.title)}</h3>
+                    ${promo.body ? `<p class="text-xs sm:text-[13px] text-slate-600 leading-relaxed line-clamp-2">${escapeAdHtml(promo.body)}</p>` : ''}
                 </div>
+                <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0 self-start sm:self-center">
+                    <span>${escapeAdHtml(promo.cta_text || 'View Details')}</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
             </div>
         `;
         return card;
