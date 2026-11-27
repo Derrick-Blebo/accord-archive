@@ -10,6 +10,8 @@ let promotablePageIds = [];
 let promotablePagesById = {};
 let savedCardsCache = [];
 let usingLocalCardsFallback = false;
+let myPromotionsCache = [];
+let activeDetailPromoId = null;
 
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
@@ -516,9 +518,12 @@ async function loadMyPromotions() {
         .order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
+        myPromotionsCache = [];
         listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center">You haven't submitted any promotions yet.</p>`;
         return;
     }
+
+    myPromotionsCache = data;
 
     const statusBadge = {
         pending_approval: 'bg-amber-50 text-amber-700',
@@ -547,18 +552,21 @@ async function loadMyPromotions() {
         const canPause = p.status === 'approved';
         const canResume = p.status === 'paused';
         const pauseBtnHtml = canPause
-            ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-pause text-[9px]"></i> Pause Ad</button>`
+            ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-pause text-[9px]"></i> Pause Ad</button>`
             : canResume
-                ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-play text-[9px]"></i> Resume Ad</button>`
+                ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-play text-[9px]"></i> Resume Ad</button>`
                 : '';
 
         return `
-        <div class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-2">
+        <div role="button" tabindex="0" onclick="openPromotionDetailsModal('${escapePromoHtml(p.id)}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPromotionDetailsModal('${escapePromoHtml(p.id)}'); }" class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-accord-blue/50 hover:shadow-sm transition-all cursor-pointer space-y-2 focus:outline-none focus:ring-2 focus:ring-accord-blue/40">
             <div class="flex items-center justify-between gap-2">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml(p.status.replace('_', ' '))}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml((p.status || '').replace('_', ' '))}</span>
                 <span class="text-[11px] font-semibold text-accord-muted">${p.duration_days}d · ${escapePromoHtml(localLabel)} (${escapePromoHtml(dailyLabel)}/day)</span>
             </div>
-            <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(displayTitle)}</p>
+            <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(displayTitle)}</p>
+                <i class="fa-solid fa-chevron-right text-[10px] text-accord-muted shrink-0"></i>
+            </div>
             <div class="flex items-center justify-between gap-2 flex-wrap">
                 <div class="flex items-center gap-3 text-[11px] text-accord-muted">
                     <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
@@ -573,6 +581,286 @@ async function loadMyPromotions() {
         `;
     }).join('');
 }
+
+function formatPromoDateTime(isoStr) {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    }) + ' · ' + d.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatPromoDateOnly(isoStr) {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function getPromoPeriodSummary(p) {
+    const durationDays = Math.max(1, Number(p.duration_days || 1));
+    const startsLabel = formatPromoDateOnly(p.starts_at);
+    const endsLabel = formatPromoDateOnly(p.ends_at);
+    if (startsLabel && endsLabel) {
+        const endMs = Date.parse(p.ends_at);
+        const nowMs = Date.now();
+        let remainingText = '';
+        if (!Number.isNaN(endMs)) {
+            const diffDays = Math.ceil((endMs - nowMs) / (1000 * 60 * 60 * 24));
+            remainingText = diffDays > 0
+                ? `${diffDays} day${diffDays === 1 ? '' : 's'} remaining`
+                : 'Ended';
+        }
+        return {
+            range: `${startsLabel} – ${endsLabel}`,
+            note: remainingText || `${durationDays} day${durationDays === 1 ? '' : 's'} total`
+        };
+    }
+    if (p.status === 'pending_approval') {
+        return {
+            range: `${durationDays} day${durationDays === 1 ? '' : 's'} (pending start)`,
+            note: 'Period begins once approved by an Admin'
+        };
+    }
+    if (p.status === 'rejected') {
+        return {
+            range: `${durationDays} day${durationDays === 1 ? '' : 's'} (not active)`,
+            note: 'Campaign was not approved'
+        };
+    }
+    return {
+        range: `${durationDays} day${durationDays === 1 ? '' : 's'}`,
+        note: startsLabel ? `Started ${startsLabel}` : 'Schedule not set'
+    };
+}
+
+function formatPromoPlacements(placements, slotPosition) {
+    const map = {
+        all: 'All Main Pages (Library, Feed, Music)',
+        library: 'Digital Library',
+        feed: 'Fellowship Feed',
+        music: 'Music Page'
+    };
+    const arr = Array.isArray(placements) && placements.length ? placements : ['all'];
+    const labels = arr.map(pl => map[pl] || pl);
+    if (slotPosition) {
+        labels.push(`Slot: ${slotPosition}`);
+    }
+    return labels.join(', ');
+}
+
+function openPromotionDetailsModal(promoId) {
+    const p = myPromotionsCache.find(item => String(item.id) === String(promoId));
+    if (!p) return;
+    activeDetailPromoId = p.id;
+
+    const modal = document.getElementById('promo-details-modal');
+    const statusEl = document.getElementById('promo-detail-status');
+    const typeEl = document.getElementById('promo-detail-type');
+    const titleEl = document.getElementById('promo-detail-title');
+    const bodyEl = document.getElementById('promo-details-body');
+    const footerEl = document.getElementById('promo-details-footer');
+    if (!modal || !bodyEl) return;
+
+    const statusBadge = {
+        pending_approval: 'bg-amber-50 text-amber-700',
+        approved: 'bg-emerald-50 text-emerald-700',
+        rejected: 'bg-red-50 text-red-600',
+        paused: 'bg-slate-100 text-slate-600',
+        expired: 'bg-slate-100 text-slate-500'
+    };
+
+    const typeLabel = p.promo_type === 'banner'
+        ? 'Display Ad Banner'
+        : p.promo_type === 'book'
+            ? 'Promoted Library Book'
+            : 'Promoted Feed Post';
+    const displayTitle = (p.title || '').trim() || (p.body ? p.body.slice(0, 80) : typeLabel);
+    const goalLabel = (p.ad_goal === 'views' || (!p.ad_goal && !p.cta_url)) ? 'Views (Awareness)' : 'Clicks (Traffic)';
+    const impressions = Number(p.impressions_count || 0);
+    const clicks = Number(p.clicks_count || 0);
+    const ctr = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) + '%' : '0.00%';
+
+    const totalUsd = Number(p.budget_amount || 0);
+    const durationDays = Math.max(1, Number(p.duration_days || 1));
+    const dailyUsd = Number(p.daily_budget_usd || 0) || (totalUsd > 0 ? totalUsd / durationDays : 0);
+    const totalLocal = window.AccordCurrency?.formatLocalFromUsd
+        ? window.AccordCurrency.formatLocalFromUsd(totalUsd)
+        : `USD ${totalUsd.toFixed(2)}`;
+    const dailyLocal = window.AccordCurrency?.formatLocalFromUsd
+        ? window.AccordCurrency.formatLocalFromUsd(dailyUsd)
+        : `USD ${dailyUsd.toFixed(2)}`;
+
+    const period = getPromoPeriodSummary(p);
+    const submittedAt = formatPromoDateTime(p.created_at) || 'Unknown';
+    const countries = Array.isArray(p.target_countries) && p.target_countries.length
+        ? p.target_countries.join(', ')
+        : 'Global (All Countries)';
+    const placementsText = formatPromoPlacements(p.placements, p.slot_position);
+
+    if (statusEl) {
+        statusEl.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}`;
+        statusEl.textContent = (p.status || 'unknown').replace('_', ' ');
+    }
+    if (typeEl) typeEl.textContent = typeLabel;
+    if (titleEl) titleEl.textContent = displayTitle;
+
+    const safeUrl = p.cta_url && /^(https?:\/\/|\/|[a-z0-9_-]+\.html)/i.test(String(p.cta_url).trim())
+        ? String(p.cta_url).trim()
+        : null;
+
+    bodyEl.innerHTML = `
+        <div class="grid grid-cols-3 gap-2.5">
+            <div class="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Views</p>
+                <p class="text-base font-extrabold text-accord-slate mt-0.5">${impressions.toLocaleString()}</p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Clicks</p>
+                <p class="text-base font-extrabold text-accord-slate mt-0.5">${clicks.toLocaleString()}</p>
+            </div>
+            <div class="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">CTR</p>
+                <p class="text-base font-extrabold text-accord-blue mt-0.5">${ctr}</p>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2.5">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate flex items-center gap-1.5">
+                <i class="fa-regular fa-calendar text-accord-blue"></i> Ad Period &amp; Schedule
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Active Period</p>
+                    <p class="font-bold text-accord-slate">${escapePromoHtml(period.range)}</p>
+                    <p class="text-[11px] text-accord-muted">${escapePromoHtml(period.note)}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Submitted On</p>
+                    <p class="font-semibold text-accord-slate">${escapePromoHtml(submittedAt)}</p>
+                    <p class="text-[11px] text-accord-muted">Duration: ${durationDays} day${durationDays === 1 ? '' : 's'}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2.5">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate flex items-center gap-1.5">
+                <i class="fa-solid fa-wallet text-accord-blue"></i> Budget &amp; Payment
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Total Budget</p>
+                    <p class="font-bold text-accord-slate">${escapePromoHtml(totalLocal)} <span class="text-[11px] font-medium text-accord-muted">($${totalUsd.toFixed(2)} USD)</span></p>
+                    <p class="text-[11px] text-accord-muted">${escapePromoHtml(dailyLocal)}/day ($${dailyUsd.toFixed(2)} USD/day)</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Payment</p>
+                    <p class="font-semibold text-accord-slate">${escapePromoHtml(p.payment_card_label || (p.payment_provider ? String(p.payment_provider).toUpperCase() : 'Paystack'))}</p>
+                    <p class="text-[11px] text-accord-muted">Status: ${escapePromoHtml(p.payment_status || 'paid')}${p.payment_reference ? ` · Ref: ${escapePromoHtml(p.payment_reference)}` : ''}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2.5">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate flex items-center gap-1.5">
+                <i class="fa-solid fa-bullseye text-accord-blue"></i> Targeting &amp; Placement
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Goal</p>
+                    <p class="font-semibold text-accord-slate">${escapePromoHtml(goalLabel)}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Target Countries</p>
+                    <p class="font-semibold text-accord-slate">${escapePromoHtml(countries)}</p>
+                </div>
+                <div class="sm:col-span-2">
+                    <p class="text-[10px] text-accord-muted uppercase font-semibold">Placements</p>
+                    <p class="font-semibold text-accord-slate">${escapePromoHtml(placementsText)}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-2.5">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate flex items-center gap-1.5">
+                <i class="fa-regular fa-newspaper text-accord-blue"></i> Ad Creative &amp; Link
+            </p>
+            ${p.body ? `<p class="text-accord-slate leading-relaxed whitespace-pre-line">${escapePromoHtml(p.body)}</p>` : '<p class="text-accord-muted italic">No ad copy provided.</p>'}
+            ${safeUrl ? `
+                <div class="pt-1 flex items-center justify-between gap-2 flex-wrap">
+                    <span class="text-[11px] text-accord-muted">CTA: <strong class="text-accord-slate">${escapePromoHtml(p.cta_text || 'Learn More')}</strong></span>
+                    <a href="${escapePromoHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-accord-blue hover:underline truncate max-w-full">
+                        ${escapePromoHtml(safeUrl)} <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
+                    </a>
+                </div>
+            ` : ''}
+            ${(p.desktop_image_url || p.mobile_image_url) ? `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    ${p.desktop_image_url ? `
+                        <a href="${escapePromoHtml(p.desktop_image_url)}" target="_blank" rel="noopener noreferrer" class="block rounded-xl overflow-hidden border border-slate-200 bg-white">
+                            <img src="${escapePromoHtml(p.desktop_image_url)}" alt="Desktop banner" class="w-full h-24 object-cover">
+                            <span class="block px-2.5 py-1 text-[10px] font-semibold text-accord-muted">Desktop Banner</span>
+                        </a>
+                    ` : ''}
+                    ${p.mobile_image_url ? `
+                        <a href="${escapePromoHtml(p.mobile_image_url)}" target="_blank" rel="noopener noreferrer" class="block rounded-xl overflow-hidden border border-slate-200 bg-white">
+                            <img src="${escapePromoHtml(p.mobile_image_url)}" alt="Mobile banner" class="w-full h-24 object-cover">
+                            <span class="block px-2.5 py-1 text-[10px] font-semibold text-accord-muted">Mobile Banner</span>
+                        </a>
+                    ` : ''}
+                </div>
+            ` : ''}
+        </div>
+
+        ${p.admin_notes ? `
+            <div class="rounded-2xl border border-accord-blue/25 bg-accord-lightBlue/40 p-3.5">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-blue mb-1">Admin Note</p>
+                <p class="text-accord-slate leading-relaxed">${escapePromoHtml(p.admin_notes)}</p>
+            </div>
+        ` : ''}
+    `;
+
+    if (footerEl) {
+        const canPause = p.status === 'approved';
+        const canResume = p.status === 'paused';
+        const actionBtn = canPause
+            ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-pause text-[10px]"></i> Pause Ad</button>`
+            : canResume
+                ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-play text-[10px]"></i> Resume Ad</button>`
+                : '';
+        footerEl.innerHTML = `
+            ${actionBtn}
+            <button type="button" onclick="closePromotionDetailsModal()" class="px-4 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-200 text-accord-slate text-xs font-bold">Close</button>
+        `;
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePromotionDetailsModal() {
+    activeDetailPromoId = null;
+    const modal = document.getElementById('promo-details-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activeDetailPromoId !== null) {
+        closePromotionDetailsModal();
+    }
+});
 
 async function togglePromotionPause(promoId, nextStatus) {
     if (!promoUser || !promoId) return;
@@ -593,6 +881,9 @@ async function togglePromotionPause(promoId, nextStatus) {
         ? 'Ad paused. It will not appear across the site until you resume it.'
         : 'Ad resumed and is active again.');
     await loadMyPromotions();
+    if (activeDetailPromoId && String(activeDetailPromoId) === String(promoId)) {
+        openPromotionDetailsModal(promoId);
+    }
 }
 
 // =========================================================
