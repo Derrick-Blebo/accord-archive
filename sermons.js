@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const supabaseClient = window.supabaseClient;
 const SERMONS_CONFIG_RECORD_NAME = '__ACCORD_SERMONS_CONFIG__';
+const DEFAULT_SERMON_COVER_IMAGE = 'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&q=80&w=800';
 
 let currentSermonsUser = null;
 let activeTopicFilter = 'all';
@@ -51,6 +52,10 @@ window.onload = async function () {
     currentSermonsUser = session?.user || null;
 
     await fetchSermonsData();
+    const profileSermonPlaylists = await fetchPinnedProfileSermonPlaylists(sermonsData.playlists);
+    if (profileSermonPlaylists.length > 0) {
+        sermonsData.playlists = [...sermonsData.playlists, ...profileSermonPlaylists];
+    }
     window.sermonsData = sermonsData;
 
     if (window.AccordPlaylists) {
@@ -103,6 +108,78 @@ async function fetchSermonsData() {
         playlists: [],
         sermonSpotlights: []
     });
+}
+
+function collectNormalizedPlaylistUrls(playlists) {
+    const urls = new Set();
+    (playlists || []).forEach(pl => {
+        const candidates = [
+            pl?.link,
+            pl?.spotifyLink,
+            pl?.audiomackLink,
+            pl?.appleMusicLink,
+            pl?.links?.spotify,
+            pl?.links?.audiomack,
+            pl?.links?.apple
+        ];
+        candidates.forEach(raw => {
+            const normalized = String(raw || '').trim().toLowerCase().replace(/\/+$/, '');
+            if (normalized) urls.add(normalized);
+        });
+    });
+    return urls;
+}
+
+async function fetchPinnedProfileSermonPlaylists(existingPlaylists = []) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('id, full_name, handle, bio, avatar_url, audio_stream_url, audio_stream_type')
+            .eq('audio_stream_type', 'sermons')
+            .not('audio_stream_url', 'is', null);
+
+        if (error || !Array.isArray(data)) {
+            if (error && !/audio_stream_/i.test(error.message || '')) {
+                console.warn('Could not load pinned profile sermon links:', error);
+            }
+            return [];
+        }
+
+        const existingUrls = collectNormalizedPlaylistUrls(existingPlaylists);
+        const derived = [];
+
+        data.forEach(profile => {
+            const url = String(profile?.audio_stream_url || '').trim();
+            if (!url) return;
+            const normalizedUrl = url.toLowerCase().replace(/\/+$/, '');
+            if (existingUrls.has(normalizedUrl)) return;
+            existingUrls.add(normalizedUrl);
+
+            const displayName = String(profile.full_name || '').trim()
+                || (profile.handle ? `@${String(profile.handle).replace(/^@/, '')}` : 'Accord Creator');
+            const handleLabel = profile.handle
+                ? `@${String(profile.handle).replace(/^@/, '')}`
+                : displayName;
+
+            derived.push({
+                id: `profile_sermon_${profile.id}`,
+                title: `${displayName} — Sermons`,
+                genre: 'Creator & Ministry Sermons',
+                curator: handleLabel,
+                image: String(profile.avatar_url || '').trim() || DEFAULT_SERMON_COVER_IMAGE,
+                description: String(profile.bio || '').trim() || `Pinned sermon stream from ${displayName}.`,
+                link: url,
+                featured: false,
+                hidden: false,
+                sourceProfileId: profile.id
+            });
+        });
+
+        return derived;
+    } catch (e) {
+        console.warn('Could not load pinned profile sermon links:', e);
+        return [];
+    }
 }
 
 function renderFeaturedSermons() {
