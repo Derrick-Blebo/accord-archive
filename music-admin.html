@@ -666,6 +666,48 @@
                 </div>
             </section>
 
+            <!-- Section 1B: Playlist Insights (Most Saved & Most Engaged) -->
+            <section id="admin-playlist-insights-section" class="space-y-4 scroll-mt-24">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="serif-heading text-xl font-bold text-accord-slate">Playlist Insights: Most Saved &amp; Most Engaged</h2>
+                        <p class="text-xs text-accord-muted mt-0.5">Live playlist saves, play modal opens, and streaming platform clicks to guide curation decisions.</p>
+                    </div>
+                    <button type="button" onclick="loadAndRenderPlaylistInsights()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-accord-slate text-xs font-bold shadow-xs transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
+                        <i class="fa-solid fa-rotate text-accord-blue"></i>
+                        <span>Refresh Insights</span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div class="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-blue flex items-center gap-1.5">
+                                <i class="fa-solid fa-bookmark"></i>
+                                <span>Most Saved Playlists</span>
+                            </h3>
+                            <span class="text-[10px] font-semibold text-accord-muted">Ranked by saves</span>
+                        </div>
+                        <div id="insights-most-saved" class="divide-y divide-slate-100 text-xs">
+                            <p class="text-accord-muted py-4">Loading playlist save insights...</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-chart-line"></i>
+                                <span>Most Engaged Playlists</span>
+                            </h3>
+                            <span class="text-[10px] font-semibold text-accord-muted">Plays + platform clicks + saves</span>
+                        </div>
+                        <div id="insights-most-engaged" class="divide-y divide-slate-100 text-xs">
+                            <p class="text-accord-muted py-4">Loading playlist engagement insights...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Section 2: Song Spotlight Management -->
             <section id="admin-song-spotlights-section" class="space-y-5 scroll-mt-24">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">

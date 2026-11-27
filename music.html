@@ -298,7 +298,7 @@
 
         <!-- Section 3: Curated Playlists -->
         <section id="playlists" class="scroll-mt-24 space-y-6 py-2">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
                 <div class="space-y-1">
                     <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
                         <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
@@ -307,6 +307,10 @@
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Curated Gospel Playlists</h2>
                     <p class="text-xs text-accord-muted">Stream editorial selections curated by DJ ChristCentric & SoundSpace PR.</p>
                 </div>
+                <a href="playlists.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all self-start sm:self-auto shrink-0">
+                    <span>View More Playlists</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
             </div>
 
             <div id="playlist-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -408,6 +412,7 @@
 
     <!-- Script -->
     <script src="ads.js"></script>
-    <script src="music.js?v=10"></script>
+    <script src="playlists-shared.js?v=1"></script>
+    <script src="music.js?v=11"></script>
 </body>
 </html>

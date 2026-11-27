@@ -12,12 +12,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     <span class="hidden sm:inline">•</span>
                     <span>Digital Preservation & Publishing</span>
                 </div>
-                <div class="flex items-center space-x-5 font-semibold text-accord-slate">
+                <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-semibold text-accord-slate">
                     <a href="index.html" class="hover:text-accord-blue transition-colors">Library</a>
                     <a href="feed.html" class="hover:text-accord-blue transition-colors">Fellowship Feed</a>
                     <a href="music.html" class="hover:text-accord-blue transition-colors">Music</a>
                     <a href="privacy.html" class="hover:text-accord-blue transition-colors">Privacy</a>
                     <a href="terms.html" class="hover:text-accord-blue transition-colors">Terms</a>
+                    <button type="button" onclick="window.openAccordConsentBanner?.()" class="hover:text-accord-blue transition-colors">Cookie Preferences</button>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>

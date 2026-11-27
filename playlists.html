@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Curated Gospel Playlists — Accord Music Hub</title>
+    <link rel="canonical" href="https://www.accordarchives.com/playlists.html" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/icon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="Explore all curated gospel playlists on Accord Music Hub. Stream on Spotify, Apple Music, Audiomack, and save your favorites." />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 bg-accord-slate text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-lg"></i>
+        <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
+    </div>
+
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js?v=6"></script>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-14 space-y-10">
+        <!-- Hero / Filter Header -->
+        <section class="rounded-3xl bg-gradient-to-br from-accord-darkBlue via-[#004A9F] to-accord-slate text-white p-6 sm:p-8 shadow-lg space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="space-y-1.5">
+                    <a href="music.html" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-200 hover:text-white transition-colors">
+                        <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                        <span>Back to Accord Music Hub</span>
+                    </a>
+                    <h1 class="serif-heading text-2xl sm:text-3xl font-extrabold tracking-tight">Curated Gospel Playlists</h1>
+                    <p class="text-xs sm:text-sm text-blue-100/90 max-w-2xl">
+                        Browse every curated gospel playlist across AfroGospel, Worship, Urban Praise, and Acoustic sessions. Save your favorites or stream directly.
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <a href="saved.html" class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white text-white hover:text-accord-darkBlue border border-white/20 text-xs font-bold transition-all">
+                        <i class="fa-solid fa-bookmark text-[11px]"></i>
+                        <span>Saved Playlists</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+                <div class="relative flex-1 max-w-md">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-200 text-xs"></i>
+                    <input type="text" id="playlist-search-input" oninput="handlePlaylistSearch()" placeholder="Search playlists by title, curator, or genre..." class="w-full bg-white/10 border border-white/20 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-blue-200/80 focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all">
+                </div>
+                <div id="playlist-genre-filters" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                    <!-- Genre filter pills populated by playlists.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="playlists-loading" class="text-center py-16">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue mb-3"></i>
+            <p class="text-xs text-accord-muted">Loading curated playlists...</p>
+        </div>
+
+        <!-- Playlist Chunks (Alternating Horizontal & Vertical Scrolling Sections) -->
+        <div id="playlists-chunks-container" class="space-y-10"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Music Hub</span>
+                <span>• Powered by SoundSpace PR & Accord Media House</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Media Player Modal -->
+    <div id="playlist-player-modal" class="fixed inset-0 z-50 bg-accord-slate/75 backdrop-blur-sm hidden items-center justify-center p-4" onclick="if(event.target===this) closePlaylistPlayerModal()">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="min-w-0 pr-4">
+                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Music Player</h3>
+                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Accord Music Hub</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <a id="player-modal-external" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-accord-slate text-[11px] font-bold transition-colors">
+                        Open App <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="closePlaylistPlayerModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="player-modal-platforms" class="hidden px-6 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center gap-2"></div>
+            <div id="player-modal-body" class="p-4 bg-slate-100"></div>
+        </div>
+    </div>
+
+    <script src="ads.js"></script>
+    <script src="playlists-shared.js?v=1"></script>
+    <script src="playlists.js?v=1"></script>
+</body>
+</html>

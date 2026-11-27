@@ -45,7 +45,7 @@
     
     <!-- Global Header Container -->
     <div id="accord-header"></div>
-    <script src="header.js?v=4"></script>
+    <script src="header.js?v=6"></script>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-14 space-y-8 flex-grow">
         <div>
@@ -56,33 +56,49 @@
 
         <div class="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 space-y-6 text-sm text-slate-700 leading-relaxed shadow-sm">
             <section class="space-y-2">
-                <h2 class="font-bold text-base text-[#0F172A]">1. Information We Collect</h2>
-                <p>Accord Media House ("Accord", "we", "our") operates the Accord Digital Library &amp; Historical Archive at <strong>accordarchives.com</strong>. We collect the following categories of information:</p>
+                <h2 class="font-bold text-base text-[#0F172A]">1. Who Operates Accord Archive</h2>
+                <p>Accord Media House ("Accord", "we", "our") operates the Accord Digital Library &amp; Historical Archive at <strong>accordarchives.com</strong>. Accord is a faith-centered Christian digital library and fellowship community committed to maintaining a safe, respectful environment. For all privacy, legal, or data inquiries, contact us at <strong>derrick@accordofficial.com</strong>.</p>
+            </section>
+
+            <section class="space-y-2">
+                <h2 class="font-bold text-base text-[#0F172A]">2. Information We Collect</h2>
                 <ul class="list-disc pl-5 space-y-1.5">
-                    <li><strong>Account &amp; Profile Data:</strong> When you create an account or sign in via Google, we collect your name, email address, unique @handle, Terms acceptance timestamp, and optional ministry/bio details.</li>
-                    <li><strong>Approximate Location &amp; Audience Signals:</strong> To deliver relevant regional promotions and measure advertising reach, we collect approximate location (country, region/state, and city) derived from standard network/edge headers (without requesting precise browser GPS permissions), along with device type and page engagement signals.</li>
+                    <li><strong>Account &amp; Profile Data:</strong> When you create an account or sign in via Google, we collect your name, email address, unique @handle, minimum-age and Terms acceptance timestamp, and optional ministry/bio details.</li>
+                    <li><strong>Approximate Location &amp; Audience Signals (With Your Consent):</strong> If you accept non-essential cookies/analytics in our Cookie Preferences banner, we use approximate location (country, region/state, and city) derived from standard network/edge headers (without requesting precise browser GPS permissions), a pseudonymous browser session key (<code class="text-xs bg-slate-100 px-1 py-0.5 rounded">accord_session_key</code>), device type, and page engagement signals to measure aggregated advertising reach and deliver relevant regional promotions.</li>
+                    <li><strong>Essential Storage &amp; Regional Pricing:</strong> Even if you choose "Essential Only" in Cookie Preferences, we use strictly necessary authentication storage and temporary session-only country lookup (<code class="text-xs bg-slate-100 px-1 py-0.5 rounded">accord_geo</code>) so the site can display prices in your local currency without persistent cross-session tracking.</li>
                     <li><strong>Contributions &amp; Transactions:</strong> Information you provide when submitting manuscripts, posts, comments, moderation reports, paid promotions, book purchases, or author payout requests.</li>
                 </ul>
             </section>
 
             <section class="space-y-2">
-                <h2 class="font-bold text-base text-[#0F172A]">2. How We Use Your Information</h2>
+                <h2 class="font-bold text-base text-[#0F172A]">3. How We Use Your Information</h2>
                 <ul class="list-disc pl-5 space-y-1">
                     <li>To authenticate accounts, synchronize saved bookmarks, and deliver real-time chat and notifications.</li>
-                    <li>To target, display, and measure aggregated performance (impressions and clicks) of ad banners and paid promotions based on approximate location and interests.</li>
-                    <li>To enforce our Terms of Service, investigate flagged content, track policy violations, and prevent fraud or abuse.</li>
+                    <li>To display relevant regional promotions and measure aggregated performance (impressions and clicks) when you consent to audience signals.</li>
+                    <li>To enforce our Terms of Service, protect community and child safety, investigate flagged content, track policy violations, and prevent fraud or abuse.</li>
                     <li>To process digital book purchases, paid promotions, and author royalty withdrawals via Paystack.</li>
                 </ul>
             </section>
 
             <section class="space-y-2">
-                <h2 class="font-bold text-base text-[#0F172A]">3. Data Storage &amp; Third-Party Services</h2>
-                <p>Authentication and database records are hosted on Supabase, payments and payouts are processed via Paystack, transactional emails are delivered via Resend, and web hosting/edge routing is provided by Vercel. We do not sell your personal contact details to third-party data brokers.</p>
+                <h2 class="font-bold text-base text-[#0F172A]">4. Third-Party Embedded Media</h2>
+                <p>Accord Archive does not directly host songs, sermons, or videos on our own media servers; instead, these items are linked as third-party embeds (such as YouTube, Spotify, or external media providers). When you view or play an embedded player, the third-party provider may receive your IP address, browser/device information, and set its own cookies in accordance with its own privacy policy.</p>
             </section>
 
             <section class="space-y-2">
-                <h2 class="font-bold text-base text-[#0F172A]">4. Your Rights &amp; Account Deletion</h2>
-                <p>You may update your profile information or sign out at any time. To request deletion of your account and associated personal data, contact us at <strong>derrick@accordofficial.com</strong>.</p>
+                <h2 class="font-bold text-base text-[#0F172A]">5. Data Storage, Subprocessors &amp; International Transfers</h2>
+                <p>Authentication and database records are hosted on Supabase, payments and payouts are processed via Paystack, transactional emails are delivered via Resend, and web hosting/edge routing is provided by Vercel. Because our users and infrastructure span multiple countries, your data may be transferred to and processed in jurisdictions outside your home country subject to appropriate contractual safeguards. We do not sell your personal contact details to third-party data brokers.</p>
+            </section>
+
+            <section class="space-y-2">
+                <h2 class="font-bold text-base text-[#0F172A]">6. Children's Privacy &amp; Minimum Age</h2>
+                <p>Accord Archive is intended for users aged <strong>13 and older</strong> (or <strong>16 and older</strong> where required by local law, such as in the EEA/UK). We do not knowingly collect personal information from children below the applicable minimum age. If you believe a child under the minimum age has created an account, please contact <strong>derrick@accordofficial.com</strong> so we can promptly remove the account.</p>
+            </section>
+
+            <section class="space-y-2">
+                <h2 class="font-bold text-base text-[#0F172A]">7. Data Retention &amp; Your Privacy Rights</h2>
+                <p>We retain account and transaction records for as long as your account is active or as needed to comply with legal, tax, and safety obligations. Depending on your location (including Ghana's Data Protection Act, 2012 (Act 843), the EU/UK GDPR, and US state privacy laws), you may have the right to access, correct, export, or request deletion of your personal data, and to withdraw consent for non-essential audience signals at any time using the <strong>Cookie Preferences</strong> link in the footer.</p>
+                <p>To submit a data access, correction, or account deletion request, contact us at <strong>derrick@accordofficial.com</strong>. We aim to respond to all verified privacy requests within 30 days.</p>
             </section>
         </div>
     </main>

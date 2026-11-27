@@ -1093,6 +1093,66 @@ function checkUnreadPolicyWarnings() {
     });
 }
 
+const ACCORD_CONSENT_STORAGE_KEY = 'accord_consent_v1';
+
+function getAccordConsentChoice() {
+    try {
+        const val = localStorage.getItem(ACCORD_CONSENT_STORAGE_KEY);
+        return (val === 'accepted' || val === 'essential') ? val : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function saveAccordConsentChoice(choice) {
+    try {
+        localStorage.setItem(ACCORD_CONSENT_STORAGE_KEY, choice);
+        if (choice !== 'accepted') {
+            localStorage.removeItem('accord_session_key');
+        }
+    } catch (_) {}
+    document.getElementById('accord-consent-banner')?.remove();
+    if (choice === 'accepted') {
+        collectAudienceGeoSignal(globalHeaderUser);
+    }
+}
+
+window.openAccordConsentBanner = function (forceShow = true) {
+    if (!forceShow && getAccordConsentChoice()) return;
+    if (document.getElementById('accord-consent-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'accord-consent-banner';
+    banner.setAttribute('role', 'dialog');
+    banner.setAttribute('aria-label', 'Cookie and privacy preferences');
+    banner.className = 'fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[90] bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 sm:p-5 text-xs text-slate-700';
+    banner.innerHTML = `
+        <div class="space-y-3">
+            <div class="flex items-start justify-between gap-3">
+                <p class="font-bold text-sm text-[#0F172A]">Privacy &amp; Cookie Preferences</p>
+            </div>
+            <p class="leading-relaxed text-slate-600">
+                Accord Archive uses strictly necessary storage for sign-in, saved items, and regional currency display. With your consent, we also use approximate location and a session key to measure aggregated reach and deliver relevant regional promotions. See our <a href="privacy.html" class="text-[#0077FF] font-semibold hover:underline">Privacy Policy</a>.
+            </p>
+            <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
+                <button type="button" id="accord-consent-essential" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold transition-colors">
+                    Essential Only
+                </button>
+                <button type="button" id="accord-consent-accept" class="px-4 py-2 rounded-xl bg-[#0077FF] hover:bg-[#005BC4] text-white font-semibold shadow-sm transition-colors">
+                    Accept All
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(banner);
+    document.getElementById('accord-consent-essential')?.addEventListener('click', () => saveAccordConsentChoice('essential'));
+    document.getElementById('accord-consent-accept')?.addEventListener('click', () => saveAccordConsentChoice('accepted'));
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.openAccordConsentBanner(false);
+});
+
 async function collectAudienceGeoSignal(user) {
     try {
         let geo = null;
@@ -1108,6 +1168,9 @@ async function collectAudienceGeoSignal(user) {
         }
         if (!geo) return;
         window.accordUserGeo = geo;
+
+        // Only persist or log audience tracking signals when the visitor has explicitly consented.
+        if (getAccordConsentChoice() !== 'accepted') return;
 
         const client = window.supabaseClient;
         if (!client) return;

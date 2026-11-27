@@ -154,7 +154,7 @@
                     <label class="flex items-start gap-2.5 cursor-pointer text-[11px] text-accord-slate leading-relaxed">
                         <input type="checkbox" id="auth-terms-checkbox" class="mt-0.5 rounded border-slate-300 text-accord-blue focus:ring-accord-blue">
                         <span>
-                            I agree to the <a href="terms.html" target="_blank" class="text-accord-blue font-bold hover:underline">Terms of Service &amp; Community Guidelines</a> (including rules against abusive language, inappropriate content, violence, and copyright infringement) and the <a href="privacy.html" target="_blank" class="text-accord-blue font-bold hover:underline">Privacy Policy</a>.
+                            I confirm that I am at least <strong>13 years old</strong> (or <strong>16+</strong> where required by local law) and agree to the <a href="terms.html" target="_blank" class="text-accord-blue font-bold hover:underline">Terms of Service &amp; Community Guidelines</a> (including rules against child exploitation, abusive language, inappropriate content, violence, and copyright infringement) and the <a href="privacy.html" target="_blank" class="text-accord-blue font-bold hover:underline">Privacy Policy</a>.
                         </span>
                     </label>
                 </div>
@@ -481,7 +481,7 @@
             }
 
             if (isSignUpMode && !document.getElementById('auth-terms-checkbox')?.checked) {
-                showAuthAlert('You must accept the Terms of Service & Privacy Policy to create an account.', 'error');
+                showAuthAlert('You must confirm you meet the minimum age (13+) and accept the Terms of Service & Privacy Policy to create an account.', 'error');
                 return;
             }
 
