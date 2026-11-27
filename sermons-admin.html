@@ -32,6 +32,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
@@ -133,6 +134,10 @@
                         <p class="text-xs text-accord-muted">Add sermon playlists (with Spotify, Apple Podcasts, Audiomack auto-fill), Pastor Spotlights, and Ministry Spotlights.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="openSermonsExcelImportModal('auto')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Import Excel</span>
+                        </button>
                         <button type="button" onclick="openSermonItemModal('add', null, 'playlist')" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
                             <i class="fa-solid fa-plus"></i>
                             <span>Add Sermon Playlist</span>
@@ -181,10 +186,16 @@
                         <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Spotlight (Featured Individual Sermons)</h2>
                         <p class="text-xs text-accord-muted">Add individual featured sermons that appear in the Sermon Spotlight section.</p>
                     </div>
-                    <button type="button" onclick="openSermonSpotlightModal('add')" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Add Featured Sermon</span>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                        <button type="button" onclick="openSermonsExcelImportModal('sermon')" class="px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Import Sermons (Excel)</span>
+                        </button>
+                        <button type="button" onclick="openSermonSpotlightModal('add')" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add Featured Sermon</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -365,6 +376,104 @@
         </div>
     </div>
 
-    <script src="sermons-admin.js?v=1"></script>
+    <!-- Bulk Import Sermons, Pastors & Ministries from Excel Modal -->
+    <div id="excel-sermons-import-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                        <span>Import Sermons, Pastors &amp; Ministries from Excel</span>
+                    </h3>
+                    <p class="text-xs text-accord-muted mt-0.5">Upload an .xlsx, .xls, or .csv file. Supports multi-sheet workbooks (Sermon Playlists, Pastors, Ministries, Sermons) or a single sheet with a Type column. Streaming links auto-fill metadata.</p>
+                </div>
+                <button type="button" onclick="closeSermonsExcelImportModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-5 flex-1">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <label for="sermons-excel-file" class="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all">
+                            <i class="fa-solid fa-upload"></i>
+                            <span>Choose Excel / CSV File</span>
+                        </label>
+                        <input type="file" id="sermons-excel-file" accept=".xlsx,.xls,.csv" onchange="handleSermonsExcelUpload(event)" class="hidden">
+                        <span id="sermons-excel-filename" class="text-xs text-accord-muted">No file selected</span>
+                    </div>
+                    <button type="button" onclick="downloadSermonsExcelTemplate()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-accord-slate border border-slate-200 text-xs font-bold transition-all self-start sm:self-auto">
+                        <i class="fa-solid fa-download text-emerald-600"></i>
+                        <span>Download Sample Template (.xlsx)</span>
+                    </button>
+                </div>
+
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+                    <div class="flex items-center gap-2.5">
+                        <label for="sermons-excel-default-type" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Default Row Type:</label>
+                        <select id="sermons-excel-default-type" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                            <option value="auto">Auto-detect (Sheet Name / Type Column)</option>
+                            <option value="playlist">Sermon Playlist</option>
+                            <option value="pastor">Pastor Spotlight</option>
+                            <option value="ministry">Ministry Spotlight</option>
+                            <option value="sermon">Featured Individual Sermon</option>
+                        </select>
+                    </div>
+                    <p class="text-[11px] text-accord-muted">Used when a sheet has no <code>Type</code> column and its name is generic (e.g. Sheet1 / CSV).</p>
+                </div>
+
+                <div id="sermons-excel-progress-wrap" class="hidden space-y-1.5">
+                    <div class="flex items-center justify-between text-xs font-semibold text-accord-slate">
+                        <span id="sermons-excel-progress-text">Fetching streaming covers &amp; metadata...</span>
+                        <span id="sermons-excel-progress-count">0 / 0</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="sermons-excel-progress-bar" class="h-full bg-emerald-600 transition-all duration-200" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div id="sermons-excel-preview-wrap" class="hidden space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p id="sermons-excel-summary" class="text-xs font-bold text-accord-slate">0 entries ready to import</p>
+                        <label class="inline-flex items-center gap-2 text-xs font-semibold text-accord-slate cursor-pointer">
+                            <input type="checkbox" id="sermons-excel-skip-duplicates" checked onchange="recheckSermonsExcelDuplicates()" class="w-4 h-4 accent-emerald-600 rounded">
+                            <span>Skip duplicates matching existing entries</span>
+                        </label>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-2xl overflow-hidden">
+                        <div class="overflow-x-auto max-h-72">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-accord-muted sticky top-0">
+                                    <tr>
+                                        <th class="py-3 px-3 w-8">
+                                            <input type="checkbox" id="sermons-excel-select-all" checked onchange="toggleAllSermonsExcelRows(this.checked)" class="w-4 h-4 accent-emerald-600 rounded">
+                                        </th>
+                                        <th class="py-3 px-3">Cover</th>
+                                        <th class="py-3 px-3">Type</th>
+                                        <th class="py-3 px-3">Title &amp; Preacher / Curator</th>
+                                        <th class="py-3 px-3">Topic / Links</th>
+                                        <th class="py-3 px-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sermons-excel-preview-body" class="divide-y divide-slate-100">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
+                <button type="button" onclick="closeSermonsExcelImportModal()" class="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-accord-slate border border-slate-200 text-xs font-bold transition-all">Cancel</button>
+                <button type="button" id="sermons-excel-confirm-btn" onclick="confirmSermonsExcelImport()" disabled class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md transition-all">
+                    <i class="fa-solid fa-check mr-1.5"></i> Import Entries
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="sermons-admin.js?v=2"></script>
 </body>
 </html>

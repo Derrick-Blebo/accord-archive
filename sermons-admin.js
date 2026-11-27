@@ -652,3 +652,603 @@ async function deleteSermonSpotlight(id) {
     sermonsConfig.sermonSpotlights = sermonsConfig.sermonSpotlights.filter(x => x.id !== id);
     if (await persistSermonsConfig()) showToast('Sermon Spotlight deleted.');
 }
+
+// ==========================================
+// BULK IMPORT SERMONS, PASTORS & MINISTRIES FROM EXCEL
+// ==========================================
+
+let excelSermonDrafts = [];
+
+const SERMON_EXCEL_TYPE_META = {
+    playlist: { label: 'Sermon Playlist', badge: 'bg-blue-50 text-accord-blue', icon: 'fa-solid fa-list-ul' },
+    pastor: { label: 'Pastor Spotlight', badge: 'bg-amber-50 text-amber-800', icon: 'fa-solid fa-user-tie' },
+    ministry: { label: 'Ministry Spotlight', badge: 'bg-indigo-50 text-indigo-700', icon: 'fa-solid fa-church' },
+    sermon: { label: 'Featured Sermon', badge: 'bg-emerald-50 text-emerald-700', icon: 'fa-solid fa-microphone-lines' }
+};
+
+function openSermonsExcelImportModal(defaultType = 'auto') {
+    excelSermonDrafts = [];
+    const fileInput = document.getElementById('sermons-excel-file');
+    if (fileInput) fileInput.value = '';
+    const filenameEl = document.getElementById('sermons-excel-filename');
+    if (filenameEl) filenameEl.textContent = 'No file selected';
+    const typeSelect = document.getElementById('sermons-excel-default-type');
+    if (typeSelect) typeSelect.value = defaultType || 'auto';
+    document.getElementById('sermons-excel-progress-wrap')?.classList.add('hidden');
+    document.getElementById('sermons-excel-preview-wrap')?.classList.add('hidden');
+    const tbody = document.getElementById('sermons-excel-preview-body');
+    if (tbody) tbody.innerHTML = '';
+    const confirmBtn = document.getElementById('sermons-excel-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i> Import Entries';
+    }
+    const modal = document.getElementById('excel-sermons-import-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+}
+
+function closeSermonsExcelImportModal() {
+    const modal = document.getElementById('excel-sermons-import-modal');
+    if (modal) {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+    excelSermonDrafts = [];
+}
+
+function downloadSermonsExcelTemplate() {
+    if (typeof XLSX === 'undefined') {
+        showToast('Excel library is still loading. Please try again in a moment.');
+        return;
+    }
+
+    const workbook = XLSX.utils.book_new();
+
+    const playlistRows = [
+        {
+            Title: 'Kingdom Foundations Series',
+            'Spotify Link': 'https://open.spotify.com/show/example',
+            'Apple Link': '',
+            'Audiomack Link': '',
+            Topic: 'Faith & Grace',
+            'Preacher / Curator': 'Pastor John Doe',
+            Description: 'Foundational teachings on faith, grace, and purpose.',
+            'Episodes / Tracks': 'Walking in Faith - Pastor John Doe; Power of Grace - Pastor John Doe',
+            'Cover URL': '',
+            Featured: 'Yes',
+            Visible: 'Yes'
+        }
+    ];
+
+    const pastorRows = [
+        {
+            Name: 'Pastor John Doe',
+            'Topic / Focus': 'Faith & Leadership',
+            'Primary Link': 'https://open.spotify.com/show/example',
+            'Cover URL': '',
+            'Featured Sermons': 'Walking in Faith | https://open.spotify.com/episode/example1; Living with Purpose | https://open.spotify.com/episode/example2',
+            'Bio / Article': 'Senior pastor and author teaching practical biblical wisdom.',
+            Featured: 'Yes',
+            Visible: 'Yes'
+        }
+    ];
+
+    const ministryRows = [
+        {
+            Name: 'Grace City Ministry',
+            'Topic / Focus': 'Worship & Discipleship',
+            'Primary Link': 'https://open.spotify.com/show/example',
+            'Cover URL': '',
+            'Featured Sermons': 'Sunday Teaching Series | https://open.spotify.com/episode/example3',
+            'Description / Article': 'A teaching and worship ministry equipping believers.',
+            Featured: 'Yes',
+            Visible: 'Yes'
+        }
+    ];
+
+    const sermonRows = [
+        {
+            'Sermon Title': 'Walking by Faith',
+            'Preacher / Ministry': 'Pastor John Doe',
+            'Streaming Link': 'https://open.spotify.com/episode/example1',
+            Visible: 'Yes'
+        }
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(playlistRows), 'Sermon Playlists');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pastorRows), 'Pastors');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ministryRows), 'Ministries');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sermonRows), 'Sermons');
+
+    XLSX.writeFile(workbook, 'Accord_Sermons_Pastors_Ministries_Template.xlsx');
+    showToast('Sample Excel template downloaded!');
+}
+
+function normalizeExcelHeader(key) {
+    return String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeUrlForDupCheck(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+        const u = new URL(raw);
+        return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`;
+    } catch {
+        return raw.toLowerCase();
+    }
+}
+
+function parseExcelBoolean(val, defaultVal = true, isNegated = false) {
+    const str = String(val ?? '').trim().toLowerCase();
+    if (!str) return defaultVal;
+    const falsy = ['false', 'no', '0', 'hidden', 'n', 'off'];
+    const truthy = ['true', 'yes', '1', 'visible', 'y', 'on'];
+    if (isNegated) {
+        if (truthy.includes(str)) return false;
+        if (falsy.includes(str)) return true;
+        return defaultVal;
+    }
+    if (falsy.includes(str)) return false;
+    if (truthy.includes(str)) return true;
+    return defaultVal;
+}
+
+function parsePlaylistTracksText(raw) {
+    if (!raw) return [];
+    const lines = String(raw).includes('\n') ? String(raw).split('\n') : String(raw).split(';');
+    return lines
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(line => {
+            const idx = line.indexOf(' - ');
+            return idx !== -1
+                ? { title: line.slice(0, idx).trim(), artist: line.slice(idx + 3).trim() }
+                : { title: line, artist: '' };
+        });
+}
+
+function parseSpotlightSermonsText(raw, fallbackTitle = '') {
+    if (!raw) return [];
+    const lines = String(raw).includes('\n') ? String(raw).split('\n') : String(raw).split(';');
+    return lines
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(line => {
+            if (line.includes('|')) {
+                const [t, ...rest] = line.split('|');
+                return { title: t.trim() || fallbackTitle, link: rest.join('|').trim() };
+            }
+            const urlMatch = line.match(/https?:\/\/\S+/i);
+            if (urlMatch) {
+                const link = urlMatch[0];
+                const title = line.replace(link, '').replace(/[-–—:]\s*$/, '').trim();
+                return { title: title || fallbackTitle, link };
+            }
+            return { title: line, link: '' };
+        })
+        .filter(s => s.title || s.link);
+}
+
+function normalizeSermonEntryType(rawType) {
+    const t = String(rawType || '').trim().toLowerCase();
+    if (!t) return '';
+    if (t.includes('pastor') || t.includes('preacher') || t.includes('speaker')) return 'pastor';
+    if (t.includes('ministr') || t.includes('church')) return 'ministry';
+    if (t === 'sermon' || t === 'sermons' || t.includes('spotlight') || t.includes('individual') || t.includes('episode')) return 'sermon';
+    if (t.includes('playlist') || t.includes('series')) return 'playlist';
+    return '';
+}
+
+function inferSermonRowType(sheetName, normalizedRow, fallbackType = 'auto') {
+    const explicitType = normalizeSermonEntryType(
+        normalizedRow.type || normalizedRow.entrytype || normalizedRow.kind || normalizedRow.section
+    );
+    if (explicitType) return explicitType;
+
+    const sheetType = normalizeSermonEntryType(sheetName);
+    if (sheetType) return sheetType;
+
+    if (fallbackType && fallbackType !== 'auto') return fallbackType;
+
+    if (normalizedRow.sermontitle || normalizedRow.streaminglink) return 'sermon';
+    if (normalizedRow.pastorname || normalizedRow.bioarticle || normalizedRow.bio) return 'pastor';
+    if (normalizedRow.ministryname || normalizedRow.churchname) return 'ministry';
+    return 'playlist';
+}
+
+function mapExcelRowToSermonDraft(rawRow, index, sheetName, fallbackType) {
+    const normalized = {};
+    Object.entries(rawRow || {}).forEach(([k, v]) => {
+        normalized[normalizeExcelHeader(k)] = String(v ?? '').trim();
+    });
+
+    const pick = (...keys) => {
+        for (const k of keys) {
+            if (normalized[k]) return normalized[k];
+        }
+        return '';
+    };
+
+    const kind = inferSermonRowType(sheetName, normalized, fallbackType);
+
+    const spotifyLink = pick('spotifylink', 'spotifyurl', 'spotify');
+    const appleLink = pick('applelink', 'applepodcastslink', 'applemusiclink', 'appleurl', 'apple');
+    const audiomackLink = pick('audiomacklink', 'audiomackurl', 'audiomack');
+    const genericLink = pick('streaminglink', 'primarylink', 'profilelink', 'link', 'url');
+
+    const title = pick(
+        'title', 'name', 'sermontitle', 'playlisttitle', 'playlistname',
+        'pastorname', 'ministryname', 'churchname', 'series'
+    );
+    const curator = pick(
+        'preachercurator', 'preacherministry', 'preacher', 'curator',
+        'artist', 'speaker', 'author', 'ministry', 'pastor'
+    );
+    const genre = pick('topicfocus', 'topicseries', 'topic', 'focus', 'genre', 'category', 'series');
+    const image = pick('coverurl', 'imageurl', 'image', 'cover', 'portrait', 'portraiturl', 'artwork');
+    const description = pick('descriptionarticle', 'bioarticle', 'description', 'bio', 'article', 'summary', 'notes');
+
+    const rawTracks = pick('episodestracks', 'episodes', 'tracks', 'tracklist');
+    const rawFeaturedSermons = pick('featuredsermons', 'sermons', 'sermonlinks', 'songs');
+
+    const tracks = kind === 'playlist' ? parsePlaylistTracksText(rawTracks) : [];
+    const songs = (kind === 'pastor' || kind === 'ministry')
+        ? parseSpotlightSermonsText(rawFeaturedSermons || rawTracks, title)
+        : [];
+
+    const visible = normalized.hidden !== undefined && normalized.hidden !== ''
+        ? parseExcelBoolean(normalized.hidden, true, true)
+        : parseExcelBoolean(normalized.visible, true, false);
+    const featured = parseExcelBoolean(normalized.featured, true, false);
+
+    return {
+        rowIndex: index,
+        sheetName: sheetName || '',
+        kind,
+        title,
+        curator,
+        genre,
+        image,
+        spotifyLink,
+        appleLink,
+        audiomackLink,
+        link: genericLink || spotifyLink || appleLink || audiomackLink,
+        description,
+        tracks,
+        songs,
+        featured,
+        visible,
+        selected: true,
+        isDuplicate: false,
+        fetchStatus: 'pending'
+    };
+}
+
+function isDuplicateSermonDraft(draft) {
+    const draftTitle = String(draft.title || '').trim().toLowerCase();
+    const draftLinks = [
+        draft.link,
+        draft.spotifyLink,
+        draft.appleLink,
+        draft.audiomackLink
+    ].map(normalizeUrlForDupCheck).filter(Boolean);
+
+    const targetList = draft.kind === 'pastor'
+        ? sermonsConfig.pastors
+        : (draft.kind === 'ministry'
+            ? sermonsConfig.ministries
+            : (draft.kind === 'sermon' ? sermonsConfig.sermonSpotlights : sermonsConfig.playlists));
+
+    return targetList.some(existing => {
+        const existingTitle = String(existing.title || '').trim().toLowerCase();
+        if (draftTitle && existingTitle && draftTitle === existingTitle) return true;
+
+        const existingLinks = [
+            existing.link,
+            existing.links?.spotify,
+            existing.links?.apple,
+            existing.links?.audiomack
+        ].map(normalizeUrlForDupCheck).filter(Boolean);
+
+        return draftLinks.some(u => existingLinks.includes(u));
+    });
+}
+
+function recheckSermonsExcelDuplicates() {
+    const skipDuplicates = document.getElementById('sermons-excel-skip-duplicates')?.checked !== false;
+    excelSermonDrafts.forEach(draft => {
+        draft.isDuplicate = isDuplicateSermonDraft(draft);
+        if (draft.isDuplicate && skipDuplicates) {
+            draft.selected = false;
+        }
+    });
+    renderSermonsExcelPreview();
+}
+
+function toggleAllSermonsExcelRows(checked) {
+    const skipDuplicates = document.getElementById('sermons-excel-skip-duplicates')?.checked !== false;
+    excelSermonDrafts.forEach(draft => {
+        if (checked && draft.isDuplicate && skipDuplicates) {
+            draft.selected = false;
+        } else {
+            draft.selected = Boolean(checked);
+        }
+    });
+    renderSermonsExcelPreview();
+}
+
+function toggleSermonsExcelRow(index, checked) {
+    if (!excelSermonDrafts[index]) return;
+    excelSermonDrafts[index].selected = Boolean(checked);
+    updateSermonsExcelSummary();
+}
+
+function updateSermonsExcelSummary() {
+    const selected = excelSermonDrafts.filter(d => d.selected && d.title);
+    const dupCount = excelSermonDrafts.filter(d => d.isDuplicate).length;
+    const summaryEl = document.getElementById('sermons-excel-summary');
+    if (summaryEl) {
+        summaryEl.textContent = `${selected.length} of ${excelSermonDrafts.length} entries selected` +
+            (dupCount > 0 ? ` (${dupCount} duplicate${dupCount === 1 ? '' : 's'} detected)` : '');
+    }
+    const confirmBtn = document.getElementById('sermons-excel-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = selected.length === 0;
+        confirmBtn.innerHTML = `<i class="fa-solid fa-check mr-1.5"></i> Import ${selected.length || ''} Entr${selected.length === 1 ? 'y' : 'ies'}`;
+    }
+}
+
+function renderSermonsExcelPreview() {
+    const previewWrap = document.getElementById('sermons-excel-preview-wrap');
+    const tbody = document.getElementById('sermons-excel-preview-body');
+    if (!tbody || !previewWrap) return;
+
+    previewWrap.classList.remove('hidden');
+    tbody.innerHTML = '';
+
+    excelSermonDrafts.forEach((draft, idx) => {
+        const typeMeta = SERMON_EXCEL_TYPE_META[draft.kind] || SERMON_EXCEL_TYPE_META.playlist;
+        const hasLink = Boolean(draft.link || draft.spotifyLink || draft.appleLink || draft.audiomackLink);
+
+        let statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">Ready</span>';
+        if (draft.fetchStatus === 'loading') {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching</span>';
+        } else if (draft.isDuplicate) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Duplicate</span>';
+        } else if (!draft.title) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Missing Title</span>';
+        } else if (draft.kind !== 'sermon' && !draft.image) {
+            statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">No Cover</span>';
+        }
+
+        const subInfo = draft.kind === 'playlist'
+            ? `${draft.tracks.length} episode${draft.tracks.length === 1 ? '' : 's'}`
+            : (draft.kind === 'sermon'
+                ? (hasLink ? 'Streaming link ready' : 'No link')
+                : `${draft.songs.length} featured sermon${draft.songs.length === 1 ? '' : 's'}`);
+
+        const tr = document.createElement('tr');
+        tr.className = draft.isDuplicate ? 'bg-amber-50/40' : 'hover:bg-slate-50/80';
+        tr.innerHTML = `
+            <td class="py-2.5 px-3">
+                <input type="checkbox" ${draft.selected ? 'checked' : ''} onchange="toggleSermonsExcelRow(${idx}, this.checked)" class="w-4 h-4 accent-emerald-600 rounded">
+            </td>
+            <td class="py-2.5 px-3">
+                ${draft.image
+                    ? `<img src="${escapeHTML(draft.image)}" alt="" class="w-10 h-10 rounded-xl object-cover border border-slate-200">`
+                    : `<div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200"><i class="${typeMeta.icon}"></i></div>`
+                }
+            </td>
+            <td class="py-2.5 px-3 whitespace-nowrap">
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${typeMeta.badge}">${typeMeta.label}</span>
+            </td>
+            <td class="py-2.5 px-3">
+                <p class="font-bold text-accord-slate">${escapeHTML(draft.title || '(Untitled)')}</p>
+                <p class="text-[11px] text-accord-muted">${escapeHTML(draft.curator || '—')}</p>
+            </td>
+            <td class="py-2.5 px-3">
+                <p class="text-accord-slate font-medium">${escapeHTML(draft.genre || '—')}</p>
+                <p class="text-[10px] text-accord-muted mt-0.5">${escapeHTML(subInfo)}</p>
+            </td>
+            <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    updateSermonsExcelSummary();
+}
+
+async function handleSermonsExcelUpload(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    if (typeof XLSX === 'undefined') {
+        showToast('Excel library is still loading. Please try again in a moment.');
+        return;
+    }
+
+    const filenameEl = document.getElementById('sermons-excel-filename');
+    if (filenameEl) filenameEl.textContent = file.name;
+
+    const fallbackType = document.getElementById('sermons-excel-default-type')?.value || 'auto';
+
+    try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            showToast('The uploaded file has no sheets.');
+            return;
+        }
+
+        const drafts = [];
+        workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName];
+            const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+            rawRows.forEach(rawRow => {
+                const draft = mapExcelRowToSermonDraft(rawRow, drafts.length, sheetName, fallbackType);
+                if (draft.title || draft.link || draft.spotifyLink || draft.appleLink || draft.audiomackLink) {
+                    drafts.push(draft);
+                }
+            });
+        });
+
+        if (drafts.length === 0) {
+            showToast('No valid sermon, pastor, or ministry rows found in the spreadsheet.');
+            return;
+        }
+
+        excelSermonDrafts = drafts;
+        recheckSermonsExcelDuplicates();
+        await enrichSermonsExcelDrafts();
+    } catch (err) {
+        console.error('Excel parse error:', err);
+        showToast('Could not read Excel file. Please check the format.');
+    }
+}
+
+async function enrichSermonsExcelDrafts() {
+    const progressWrap = document.getElementById('sermons-excel-progress-wrap');
+    const progressText = document.getElementById('sermons-excel-progress-text');
+    const progressCount = document.getElementById('sermons-excel-progress-count');
+    const progressBar = document.getElementById('sermons-excel-progress-bar');
+
+    const targets = excelSermonDrafts.filter(d => {
+        const sourceUrl = d.spotifyLink || d.appleLink || d.audiomackLink || d.link;
+        if (!sourceUrl) return false;
+        if (d.kind === 'sermon') return !d.title || !d.curator;
+        return !d.title || !d.image || (d.kind === 'playlist' && (!d.curator || d.tracks.length === 0));
+    });
+
+    if (targets.length === 0) return;
+
+    progressWrap?.classList.remove('hidden');
+    let completed = 0;
+    const total = targets.length;
+    const updateProgress = () => {
+        if (progressCount) progressCount.textContent = `${completed} / ${total}`;
+        if (progressBar) progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
+        if (progressText) {
+            progressText.textContent = completed < total
+                ? 'Fetching streaming covers & metadata...'
+                : 'Metadata extraction complete!';
+        }
+    };
+    updateProgress();
+
+    const CONCURRENCY = 3;
+    let cursor = 0;
+
+    async function worker() {
+        while (cursor < targets.length) {
+            const draft = targets[cursor++];
+            const sourceUrl = draft.spotifyLink || draft.appleLink || draft.audiomackLink || draft.link;
+            draft.fetchStatus = 'loading';
+            renderSermonsExcelPreview();
+
+            try {
+                const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(sourceUrl)}`);
+                if (resp.ok) {
+                    const meta = await resp.json();
+                    if (!draft.title && meta.title) draft.title = meta.title;
+                    if (!draft.image && meta.image) draft.image = meta.image;
+                    if (!draft.curator && meta.curator) draft.curator = meta.curator;
+                    if (!draft.description && meta.description) draft.description = meta.description;
+                    if (draft.kind === 'playlist' && draft.tracks.length === 0 && Array.isArray(meta.tracks) && meta.tracks.length > 0) {
+                        draft.tracks = meta.tracks
+                            .map(t => ({ title: t.title || '', artist: t.artist || '' }))
+                            .filter(t => t.title);
+                    }
+                    draft.fetchStatus = 'done';
+                } else {
+                    draft.fetchStatus = 'error';
+                }
+            } catch {
+                draft.fetchStatus = 'error';
+            }
+
+            completed++;
+            updateProgress();
+            recheckSermonsExcelDuplicates();
+        }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker()));
+}
+
+async function confirmSermonsExcelImport() {
+    const toCreate = excelSermonDrafts.filter(d => d.selected && d.title);
+    if (toCreate.length === 0) {
+        showToast('Select at least one entry with a title to import.');
+        return;
+    }
+
+    const baseTime = Date.now();
+    const counts = { playlist: 0, pastor: 0, ministry: 0, sermon: 0 };
+
+    toCreate.forEach((draft, idx) => {
+        if (draft.kind === 'sermon') {
+            sermonsConfig.sermonSpotlights.push({
+                id: `ss-${baseTime}-${idx}`,
+                link: draft.link || draft.spotifyLink || draft.appleLink || draft.audiomackLink || '',
+                title: draft.title,
+                artist: draft.curator || '',
+                hidden: !draft.visible
+            });
+            counts.sermon++;
+            return;
+        }
+
+        const primaryLink = draft.kind === 'playlist'
+            ? (draft.spotifyLink || draft.appleLink || draft.audiomackLink || draft.link || '')
+            : (draft.link || draft.spotifyLink || draft.appleLink || draft.audiomackLink || '');
+
+        const record = {
+            id: `serm-${baseTime}-${idx}`,
+            title: draft.title,
+            genre: draft.genre || '',
+            curator: draft.curator || '',
+            image: draft.image || '',
+            link: primaryLink,
+            ...(draft.kind === 'playlist' ? {
+                links: {
+                    spotify: draft.spotifyLink || '',
+                    apple: draft.appleLink || '',
+                    audiomack: draft.audiomackLink || ''
+                }
+            } : {}),
+            description: draft.description || '',
+            article: draft.description || '',
+            tracks: draft.kind === 'playlist' ? draft.tracks : [],
+            songs: draft.kind !== 'playlist' ? draft.songs : [],
+            approved: true,
+            featured: draft.featured,
+            hidden: !draft.visible,
+            createdAt: new Date().toISOString()
+        };
+
+        if (draft.kind === 'pastor') {
+            sermonsConfig.pastors.push(record);
+            counts.pastor++;
+        } else if (draft.kind === 'ministry') {
+            sermonsConfig.ministries.push(record);
+            counts.ministry++;
+        } else {
+            sermonsConfig.playlists.push(record);
+            counts.playlist++;
+        }
+    });
+
+    closeSermonsExcelImportModal();
+    if (await persistSermonsConfig()) {
+        const parts = [];
+        if (counts.playlist) parts.push(`${counts.playlist} playlist${counts.playlist === 1 ? '' : 's'}`);
+        if (counts.pastor) parts.push(`${counts.pastor} pastor${counts.pastor === 1 ? '' : 's'}`);
+        if (counts.ministry) parts.push(`${counts.ministry} ministr${counts.ministry === 1 ? 'y' : 'ies'}`);
+        if (counts.sermon) parts.push(`${counts.sermon} sermon${counts.sermon === 1 ? '' : 's'}`);
+        showToast(`Imported ${parts.join(', ')} from Excel!`);
+    }
+}
