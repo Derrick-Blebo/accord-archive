@@ -34,6 +34,13 @@ const PAGE_DEFAULTS = {
         description: 'Explore verified ministries, teachings, and fellowship posts on Accord Archive.',
         url: `${SITE_URL}/ministry.html`,
         type: 'profile'
+    },
+    poll: {
+        file: 'poll.html',
+        title: 'Award Poll & Live Standings — Accord Music Hub',
+        description: 'See who is leading head-to-head and cast your vote on Accord Music Hub gospel award polls.',
+        url: `${SITE_URL}/poll.html`,
+        type: 'website'
     }
 };
 
@@ -138,6 +145,32 @@ export default async function handler(req, res) {
                 description = `Explore teachings, sermons, and fellowship posts from ${item.full_name} on Accord Archive & Library.`;
                 canonicalUrl = `${SITE_URL}/ministry.html?id=${item.id}`;
                 ogType = 'profile';
+            }
+        } else if (page === 'poll' && id) {
+            const configRow = await fetchFromSupabase('books', `title=eq.__ACCORD_MUSIC_CONFIG__&select=description`);
+            if (configRow?.description) {
+                const parsed = JSON.parse(configRow.description);
+                const poll = Array.isArray(parsed?.polls) ? parsed.polls.find(p => String(p.id) === String(id)) : null;
+                if (poll && !poll.hidden) {
+                    const votes = poll.votes || {};
+                    const totalVotes = Object.values(votes).reduce((a, b) => a + (Number(b) || 0), 0);
+                    const ranked = (poll.nominees || [])
+                        .map(n => {
+                            const name = typeof n === 'string' ? n : (n?.name || '');
+                            return { name, count: Number(votes[name] || 0) };
+                        })
+                        .filter(r => r.name)
+                        .sort((a, b) => b.count - a.count);
+                    const topCount = ranked[0]?.count || 0;
+                    const leader = topCount > 0 ? ranked[0].name : '';
+                    const pct = totalVotes > 0 ? Math.round((topCount / totalVotes) * 100) : 0;
+
+                    title = `${poll.title} — Accord Music Awards Poll`;
+                    description = poll.status === 'closed'
+                        ? (leader ? `Official Winner: ${leader} (${pct}% · ${totalVotes} votes). View full standings on Accord Music Hub.` : `View final results (${totalVotes} votes) on Accord Music Hub.`)
+                        : (leader ? `${leader} is leading with ${pct}% (${totalVotes} votes). See head-to-head standings and cast your vote!` : `Vote now in ${poll.title} on Accord Music Hub!`);
+                    canonicalUrl = `${SITE_URL}/poll.html?id=${encodeURIComponent(poll.id)}`;
+                }
             }
         }
     } catch (e) {

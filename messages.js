@@ -13,6 +13,7 @@ let chatRealtimeChannel = null;
 let attachTab = 'books';
 let attachBooksCache = [];
 let attachPostsCache = [];
+let attachPollsCache = [];
 let replyToMessage = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -267,17 +268,20 @@ function renderMessagesStream() {
         if (msg.message_type !== 'text' && msg.attachment_meta) {
             const meta = msg.attachment_meta;
             const isVideoPost = meta.post_type === 'video';
-            const badgeLabel = msg.message_type === 'shared_book'
-                ? 'Shared Book'
-                : msg.message_type === 'shared_playlist'
-                    ? 'Shared Playlist'
-                    : msg.message_type === 'shared_testimony'
-                        ? 'Shared Testimony'
-                        : msg.message_type === 'shared_profile'
-                            ? 'Shared Profile'
-                            : isVideoPost
-                                ? 'Shared Video'
-                                : 'Shared Post';
+            const isPollItem = msg.message_type === 'shared_poll' || meta.item_type === 'poll';
+            const badgeLabel = isPollItem
+                ? '<i class="fa-solid fa-trophy text-accord-gold mr-1"></i>Award Poll'
+                : msg.message_type === 'shared_book'
+                    ? 'Shared Book'
+                    : msg.message_type === 'shared_playlist'
+                        ? 'Shared Playlist'
+                        : msg.message_type === 'shared_testimony'
+                            ? 'Shared Testimony'
+                            : msg.message_type === 'shared_profile'
+                                ? 'Shared Profile'
+                                : isVideoPost
+                                    ? 'Shared Video'
+                                    : 'Shared Post';
             const resolvedThumb = meta.image_url || (isVideoPost ? getChatVideoThumbnailUrl(meta.media_url) : '');
             let mediaThumbHtml = '';
             if (isVideoPost) {
@@ -657,6 +661,19 @@ async function openAttachModal() {
             .limit(60);
         attachPostsCache = data || [];
     }
+    if (attachPollsCache.length === 0) {
+        const { data } = await supabaseClient
+            .from('books')
+            .select('description')
+            .eq('title', '__ACCORD_MUSIC_CONFIG__')
+            .maybeSingle();
+        if (data?.description) {
+            try {
+                const parsed = JSON.parse(data.description);
+                attachPollsCache = Array.isArray(parsed?.polls) ? parsed.polls.filter(p => !p.hidden) : [];
+            } catch {}
+        }
+    }
 
     renderAttachItems();
 }
@@ -675,6 +692,12 @@ function setAttachTab(tab) {
     document.getElementById('attach-tab-posts').className = tab === 'posts'
         ? 'px-4 py-2 rounded-xl text-xs font-bold bg-accord-blue text-white'
         : 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate';
+    const pollsBtn = document.getElementById('attach-tab-polls');
+    if (pollsBtn) {
+        pollsBtn.className = tab === 'polls'
+            ? 'px-4 py-2 rounded-xl text-xs font-bold bg-accord-blue text-white'
+            : 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate';
+    }
     renderAttachItems();
 }
 
@@ -698,6 +721,25 @@ function renderAttachItems() {
                     <span class="px-3 py-1 rounded-lg bg-accord-blue text-white text-[11px] font-bold shrink-0">Share</span>
                 </button>
             `).join('');
+    } else if (attachTab === 'polls') {
+        const items = attachPollsCache.filter(p =>
+            (p.title || '').toLowerCase().includes(q)
+        );
+        listEl.innerHTML = items.length === 0
+            ? '<p class="py-6 text-center text-xs text-accord-muted">No matching polls.</p>'
+            : items.map(p => {
+                const votes = Object.values(p.votes || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+                const statusLabel = p.status === 'closed' ? 'Closed' : p.status === 'open' ? 'Open for Voting' : 'Upcoming';
+                return `
+                    <button type="button" onclick="sendAttachedPoll('${escapeChatHtml(p.id)}')" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 text-left">
+                        <div class="min-w-0 pr-3">
+                            <p class="text-xs font-bold text-accord-slate truncate"><i class="fa-solid fa-trophy text-accord-gold mr-1"></i>${escapeChatHtml(p.title)}</p>
+                            <p class="text-[10px] text-accord-muted truncate">${statusLabel} · ${votes} votes</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-lg bg-accord-blue text-white text-[11px] font-bold shrink-0">Share</span>
+                    </button>
+                `;
+            }).join('');
     } else {
         const items = attachPostsCache.filter(p =>
             (p.body || '').toLowerCase().includes(q) || (p.author_name || '').toLowerCase().includes(q)
@@ -752,6 +794,42 @@ async function sendAttachedPost(postId) {
             image_url: videoThumb,
             media_url: p.media_url || '',
             url: `post.html?id=${encodeURIComponent(p.id)}`
+        }
+    }]);
+}
+
+async function sendAttachedPoll(pollId) {
+    const p = attachPollsCache.find(x => String(x.id) === String(pollId));
+    if (!p || !activeConvId) return;
+    closeAttachModal();
+    const votes = p.votes || {};
+    const totalVotes = Object.values(votes).reduce((a, b) => a + (Number(b) || 0), 0);
+    const ranked = (p.nominees || [])
+        .map(n => {
+            const name = typeof n === 'string' ? n : (n?.name || '');
+            return { name, count: Number(votes[name] || 0) };
+        })
+        .filter(r => r.name)
+        .sort((a, b) => b.count - a.count);
+    const topCount = ranked[0]?.count || 0;
+    const leader = topCount > 0 ? ranked[0].name : '';
+    const pct = totalVotes > 0 ? Math.round((topCount / totalVotes) * 100) : 0;
+    const subtitle = p.status === 'closed'
+        ? (leader ? `Winner: ${leader} (${pct}% · ${totalVotes} votes)` : `Final Results · ${totalVotes} votes`)
+        : (leader ? `Leading: ${leader} (${pct}%) · ${totalVotes} votes — Vote now!` : `Open for voting · ${totalVotes} votes`);
+
+    await supabaseClient.from('chat_messages').insert([{
+        conversation_id: activeConvId,
+        sender_id: chatUser.id,
+        message_type: 'shared_post',
+        attachment_meta: {
+            id: p.id,
+            item_type: 'poll',
+            badge_label: 'Award Poll',
+            title: p.title || 'Accord Award Poll',
+            subtitle,
+            author_name: 'Accord Music Awards',
+            url: `poll.html?id=${encodeURIComponent(p.id)}`
         }
     }]);
 }

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Award Poll &amp; Live Standings — Accord Music Hub</title>
+    <link rel="canonical" href="https://www.accordarchives.com/poll.html" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/icon-48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/icon-96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="See who is leading head-to-head and cast your vote on Accord Music Hub gospel award polls." />
+
+    <!-- Open Graph / WhatsApp / Social Preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Accord Archive & Library" />
+    <meta property="og:url" content="https://www.accordarchives.com/poll.html" />
+    <meta property="og:title" content="Award Poll & Live Standings — Accord Music Hub" />
+    <meta property="og:description" content="See who is leading head-to-head and cast your vote on Accord Music Hub gospel award polls." />
+    <meta property="og:image" content="https://www.accordarchives.com/og-cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Award Poll & Live Standings — Accord Music Hub" />
+    <meta name="twitter:description" content="See who is leading head-to-head and cast your vote on Accord Music Hub gospel award polls." />
+    <meta name="twitter:image" content="https://www.accordarchives.com/og-cover.png" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts Inter & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white flex flex-col">
+
+    <!-- Header -->
+    <script src="header.js?v=6"></script>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-6 flex-1 w-full">
+
+        <!-- Breadcrumb -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 text-xs font-bold">
+                <a href="polls.html" class="inline-flex items-center gap-1.5 text-accord-muted hover:text-accord-blue transition-colors">
+                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                    <span>All Polls &amp; Winners</span>
+                </a>
+                <span class="text-slate-300">•</span>
+                <a href="music.html#poll-results" class="text-accord-muted hover:text-accord-blue transition-colors">Music Hub</a>
+            </div>
+            <button type="button" id="top-share-poll-btn" onclick="shareCurrentPoll()" class="hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all">
+                <i class="fa-solid fa-share-nodes text-[11px]"></i>
+                <span>Share Poll</span>
+            </button>
+        </div>
+
+        <!-- Dedicated Poll Container -->
+        <div id="poll-detail-root" class="space-y-6">
+            <div class="bg-white border border-slate-200 rounded-3xl p-10 text-center text-xs text-accord-muted shadow-sm">
+                Loading poll standings...
+            </div>
+        </div>
+
+        <!-- Other Polls Discovery -->
+        <section id="other-polls-section" class="hidden pt-4 space-y-4">
+            <div class="flex items-center justify-between gap-2">
+                <h2 class="serif-heading text-lg font-bold text-accord-slate">More Award Polls</h2>
+                <a href="polls.html" class="text-xs font-bold text-accord-blue hover:underline">View All →</a>
+            </div>
+            <div id="other-polls-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-10 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-4 sm:space-y-0">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-accord-slate">Accord Music Hub</span>
+                <span>• Powered by SoundSpace PR &amp; Accord Media House</span>
+            </div>
+            <p>© 2026 Accord Media House. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Media Player Modal for Poll Nominee Songs -->
+    <div id="playlist-player-modal" class="fixed inset-0 z-50 bg-accord-slate/75 backdrop-blur-sm hidden items-center justify-center p-4" onclick="if(event.target===this) closePlaylistPlayerModal()">
+        <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="min-w-0 pr-4">
+                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Music Player</h3>
+                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Accord Music Hub</p>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <a id="player-modal-external" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-accord-slate text-[11px] font-bold transition-colors">
+                        Open App <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="closePlaylistPlayerModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="player-modal-body" class="p-4 bg-slate-100"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-accord-slate text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center space-x-3 text-xs font-bold translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-base"></i>
+        <span id="toast-message">Done</span>
+    </div>
+
+    <script src="polls-shared.js?v=1"></script>
+    <script src="poll.js?v=1"></script>
+    <script src="ads.js"></script>
+</body>
+</html>

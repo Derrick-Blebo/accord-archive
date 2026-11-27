@@ -156,7 +156,14 @@
         </div>
     </footer>
 
-    <script src="polls.js?v=2"></script>
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-accord-slate text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center space-x-3 text-xs font-bold translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accord-gold text-base"></i>
+        <span id="toast-message">Done</span>
+    </div>
+
+    <script src="polls-shared.js?v=1"></script>
+    <script src="polls.js?v=3"></script>
     <script src="ads.js"></script>
 </body>
 </html>

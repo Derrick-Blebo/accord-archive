@@ -7,6 +7,30 @@ const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
 let allPolls = [];
 let activeFilter = 'all';
 
+function showToast(message, isError = false) {
+    const toast = document.getElementById('toast');
+    const msgEl = document.getElementById('toast-message');
+    const iconEl = document.getElementById('toast-icon');
+    if (!toast || !msgEl) return;
+    msgEl.textContent = message;
+    if (iconEl) {
+        iconEl.className = isError
+            ? 'fa-solid fa-circle-exclamation text-red-400 text-base'
+            : 'fa-solid fa-circle-check text-accord-gold text-base';
+    }
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    setTimeout(() => toast.classList.add('translate-y-24', 'opacity-0'), 3200);
+}
+window.showToast = showToast;
+
+function sharePoll(pollId) {
+    if (window.AccordPolls) {
+        window.AccordPolls.registerPolls(allPolls);
+        window.AccordPolls.openShareModal(pollId);
+    }
+}
+window.sharePoll = sharePoll;
+
 function escapeHTML(str) {
     return String(str || '')
         .replace(/&/g, '&amp;')
@@ -166,6 +190,8 @@ function renderAllPolls() {
             }).join('')
             : `<p class="text-xs text-accord-muted italic">Nominees have not been finalized yet.</p>`;
 
+        const pollPageUrl = `poll.html?id=${encodeURIComponent(poll.id)}`;
+        const safePollId = escapeHTML(poll.id).replace(/'/g, "\\'");
         const card = document.createElement('div');
         card.className = 'bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4';
         card.innerHTML = `
@@ -174,12 +200,17 @@ function renderAllPolls() {
                     ${statusBadge}
                     <span class="text-[11px] font-semibold text-accord-muted">${totalVotes} total votes</span>
                 </div>
-                <h2 class="serif-heading text-lg font-bold text-accord-slate leading-snug">${escapeHTML(poll.title)}</h2>
+                <h2 class="serif-heading text-lg font-bold text-accord-slate leading-snug">
+                    <a href="${pollPageUrl}" class="hover:text-accord-blue transition-colors">${escapeHTML(poll.title)}</a>
+                </h2>
 
                 <div class="rounded-xl border p-3 ${winnerBoxClass}">
                     <p class="text-[10px] font-extrabold uppercase tracking-wider text-accord-muted">${winnerLabel}</p>
                     <div class="flex items-center justify-between gap-2 mt-0.5">
-                        <p class="text-sm font-extrabold text-accord-slate truncate">${escapeHTML(winnerNames)}</p>
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            ${hasWinner ? `<i class="fa-solid fa-trophy text-accord-gold text-xs shrink-0"></i>` : ''}
+                            <p class="text-sm font-extrabold text-accord-slate truncate">${escapeHTML(winnerNames)}</p>
+                        </div>
                         ${hasWinner ? `<span class="text-xs font-extrabold text-accord-blue shrink-0">${winnerPct}%</span>` : ''}
                     </div>
                 </div>
@@ -189,9 +220,15 @@ function renderAllPolls() {
                 </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span class="text-accord-muted">${poll.endDate ? `Ends ${escapeHTML(poll.endDate)}` : (isNominating ? 'Accepting nominations' : 'Accord Music Awards')}</span>
-                ${isOpen || isNominating ? `<a href="music.html#polls" class="font-bold text-accord-blue hover:underline">${isOpen ? 'Vote Now →' : 'Nominate →'}</a>` : '<span class="font-bold text-amber-700">Final Results</span>'}
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span class="text-accord-muted truncate">${poll.endDate ? `Ends ${escapeHTML(poll.endDate)}` : (isNominating ? 'Accepting nominations' : 'Accord Music Awards')}</span>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" onclick="sharePoll('${safePollId}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue font-bold transition-colors">
+                        <i class="fa-solid fa-share-nodes text-[10px]"></i>
+                        <span>Share</span>
+                    </button>
+                    <a href="${pollPageUrl}" class="font-bold text-accord-blue hover:underline">${isOpen ? 'Vote &amp; Standings →' : isNominating ? 'View Poll →' : 'Results →'}</a>
+                </div>
             </div>
         `;
         grid.appendChild(card);
@@ -200,6 +237,9 @@ function renderAllPolls() {
 
 window.onload = async function () {
     await fetchPollsData();
+    if (window.AccordPolls) {
+        window.AccordPolls.registerPolls(allPolls);
+    }
     updateStats();
     renderAllPolls();
 };
