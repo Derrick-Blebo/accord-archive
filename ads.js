@@ -607,7 +607,7 @@
         const post = promo._targetPost || null;
         const authorProfile = promo._authorProfile || null;
         const card = document.createElement('article');
-        card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
+        card.className = 'w-full max-w-2xl mx-auto bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
         card.setAttribute('data-promo-id', promo.id);
 
         const postDetailHref = post ? `post.html?id=${encodeURIComponent(post.id)}` : '';

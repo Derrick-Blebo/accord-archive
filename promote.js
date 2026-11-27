@@ -12,6 +12,92 @@ let savedCardsCache = [];
 let usingLocalCardsFallback = false;
 let myPromotionsCache = [];
 let activeDetailPromoId = null;
+let promoAuthorProfilesById = {};
+let activePromoTab = 'create';
+
+function switchPromoTab(tab) {
+    const valid = ['create', 'campaigns', 'cards'].includes(tab) ? tab : 'create';
+    activePromoTab = valid;
+
+    document.querySelectorAll('[data-promo-tab]').forEach(btn => {
+        const isSelected = btn.getAttribute('data-promo-tab') === valid;
+        btn.className = isSelected
+            ? 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm inline-flex items-center gap-2'
+            : 'px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-slate hover:bg-slate-100 inline-flex items-center gap-2';
+    });
+
+    ['create', 'campaigns', 'cards'].forEach(key => {
+        const panel = document.getElementById(`promo-tab-panel-${key}`);
+        if (panel) panel.classList.toggle('hidden', key !== valid);
+    });
+}
+
+function getPostThumbnailHtml(post) {
+    const typeMeta = typeof window.getSharedPostTypeMeta === 'function'
+        ? window.getSharedPostTypeMeta(post?.post_type)
+        : { label: 'Post', icon: 'fa-align-left', textColor: 'text-emerald-600' };
+    const videoThumb = post?.post_type === 'video' && typeof window.getSharedVideoThumbnailUrl === 'function'
+        ? window.getSharedVideoThumbnailUrl(post.media_url)
+        : '';
+
+    if (videoThumb) {
+        return `
+            <div class="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-900 shrink-0 border border-slate-200">
+                <img src="${escapePromoHtml(videoThumb)}" alt="Video thumbnail" class="w-full h-full object-cover">
+                <span class="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/75 text-white flex items-center justify-center text-[9px]">
+                    <i class="fa-solid ${typeMeta.icon}"></i>
+                </span>
+            </div>
+        `;
+    }
+
+    const bgByType = {
+        video: 'bg-blue-50 text-accord-blue border-blue-200',
+        audio: 'bg-amber-50 text-accord-gold border-amber-200',
+        text: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+        testimony: 'bg-rose-50 text-rose-600 border-rose-200'
+    };
+    const cls = bgByType[post?.post_type] || 'bg-slate-100 text-accord-slate border-slate-200';
+    return `
+        <div class="w-14 h-14 rounded-xl border ${cls} flex items-center justify-center shrink-0">
+            <i class="fa-solid ${typeMeta.icon} text-lg"></i>
+        </div>
+    `;
+}
+
+function getPromotionThumbnailHtml(promo) {
+    if (promo.promo_type === 'post' && promo._targetPost) {
+        return getPostThumbnailHtml(promo._targetPost);
+    }
+    if (promo.promo_type === 'book') {
+        const cover = promo._targetBook?.cover_url || promo.desktop_image_url || promo.mobile_image_url || '';
+        if (cover) {
+            return `
+                <div class="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
+                    <img src="${escapePromoHtml(cover)}" alt="Book cover" class="w-full h-full object-cover">
+                </div>
+            `;
+        }
+        return `
+            <div class="w-14 h-14 rounded-xl border bg-amber-50 text-accord-gold border-amber-200 flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-book-open text-lg"></i>
+            </div>
+        `;
+    }
+    const bannerImg = promo.desktop_image_url || promo.mobile_image_url || '';
+    if (bannerImg) {
+        return `
+            <div class="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
+                <img src="${escapePromoHtml(bannerImg)}" alt="Banner preview" class="w-full h-full object-cover">
+            </div>
+        `;
+    }
+    return `
+        <div class="w-14 h-14 rounded-xl border bg-blue-50 text-accord-blue border-blue-200 flex items-center justify-center shrink-0">
+            <i class="fa-solid fa-panorama text-lg"></i>
+        </div>
+    `;
+}
 
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
@@ -51,28 +137,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     handlePromoTypeChange();
     handlePromoGoalChange();
     await Promise.all([loadPromoteChoices(), loadSavedPaymentCards(), loadMyPromotions()]);
+    renderPostPickerList();
+    renderBookPickerList();
 
     const params = new URLSearchParams(window.location.search);
     const prePost = params.get('post');
     const preBook = params.get('book');
+    const tabParam = params.get('tab');
+    if (tabParam && ['create', 'campaigns', 'cards'].includes(tabParam)) {
+        switchPromoTab(tabParam);
+    }
     if (prePost) {
+        switchPromoTab('create');
         document.getElementById('promo-type').value = 'post';
         handlePromoTypeChange();
         if (myPostsCache.some(p => String(p.id) === String(prePost))) {
-            document.getElementById('promo-post-id').value = prePost;
-            prefillFromSelectedPost();
+            selectPromoPost(prePost);
         } else {
             showToast('You can only promote posts you made yourself.', true);
         }
     } else if (preBook) {
+        switchPromoTab('create');
         document.getElementById('promo-type').value = 'book';
         handlePromoTypeChange();
         if (booksCache.some(b => String(b.id) === String(preBook))) {
-            document.getElementById('promo-book-id').value = preBook;
-            prefillFromSelectedBook();
+            selectPromoBook(preBook);
         } else {
             showToast('You can only promote books you uploaded yourself.', true);
         }
+    } else {
+        updateLiveAdPreview();
     }
 });
 
@@ -120,40 +214,160 @@ async function loadPromoteChoices() {
         showToast(`You do not have Promote permission for ${ctx.activeProfile?.full_name || 'this page'}.`, true);
     }
 
-    const [postsRes, booksRes] = allowedAuthorIds.length === 0
-        ? [{ data: [] }, { data: [] }]
+    const [postsRes, booksRes, profilesRes] = allowedAuthorIds.length === 0
+        ? [{ data: [] }, { data: [] }, { data: [] }]
         : await Promise.all([
-            supabaseClient.from('feed_posts').select('id, title, body, author_id').in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(80),
-            supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(120)
+            supabaseClient.from('feed_posts').select('id, title, body, author_id, author_name, author_role, is_anonymous, post_type, media_url, likes_count, reposts_count, created_at').in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(80),
+            supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').eq('is_visible', true).in('author_id', allowedAuthorIds).order('created_at', { ascending: false }).limit(120),
+            supabaseClient.from('profiles').select('id, handle, avatar_url, full_name, account_type, upgrade_status').in('id', allowedAuthorIds)
         ]);
+
+    promoAuthorProfilesById = {};
+    (profilesRes?.data || []).forEach(prof => {
+        promoAuthorProfilesById[String(prof.id)] = prof;
+    });
 
     myPostsCache = postsRes.data || [];
     booksCache = (booksRes.data || []).filter(b => !String(b.title || '').startsWith('__ACCORD_'));
 
-    const postSel = document.getElementById('promo-post-id');
-    if (postSel) {
-        postSel.innerHTML = myPostsCache.length === 0
-            ? '<option value="">-- No eligible posts to promote yet --</option>'
-            : '<option value="">-- Choose a post to promote --</option>' +
-              myPostsCache.map(p => {
-                  const pageProf = promotablePagesById[String(p.author_id)];
-                  const prefix = pageProf ? `[${pageProf.full_name || 'Verified Page'}] ` : '';
-                  const snippet = (p.body || '').trim().slice(0, 60) || 'Fellowship Post';
-                  return `<option value="${escapePromoHtml(p.id)}">${escapePromoHtml(prefix + snippet)}</option>`;
-              }).join('');
+    renderPostPickerList();
+    renderBookPickerList();
+}
+
+function getPostPromoStatusBadge(postId) {
+    const match = myPromotionsCache.find(pr => pr.promo_type === 'post' && String(pr.target_post_id) === String(postId) && ['approved', 'pending_approval', 'paused'].includes(pr.status));
+    if (!match) return '';
+    if (match.status === 'approved') {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold"><i class="fa-solid fa-rocket text-[9px]"></i> Promoted</span>`;
+    }
+    if (match.status === 'pending_approval') {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold"><i class="fa-regular fa-clock text-[9px]"></i> Pending</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">Paused</span>`;
+}
+
+function renderPostPickerList() {
+    const listEl = document.getElementById('promo-post-picker-list');
+    const countEl = document.getElementById('promo-post-picker-count');
+    if (!listEl) return;
+
+    const query = (document.getElementById('promo-post-search')?.value || '').trim().toLowerCase();
+    const typeFilter = document.getElementById('promo-post-type-filter')?.value || 'all';
+    const selectedId = document.getElementById('promo-post-id')?.value || '';
+
+    const filtered = myPostsCache.filter(p => {
+        if (typeFilter !== 'all' && p.post_type !== typeFilter) return false;
+        if (query) {
+            const hay = `${p.body || ''} ${p.author_name || ''} ${p.post_type || ''}`.toLowerCase();
+            if (!hay.includes(query)) return false;
+        }
+        return true;
+    });
+
+    if (countEl) {
+        countEl.textContent = `${filtered.length} post${filtered.length === 1 ? '' : 's'}`;
     }
 
-    const bookSel = document.getElementById('promo-book-id');
-    if (bookSel) {
-        bookSel.innerHTML = booksCache.length === 0
-            ? '<option value="">-- No eligible books to promote yet --</option>'
-            : '<option value="">-- Choose a book to promote --</option>' +
-              booksCache.map(b => {
-                  const pageProf = promotablePagesById[String(b.author_id)];
-                  const prefix = pageProf ? `[${pageProf.full_name || 'Verified Page'}] ` : '';
-                  return `<option value="${escapePromoHtml(b.id)}">${escapePromoHtml(prefix + b.title)} — ${escapePromoHtml(b.author || '')}</option>`;
-              }).join('');
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-8 text-center">${myPostsCache.length === 0 ? 'No eligible posts to promote yet.' : 'No posts match your search.'}</p>`;
+        return;
     }
+
+    listEl.innerHTML = filtered.map(p => {
+        const isSelected = String(p.id) === String(selectedId);
+        const typeMeta = typeof window.getSharedPostTypeMeta === 'function'
+            ? window.getSharedPostTypeMeta(p.post_type)
+            : { label: 'Post', icon: 'fa-align-left', textColor: 'text-emerald-600' };
+        const pageProf = promotablePagesById[String(p.author_id)] || promoAuthorProfilesById[String(p.author_id)];
+        const authorLabel = p.is_anonymous ? 'Anonymous' : (p.author_name || pageProf?.full_name || 'Your Post');
+        const dateLabel = p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        const snippet = (p.body || '').trim() || `${typeMeta.label} post`;
+        const promoBadge = getPostPromoStatusBadge(p.id);
+
+        return `
+        <div role="button" tabindex="0" onclick="selectPromoPost('${escapePromoHtml(p.id)}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPromoPost('${escapePromoHtml(p.id)}'); }" class="p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-accord-lightBlue/40' : 'hover:bg-slate-50'}">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                ${getPostThumbnailHtml(p)}
+                <div class="min-w-0 flex-1 space-y-1">
+                    <p class="text-xs font-semibold text-accord-slate line-clamp-2 leading-snug">${escapePromoHtml(snippet)}</p>
+                    <div class="flex items-center gap-1.5 flex-wrap text-[11px] text-accord-muted">
+                        <span class="inline-flex items-center gap-1 font-semibold ${typeMeta.textColor}">
+                            <i class="fa-solid ${typeMeta.icon} text-[9px]"></i>
+                            <span>${escapePromoHtml(typeMeta.label)}</span>
+                        </span>
+                        <span>·</span>
+                        <span class="truncate max-w-[130px] font-medium text-slate-600">${escapePromoHtml(authorLabel)}</span>
+                        ${dateLabel ? `<span>·</span><span>${escapePromoHtml(dateLabel)}</span>` : ''}
+                        ${promoBadge}
+                    </div>
+                </div>
+            </div>
+            <button type="button" onclick="event.stopPropagation(); selectPromoPost('${escapePromoHtml(p.id)}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition-all ${isSelected ? 'bg-accord-blue text-white shadow-sm' : 'bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200'}">
+                ${isSelected ? '<i class="fa-solid fa-check mr-1"></i>Selected' : 'Boost'}
+            </button>
+        </div>
+        `;
+    }).join('');
+}
+
+function selectPromoPost(postId) {
+    const input = document.getElementById('promo-post-id');
+    if (input) input.value = postId || '';
+    prefillFromSelectedPost();
+    renderPostPickerList();
+    updateLiveAdPreview();
+}
+
+function renderBookPickerList() {
+    const listEl = document.getElementById('promo-book-picker-list');
+    const countEl = document.getElementById('promo-book-picker-count');
+    if (!listEl) return;
+
+    const query = (document.getElementById('promo-book-search')?.value || '').trim().toLowerCase();
+    const selectedId = document.getElementById('promo-book-id')?.value || '';
+
+    const filtered = booksCache.filter(b => {
+        if (!query) return true;
+        return `${b.title || ''} ${b.author || ''}`.toLowerCase().includes(query);
+    });
+
+    if (countEl) {
+        countEl.textContent = `${filtered.length} book${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-8 text-center">${booksCache.length === 0 ? 'No eligible books to promote yet.' : 'No books match your search.'}</p>`;
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(b => {
+        const isSelected = String(b.id) === String(selectedId);
+        const coverHtml = b.cover_url
+            ? `<img src="${escapePromoHtml(b.cover_url)}" alt="${escapePromoHtml(b.title)}" class="w-11 h-14 rounded-lg object-cover border border-slate-200 shrink-0">`
+            : `<div class="w-11 h-14 rounded-lg bg-amber-50 text-accord-gold border border-amber-200 flex items-center justify-center shrink-0"><i class="fa-solid fa-book"></i></div>`;
+        return `
+        <div role="button" tabindex="0" onclick="selectPromoBook('${escapePromoHtml(b.id)}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPromoBook('${escapePromoHtml(b.id)}'); }" class="p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-accord-lightBlue/40' : 'hover:bg-slate-50'}">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                ${coverHtml}
+                <div class="min-w-0 flex-1 space-y-0.5">
+                    <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(b.title || 'Untitled Book')}</p>
+                    <p class="text-[11px] text-accord-muted truncate">${escapePromoHtml(b.author || 'Unknown Author')}</p>
+                </div>
+            </div>
+            <button type="button" onclick="event.stopPropagation(); selectPromoBook('${escapePromoHtml(b.id)}')" class="px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition-all ${isSelected ? 'bg-accord-blue text-white shadow-sm' : 'bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue border border-slate-200'}">
+                ${isSelected ? '<i class="fa-solid fa-check mr-1"></i>Selected' : 'Select'}
+            </button>
+        </div>
+        `;
+    }).join('');
+}
+
+function selectPromoBook(bookId) {
+    const input = document.getElementById('promo-book-id');
+    if (input) input.value = bookId || '';
+    prefillFromSelectedBook();
+    renderBookPickerList();
+    updateLiveAdPreview();
 }
 
 function handlePromoTypeChange() {
@@ -162,6 +376,12 @@ function handlePromoTypeChange() {
     document.getElementById('promo-post-select-wrap')?.classList.toggle('hidden', type !== 'post');
     document.getElementById('promo-book-select-wrap')?.classList.toggle('hidden', type !== 'book');
     document.getElementById('promo-banner-fields')?.classList.toggle('hidden', !isBanner);
+
+    const badge = document.getElementById('promo-preview-type-badge');
+    if (badge) {
+        badge.textContent = type === 'banner' ? 'Display Banner' : type === 'book' ? 'Promoted Book' : 'Feed Post';
+    }
+    updateLiveAdPreview();
 }
 
 function handlePromoGoalChange() {
@@ -194,6 +414,102 @@ function prefillFromSelectedBook() {
     if (!book) return;
     document.getElementById('promo-body').value = (book.description || '').slice(0, 260);
     document.getElementById('promo-cta-url').value = `book.html?id=${encodeURIComponent(book.id)}`;
+}
+
+function buildAdPreviewElement(promo) {
+    if (typeof window.createAccordSponsoredCardElement === 'function') {
+        const el = window.createAccordSponsoredCardElement(promo);
+        el.classList.add('pointer-events-none');
+        return el;
+    }
+    const fallback = document.createElement('div');
+    fallback.className = 'p-4 rounded-xl bg-white border border-slate-200 text-xs text-accord-slate';
+    fallback.textContent = promo.body || promo.title || 'Ad Preview';
+    return fallback;
+}
+
+function updateLiveAdPreview() {
+    const container = document.getElementById('promo-live-preview');
+    if (!container) return;
+
+    const promoType = document.getElementById('promo-type')?.value || 'post';
+    const adGoal = document.getElementById('promo-goal')?.value || 'views';
+    const body = document.getElementById('promo-body')?.value.trim() || '';
+    const ctaUrl = document.getElementById('promo-cta-url')?.value.trim() || '';
+    const ctaText = document.getElementById('promo-cta-text')?.value.trim() || 'Learn More';
+
+    if (promoType === 'post') {
+        const postId = document.getElementById('promo-post-id')?.value || '';
+        const post = myPostsCache.find(p => String(p.id) === String(postId)) || null;
+        if (!post) {
+            container.innerHTML = `<p class="text-xs text-accord-muted text-center py-8">Select a post on the left to see a live preview of your boosted post.</p>`;
+            return;
+        }
+        const authorProf = (!post.is_anonymous && post.author_id)
+            ? (promoAuthorProfilesById[String(post.author_id)] || promotablePagesById[String(post.author_id)] || null)
+            : null;
+        const syntheticPromo = {
+            id: 'preview',
+            promo_type: 'post',
+            ad_goal: adGoal,
+            target_post_id: post.id,
+            advertiser_name: promoUser?.user_metadata?.full_name || promoUser?.email?.split('@')[0] || 'Member',
+            body: body || post.body || '',
+            cta_url: ctaUrl,
+            cta_text: ctaText,
+            _targetPost: { ...post, body: body || post.body || '' },
+            _authorProfile: authorProf,
+            _commentsCount: 0
+        };
+        container.innerHTML = '';
+        container.appendChild(buildAdPreviewElement(syntheticPromo));
+        window.hydrateSharedBookLinkPreviews?.(container);
+        return;
+    }
+
+    if (promoType === 'book') {
+        const bookId = document.getElementById('promo-book-id')?.value || '';
+        const book = booksCache.find(b => String(b.id) === String(bookId)) || null;
+        if (!book) {
+            container.innerHTML = `<p class="text-xs text-accord-muted text-center py-8">Select a book on the left to see a live preview of your promoted book.</p>`;
+            return;
+        }
+        const syntheticPromo = {
+            id: 'preview',
+            promo_type: 'book',
+            ad_goal: adGoal,
+            target_book_id: book.id,
+            title: book.title || '',
+            advertiser_name: book.author || '',
+            body: body || book.description || '',
+            desktop_image_url: book.cover_url || '',
+            mobile_image_url: book.cover_url || '',
+            cta_url: ctaUrl || `book.html?id=${book.id}`,
+            cta_text: ctaText
+        };
+        container.innerHTML = '';
+        container.appendChild(buildAdPreviewElement(syntheticPromo));
+        return;
+    }
+
+    const desktopImg = document.getElementById('promo-desktop-img')?.value.trim() || '';
+    const mobileImg = document.getElementById('promo-mobile-img')?.value.trim() || '';
+    if (!desktopImg && !mobileImg && !body) {
+        container.innerHTML = `<p class="text-xs text-accord-muted text-center py-8">Enter a banner image URL or ad copy to preview your display banner.</p>`;
+        return;
+    }
+    const syntheticBanner = {
+        id: 'preview',
+        promo_type: 'banner',
+        ad_goal: adGoal,
+        body,
+        desktop_image_url: desktopImg,
+        mobile_image_url: mobileImg,
+        cta_url: ctaUrl,
+        cta_text: ctaText
+    };
+    container.innerHTML = '';
+    container.appendChild(buildAdPreviewElement(syntheticBanner));
 }
 
 let _dailyBudgetUsd = 1;
@@ -490,11 +806,18 @@ async function handlePromotionSubmit(e) {
             }
             showToast('Payment verified! Promotion submitted for Admin approval.');
             document.getElementById('promote-form')?.reset();
+            const postIdInput = document.getElementById('promo-post-id');
+            if (postIdInput) postIdInput.value = '';
+            const bookIdInput = document.getElementById('promo-book-id');
+            if (bookIdInput) bookIdInput.value = '';
             syncDailyBudget(1, 'reset');
             syncDurationDays(7);
             handlePromoTypeChange();
             handlePromoGoalChange();
+            renderPostPickerList();
+            renderBookPickerList();
             await loadMyPromotions();
+            switchPromoTab('campaigns');
         },
         onError: (msg) => {
             if (btn) btn.disabled = false;
@@ -503,6 +826,53 @@ async function handlePromotionSubmit(e) {
         onCancel: () => {
             if (btn) btn.disabled = false;
             showToast('Checkout canceled.', true);
+        }
+    });
+}
+
+async function enrichMyPromotionsTargets(promos) {
+    if (!Array.isArray(promos) || promos.length === 0) return;
+
+    const postIds = [...new Set(promos.filter(p => p.promo_type === 'post' && p.target_post_id).map(p => String(p.target_post_id)))];
+    const bookIds = [...new Set(promos.filter(p => p.promo_type === 'book' && p.target_book_id).map(p => Number(p.target_book_id)).filter(Boolean))];
+
+    const [postsRes, booksRes] = await Promise.all([
+        postIds.length > 0
+            ? supabaseClient.from('feed_posts').select('id, title, body, author_id, author_name, author_role, is_anonymous, post_type, media_url, likes_count, reposts_count, created_at').in('id', postIds)
+            : Promise.resolve({ data: [] }),
+        bookIds.length > 0
+            ? supabaseClient.from('books').select('id, title, author, description, cover_url, author_id').in('id', bookIds)
+            : Promise.resolve({ data: [] })
+    ]);
+
+    const postById = new Map((postsRes.data || []).map(row => [String(row.id), row]));
+    const bookById = new Map((booksRes.data || []).map(row => [String(row.id), row]));
+
+    const missingAuthorIds = [...new Set(
+        (postsRes.data || [])
+            .filter(p => !p.is_anonymous && p.author_id && !promoAuthorProfilesById[String(p.author_id)])
+            .map(p => String(p.author_id))
+    )];
+    if (missingAuthorIds.length > 0) {
+        const { data: extraProfs } = await supabaseClient
+            .from('profiles')
+            .select('id, handle, avatar_url, full_name, account_type, upgrade_status')
+            .in('id', missingAuthorIds);
+        (extraProfs || []).forEach(prof => {
+            promoAuthorProfilesById[String(prof.id)] = prof;
+        });
+    }
+
+    promos.forEach(p => {
+        if (p.promo_type === 'post' && p.target_post_id) {
+            const post = postById.get(String(p.target_post_id)) || null;
+            p._targetPost = post;
+            p._authorProfile = (post && !post.is_anonymous && post.author_id)
+                ? (promoAuthorProfilesById[String(post.author_id)] || promotablePagesById[String(post.author_id)] || null)
+                : null;
+        }
+        if (p.promo_type === 'book' && p.target_book_id) {
+            p._targetBook = bookById.get(String(p.target_book_id)) || null;
         }
     });
 }
@@ -517,13 +887,54 @@ async function loadMyPromotions() {
         .eq('advertiser_id', promoUser.id)
         .order('created_at', { ascending: false });
 
+    const countBadge = document.getElementById('promo-tab-campaigns-count');
+
     if (error || !data || data.length === 0) {
         myPromotionsCache = [];
-        listEl.innerHTML = `<p class="text-xs text-accord-muted py-6 text-center">You haven't submitted any promotions yet.</p>`;
+        if (countBadge) countBadge.textContent = '0';
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-8 text-center">You haven't submitted any promotions yet.</p>`;
+        renderPostPickerList();
         return;
     }
 
     myPromotionsCache = data;
+    if (countBadge) countBadge.textContent = String(data.length);
+
+    await enrichMyPromotionsTargets(myPromotionsCache);
+    renderMyPromotionsList();
+    renderPostPickerList();
+}
+
+function boostExistingPromotion(promoId) {
+    const p = myPromotionsCache.find(item => String(item.id) === String(promoId));
+    if (!p) return;
+    switchPromoTab('create');
+    const typeEl = document.getElementById('promo-type');
+    if (typeEl) {
+        typeEl.value = p.promo_type || 'post';
+        handlePromoTypeChange();
+    }
+    if (p.promo_type === 'post' && p.target_post_id && myPostsCache.some(mp => String(mp.id) === String(p.target_post_id))) {
+        selectPromoPost(p.target_post_id);
+    } else if (p.promo_type === 'book' && p.target_book_id && booksCache.some(bk => String(bk.id) === String(p.target_book_id))) {
+        selectPromoBook(p.target_book_id);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderMyPromotionsList() {
+    const listEl = document.getElementById('my-promotions-list');
+    if (!listEl) return;
+
+    const statusFilter = document.getElementById('promo-status-filter')?.value || 'all';
+    const filtered = statusFilter === 'all'
+        ? myPromotionsCache
+        : myPromotionsCache.filter(p => p.status === statusFilter);
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-8 text-center">${myPromotionsCache.length === 0 ? "You haven't submitted any promotions yet." : 'No promotions match this status filter.'}</p>`;
+        return;
+    }
 
     const statusBadge = {
         pending_approval: 'bg-amber-50 text-amber-700',
@@ -533,13 +944,14 @@ async function loadMyPromotions() {
         expired: 'bg-slate-100 text-slate-500'
     };
 
-    listEl.innerHTML = data.map(p => {
-        const fallbackLabel = p.promo_type === 'banner'
-            ? 'Display Ad Banner'
+    listEl.innerHTML = filtered.map(p => {
+        const typeLabel = p.promo_type === 'banner'
+            ? 'Display Banner'
             : p.promo_type === 'book'
                 ? 'Promoted Book'
                 : 'Promoted Post';
-        const displayTitle = (p.title || '').trim() || (p.body ? p.body.slice(0, 70) : fallbackLabel);
+        const targetTitle = p._targetBook?.title || p._targetPost?.body || '';
+        const displayTitle = (p.title || '').trim() || (p.body ? p.body.slice(0, 90) : '') || (targetTitle ? targetTitle.slice(0, 90) : typeLabel);
         const goalLabel = (p.ad_goal === 'views' || (!p.ad_goal && !p.cta_url)) ? 'Views' : 'Clicks';
         const totalUsd = Number(p.budget_amount || 0);
         const dailyUsd = Number(p.daily_budget_usd || 0) || (totalUsd > 0 ? totalUsd / Math.max(1, Number(p.duration_days || 1)) : 0);
@@ -552,31 +964,44 @@ async function loadMyPromotions() {
         const canPause = p.status === 'approved';
         const canResume = p.status === 'paused';
         const pauseBtnHtml = canPause
-            ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-pause text-[9px]"></i> Pause Ad</button>`
+            ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-pause text-[9px]"></i> Pause</button>`
             : canResume
-                ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-play text-[9px]"></i> Resume Ad</button>`
+                ? `<button type="button" onclick="event.stopPropagation(); togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-play text-[9px]"></i> Resume</button>`
                 : '';
 
+        const authorName = p._targetPost && !p._targetPost.is_anonymous
+            ? (p._targetPost.author_name || p._authorProfile?.full_name || '')
+            : (p._targetBook?.author || '');
+        const dateLabel = formatPromoDateOnly(p.created_at) || '';
+
         return `
-        <div role="button" tabindex="0" onclick="openPromotionDetailsModal('${escapePromoHtml(p.id)}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPromotionDetailsModal('${escapePromoHtml(p.id)}'); }" class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-accord-blue/50 hover:shadow-sm transition-all cursor-pointer space-y-2 focus:outline-none focus:ring-2 focus:ring-accord-blue/40">
-            <div class="flex items-center justify-between gap-2">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml((p.status || '').replace('_', ' '))}</span>
-                <span class="text-[11px] font-semibold text-accord-muted">${p.duration_days}d · ${escapePromoHtml(localLabel)} (${escapePromoHtml(dailyLabel)}/day)</span>
-            </div>
-            <div class="flex items-center justify-between gap-2">
-                <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(displayTitle)}</p>
-                <i class="fa-solid fa-chevron-right text-[10px] text-accord-muted shrink-0"></i>
-            </div>
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-                <div class="flex items-center gap-3 text-[11px] text-accord-muted">
-                    <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
-                    <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
-                    <span class="px-1.5 py-0.5 rounded bg-slate-200/70 text-[10px] font-bold text-accord-slate">${goalLabel}</span>
+        <div role="button" tabindex="0" onclick="openPromotionDetailsModal('${escapePromoHtml(p.id)}')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPromotionDetailsModal('${escapePromoHtml(p.id)}'); }" class="p-4 hover:bg-slate-50/90 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 focus:outline-none focus:bg-slate-50">
+            <div class="flex items-start gap-3.5 min-w-0 flex-1">
+                ${getPromotionThumbnailHtml(p)}
+                <div class="min-w-0 flex-1 space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml((p.status || '').replace('_', ' '))}</span>
+                        <span class="text-[11px] font-semibold text-accord-muted">${escapePromoHtml(typeLabel)}</span>
+                        ${authorName ? `<span class="text-[11px] text-accord-muted">· ${escapePromoHtml(authorName)}</span>` : ''}
+                        ${dateLabel ? `<span class="text-[11px] text-accord-muted">· ${escapePromoHtml(dateLabel)}</span>` : ''}
+                    </div>
+                    <p class="text-xs sm:text-[13px] font-bold text-accord-slate line-clamp-2 leading-snug">${escapePromoHtml(displayTitle)}</p>
+                    <div class="flex items-center gap-3 flex-wrap text-[11px] text-accord-muted pt-0.5">
+                        <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
+                        <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
+                        <span class="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-accord-slate">${goalLabel}</span>
+                        <span class="font-semibold text-accord-slate">${p.duration_days}d · ${escapePromoHtml(localLabel)} (${escapePromoHtml(dailyLabel)}/day)</span>
+                    </div>
+                    ${p.admin_notes ? `<p class="text-[11px] text-accord-blue">Admin note: ${escapePromoHtml(p.admin_notes)}</p>` : ''}
                 </div>
-                ${pauseBtnHtml}
             </div>
-            ${p.payment_card_label ? `<p class="text-[10px] text-accord-muted"><i class="fa-regular fa-credit-card mr-1"></i>Paid with ${escapePromoHtml(p.payment_card_label)}</p>` : ''}
-            ${p.admin_notes ? `<p class="text-[11px] text-accord-blue">Admin note: ${escapePromoHtml(p.admin_notes)}</p>` : ''}
+            <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                ${pauseBtnHtml}
+                <button type="button" onclick="event.stopPropagation(); openPromotionDetailsModal('${escapePromoHtml(p.id)}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue text-[11px] font-bold transition-colors inline-flex items-center gap-1.5">
+                    <i class="fa-regular fa-eye text-[10px]"></i>
+                    <span>Preview</span>
+                </button>
+            </div>
         </div>
         `;
     }).join('');
@@ -720,6 +1145,13 @@ function openPromotionDetailsModal(promoId) {
         : null;
 
     bodyEl.innerHTML = `
+        <div class="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate flex items-center gap-1.5">
+                <i class="fa-regular fa-eye text-accord-blue"></i> Ad Preview
+            </p>
+            <div id="promo-detail-live-preview" class="rounded-xl overflow-hidden"></div>
+        </div>
+
         <div class="grid grid-cols-3 gap-2.5">
             <div class="rounded-2xl bg-slate-50 border border-slate-200/80 p-3 text-center">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Views</p>
@@ -838,10 +1270,33 @@ function openPromotionDetailsModal(promoId) {
             : canResume
                 ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold inline-flex items-center gap-1.5"><i class="fa-solid fa-play text-[10px]"></i> Resume Ad</button>`
                 : '';
+        const boostAgainBtn = (p.promo_type === 'post' || p.promo_type === 'book')
+            ? `<button type="button" onclick="closePromotionDetailsModal(); boostExistingPromotion('${escapePromoHtml(p.id)}')" class="px-4 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors"><i class="fa-solid fa-rocket text-[10px]"></i> Boost Again</button>`
+            : '';
         footerEl.innerHTML = `
+            ${boostAgainBtn}
             ${actionBtn}
             <button type="button" onclick="closePromotionDetailsModal()" class="px-4 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-200 text-accord-slate text-xs font-bold">Close</button>
         `;
+    }
+
+    const detailPreviewHost = document.getElementById('promo-detail-live-preview');
+    if (detailPreviewHost) {
+        const previewPromo = {
+            ...p,
+            _targetPost: p._targetPost || null,
+            _authorProfile: p._authorProfile || null,
+            _commentsCount: 0,
+            ...(p.promo_type === 'book' && p._targetBook ? {
+                title: p.title || p._targetBook.title || '',
+                advertiser_name: p.advertiser_name || p._targetBook.author || '',
+                desktop_image_url: p.desktop_image_url || p._targetBook.cover_url || '',
+                mobile_image_url: p.mobile_image_url || p._targetBook.cover_url || ''
+            } : {})
+        };
+        detailPreviewHost.innerHTML = '';
+        detailPreviewHost.appendChild(buildAdPreviewElement(previewPromo));
+        window.hydrateSharedBookLinkPreviews?.(detailPreviewHost);
     }
 
     modal.classList.remove('hidden');
@@ -959,6 +1414,8 @@ async function loadSavedPaymentCards() {
 function renderSavedPaymentCards() {
     const listEl = document.getElementById('saved-cards-list');
     const selectEl = document.getElementById('promo-card-select');
+    const cardsCountBadge = document.getElementById('promo-tab-cards-count');
+    if (cardsCountBadge) cardsCountBadge.textContent = String(savedCardsCache.length);
 
     if (selectEl) {
         const previousVal = selectEl.value;

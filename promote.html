@@ -58,12 +58,12 @@
     <div id="accord-header"></div>
     <script src="header.js?v=6"></script>
 
-    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
-        <div class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="space-y-1.5">
+    <main class="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full space-y-6">
+        <div class="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="space-y-1">
                 <span class="inline-block bg-accord-goldLight text-accord-gold text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Accord Ads &amp; Promotions</span>
-                <h1 class="serif-heading text-2xl sm:text-3xl font-bold text-accord-slate">Promote Posts, Books &amp; Banners</h1>
-                <p class="text-xs sm:text-sm text-accord-muted">Reach readers across the Digital Library, Fellowship Feed, and Music. All paid promotions are verified via Paystack and reviewed by an Admin before going live.</p>
+                <h1 class="serif-heading text-xl sm:text-2xl font-bold text-accord-slate">Promote Posts, Books &amp; Banners</h1>
+                <p class="text-xs text-accord-muted">Choose content to boost, preview how it appears across Accord Archive, and track active campaigns.</p>
             </div>
         </div>
 
@@ -75,13 +75,39 @@
             <a href="signin.html?next=promote.html" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md">Sign In / Create Account</a>
         </div>
 
-        <div id="promo-workspace" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <!-- Submission Form -->
-            <section class="lg:col-span-7 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
-                <h2 class="text-base font-bold text-accord-slate">Create Paid Promotion</h2>
+        <div id="promo-workspace" class="hidden space-y-6">
+            <!-- Decongested Top Navigation Tabs -->
+            <div class="bg-white border border-slate-200/90 rounded-2xl p-1.5 shadow-sm inline-flex flex-wrap items-center gap-1">
+                <button type="button" onclick="switchPromoTab('create')" data-promo-tab="create" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-blue text-white shadow-sm inline-flex items-center gap-2">
+                    <i class="fa-solid fa-rocket text-[11px]"></i>
+                    <span>Boost &amp; Create</span>
+                </button>
+                <button type="button" onclick="switchPromoTab('campaigns')" data-promo-tab="campaigns" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-slate hover:bg-slate-100 inline-flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-[11px]"></i>
+                    <span>My Promotions</span>
+                    <span id="promo-tab-campaigns-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-200/80 text-accord-slate">0</span>
+                </button>
+                <button type="button" onclick="switchPromoTab('cards')" data-promo-tab="cards" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-slate hover:bg-slate-100 inline-flex items-center gap-2">
+                    <i class="fa-regular fa-credit-card text-[11px]"></i>
+                    <span>Payment Cards</span>
+                    <span id="promo-tab-cards-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-200/80 text-accord-slate">0</span>
+                </button>
+            </div>
 
-                <form id="promote-form" onsubmit="handlePromotionSubmit(event)" class="space-y-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- TAB 1: Boost & Create + Live Preview -->
+            <div id="promo-tab-panel-create" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <!-- Submission Form -->
+                <section class="lg:col-span-7 bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-sm space-y-5">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <h2 class="text-base font-bold text-accord-slate">Create Paid Promotion</h2>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Currency</span>
+                            <span id="promo-currency-badge" class="text-xs font-extrabold text-accord-blue">USD ($)</span>
+                        </div>
+                    </div>
+
+                    <form id="promote-form" onsubmit="handlePromotionSubmit(event)" class="space-y-5">
+                        <!-- Promotion Type -->
                         <div>
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Promotion Type *</label>
                             <select id="promo-type" onchange="handlePromoTypeChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
@@ -90,198 +116,261 @@
                                 <option value="banner">Display Ad Banner</option>
                             </select>
                         </div>
-                        <div class="flex items-end">
-                            <div class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
-                                <span class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Local Currency</span>
-                                <span id="promo-currency-badge" class="text-xs font-extrabold text-accord-blue">USD ($)</span>
+
+                        <!-- Meta-Style Post Picker -->
+                        <div id="promo-post-select-wrap" class="space-y-2.5">
+                            <input type="hidden" id="promo-post-id" value="">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <label class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Select Post to Boost *</label>
+                                <span id="promo-post-picker-count" class="text-[11px] font-medium text-accord-muted"></span>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                    <input type="text" id="promo-post-search" oninput="renderPostPickerList()" placeholder="Search your posts by caption..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                                </div>
+                                <select id="promo-post-type-filter" onchange="renderPostPickerList()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                                    <option value="all">All Types</option>
+                                    <option value="video">Video</option>
+                                    <option value="audio">Audio</option>
+                                    <option value="text">Text</option>
+                                    <option value="testimony">Testimony</option>
+                                </select>
+                            </div>
+                            <div id="promo-post-picker-list" class="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white">
+                                <p class="text-xs text-accord-muted py-6 text-center">Loading your posts...</p>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Facebook-Style Daily Budget & Duration Sliding Scale -->
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
-                        <div class="flex items-center justify-between gap-2">
+                        <!-- Visual Book Picker -->
+                        <div id="promo-book-select-wrap" class="hidden space-y-2.5">
+                            <input type="hidden" id="promo-book-id" value="">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <label class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Select Book to Promote *</label>
+                                <span id="promo-book-picker-count" class="text-[11px] font-medium text-accord-muted"></span>
+                            </div>
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                <input type="text" id="promo-book-search" oninput="renderBookPickerList()" placeholder="Search your library books by title or author..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                            </div>
+                            <div id="promo-book-picker-list" class="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white">
+                                <p class="text-xs text-accord-muted py-6 text-center">Loading your books...</p>
+                            </div>
+                        </div>
+
+                        <!-- Banner Image URLs -->
+                        <div id="promo-banner-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Daily Budget &amp; Duration</p>
-                                <p class="text-[11px] text-accord-muted">Starts from $1 USD/day. Higher daily spend gives your ad higher priority across the site.</p>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Desktop Banner URL (1920×640)</label>
+                                <input type="url" id="promo-desktop-img" oninput="updateLiveAdPreview()" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                             </div>
-                            <span id="promo-priority-badge" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-accord-lightBlue text-accord-blue shrink-0">Standard Priority</span>
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Mobile Banner URL (1080×1080)</label>
+                                <input type="url" id="promo-mobile-img" oninput="updateLiveAdPreview()" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            </div>
                         </div>
 
-                        <!-- Daily Spend Slider -->
-                        <div class="space-y-2">
+                        <!-- Facebook-Style Daily Budget & Duration Sliding Scale -->
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
                             <div class="flex items-center justify-between gap-2">
-                                <label for="promo-daily-slider" class="text-xs font-bold text-accord-slate">Daily Spend</label>
-                                <div class="flex items-center gap-2">
-                                    <span id="promo-daily-local" class="text-sm font-extrabold text-accord-slate">$1.00 / day</span>
-                                    <span id="promo-daily-usd-note" class="hidden text-[11px] font-semibold text-accord-muted"></span>
+                                <div>
+                                    <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Daily Budget &amp; Duration</p>
+                                    <p class="text-[11px] text-accord-muted">Starts from $1 USD/day. Higher daily spend gives higher priority.</p>
+                                </div>
+                                <span id="promo-priority-badge" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-accord-lightBlue text-accord-blue shrink-0">Standard Priority</span>
+                            </div>
+
+                            <!-- Daily Spend Slider -->
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <label for="promo-daily-slider" class="text-xs font-bold text-accord-slate">Daily Spend</label>
+                                    <div class="flex items-center gap-2">
+                                        <span id="promo-daily-local" class="text-sm font-extrabold text-accord-slate">$1.00 / day</span>
+                                        <span id="promo-daily-usd-note" class="hidden text-[11px] font-semibold text-accord-muted"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <input type="range" id="promo-daily-slider" min="1" max="100" step="1" value="1" oninput="syncDailyBudget(this.value, 'slider')" class="w-full accent-accord-blue cursor-pointer">
+                                    <div class="flex items-center bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
+                                        <span class="text-[11px] font-bold text-accord-muted mr-1">$</span>
+                                        <input type="number" id="promo-daily-input" min="1" max="1000" step="1" value="1" oninput="syncDailyBudget(this.value, 'input')" class="w-12 text-xs font-bold text-accord-slate focus:outline-none bg-transparent">
+                                    </div>
+                                </div>
+                                <div id="promo-daily-presets" class="flex flex-wrap gap-1.5">
+                                    <button type="button" onclick="syncDailyBudget(1, 'preset')" data-daily-preset="1" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">$1/day</button>
+                                    <button type="button" onclick="syncDailyBudget(5, 'preset')" data-daily-preset="5" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$5/day</button>
+                                    <button type="button" onclick="syncDailyBudget(10, 'preset')" data-daily-preset="10" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$10/day</button>
+                                    <button type="button" onclick="syncDailyBudget(25, 'preset')" data-daily-preset="25" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$25/day</button>
+                                    <button type="button" onclick="syncDailyBudget(50, 'preset')" data-daily-preset="50" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$50/day</button>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <input type="range" id="promo-daily-slider" min="1" max="100" step="1" value="1" oninput="syncDailyBudget(this.value, 'slider')" class="w-full accent-accord-blue cursor-pointer">
-                                <div class="flex items-center bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
-                                    <span class="text-[11px] font-bold text-accord-muted mr-1">$</span>
-                                    <input type="number" id="promo-daily-input" min="1" max="1000" step="1" value="1" oninput="syncDailyBudget(this.value, 'input')" class="w-12 text-xs font-bold text-accord-slate focus:outline-none bg-transparent">
+
+                            <!-- Duration Slider -->
+                            <div class="space-y-2 pt-2 border-t border-slate-200/80">
+                                <div class="flex items-center justify-between gap-2">
+                                    <label for="promo-duration-slider" class="text-xs font-bold text-accord-slate">Duration</label>
+                                    <span id="promo-duration-label" class="text-xs font-extrabold text-accord-slate">7 days</span>
+                                </div>
+                                <input type="range" id="promo-duration-slider" min="1" max="30" step="1" value="7" oninput="syncDurationDays(this.value)" class="w-full accent-accord-blue cursor-pointer">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <button type="button" onclick="syncDurationDays(3)" data-duration-preset="3" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">3 days</button>
+                                        <button type="button" onclick="syncDurationDays(7)" data-duration-preset="7" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">7 days</button>
+                                        <button type="button" onclick="syncDurationDays(14)" data-duration-preset="14" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">14 days</button>
+                                        <button type="button" onclick="syncDurationDays(30)" data-duration-preset="30" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">30 days</button>
+                                    </div>
+                                    <span id="promo-end-date-label" class="text-[11px] text-accord-muted font-medium"></span>
                                 </div>
                             </div>
-                            <div id="promo-daily-presets" class="flex flex-wrap gap-1.5">
-                                <button type="button" onclick="syncDailyBudget(1, 'preset')" data-daily-preset="1" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">$1/day</button>
-                                <button type="button" onclick="syncDailyBudget(5, 'preset')" data-daily-preset="5" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$5/day</button>
-                                <button type="button" onclick="syncDailyBudget(10, 'preset')" data-daily-preset="10" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$10/day</button>
-                                <button type="button" onclick="syncDailyBudget(25, 'preset')" data-daily-preset="25" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$25/day</button>
-                                <button type="button" onclick="syncDailyBudget(50, 'preset')" data-daily-preset="50" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">$50/day</button>
+
+                            <!-- Future Estimated Views Placeholder -->
+                            <div class="rounded-xl bg-white border border-slate-200/90 px-3.5 py-2 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-accord-blue text-xs"></i>
+                                <span class="text-[11px] font-bold text-accord-slate">Estimated Daily Views:</span>
+                                <span id="promo-estimated-views" class="text-[11px] text-accord-muted font-semibold">N/A</span>
                             </div>
                         </div>
 
-                        <!-- Duration Slider -->
-                        <div class="space-y-2 pt-1 border-t border-slate-200/80">
+                        <!-- Goal & Creative -->
+                        <div class="space-y-4">
+                            <div>
+                                <label for="promo-goal" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Campaign Goal *</label>
+                                <select id="promo-goal" onchange="handlePromoGoalChange(); updateLiveAdPreview();" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                    <option value="views">Views (Awareness — No Destination Link Needed)</option>
+                                    <option value="clicks">Clicks (Traffic — Destination Link Required)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Ad Copy</label>
+                                <textarea id="promo-body" rows="3" maxlength="320" oninput="updateLiveAdPreview()" placeholder="Short summary shown to readers..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                            </div>
+
+                            <div id="promo-cta-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label id="promo-cta-url-label" for="promo-cta-url" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL (Optional)</label>
+                                    <input type="text" id="promo-cta-url" oninput="updateLiveAdPreview()" placeholder="https://... or book.html?id=... (optional for views)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                                </div>
+                                <div>
+                                    <label for="promo-cta-text" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Label</label>
+                                    <input type="text" id="promo-cta-text" value="Learn More" maxlength="30" oninput="updateLiveAdPreview()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Placement *</label>
+                                    <select id="promo-placement" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                                        <option value="all">All Main Pages (Library, Feed, Music)</option>
+                                        <option value="library">Digital Library Only</option>
+                                        <option value="feed">Fellowship Feed Only</option>
+                                        <option value="music">Music Page Only</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Target Country (Optional)</label>
+                                    <input type="text" id="promo-target-country" placeholder="e.g. GH, NG, US (leave blank for Global)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment & Total -->
+                        <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
                             <div class="flex items-center justify-between gap-2">
-                                <label for="promo-duration-slider" class="text-xs font-bold text-accord-slate">Duration</label>
-                                <span id="promo-duration-label" class="text-xs font-extrabold text-accord-slate">7 days</span>
+                                <label for="promo-card-select" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">
+                                    <i class="fa-solid fa-credit-card text-accord-blue mr-1"></i> Payment Card
+                                </label>
+                                <button type="button" onclick="openAddCardModal()" class="text-[11px] font-bold text-accord-blue hover:underline inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-plus text-[10px]"></i> Add Card
+                                </button>
                             </div>
-                            <input type="range" id="promo-duration-slider" min="1" max="30" step="1" value="7" oninput="syncDurationDays(this.value)" class="w-full accent-accord-blue cursor-pointer">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div class="flex flex-wrap gap-1.5">
-                                    <button type="button" onclick="syncDurationDays(3)" data-duration-preset="3" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">3 days</button>
-                                    <button type="button" onclick="syncDurationDays(7)" data-duration-preset="7" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-accord-blue bg-accord-lightBlue text-accord-blue">7 days</button>
-                                    <button type="button" onclick="syncDurationDays(14)" data-duration-preset="14" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">14 days</button>
-                                    <button type="button" onclick="syncDurationDays(30)" data-duration-preset="30" class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white text-accord-slate hover:bg-slate-100">30 days</button>
-                                </div>
-                                <span id="promo-end-date-label" class="text-[11px] text-accord-muted font-medium"></span>
-                            </div>
-                        </div>
-
-                        <!-- Future Estimated Views Placeholder -->
-                        <div class="rounded-xl bg-white border border-slate-200/90 px-3.5 py-2.5 flex items-start gap-2.5">
-                            <i class="fa-solid fa-chart-line text-accord-blue text-xs mt-0.5"></i>
-                            <div class="text-[11px]">
-                                <span class="font-bold text-accord-slate">Estimated Daily Views:</span>
-                                <span id="promo-estimated-views" class="text-accord-muted font-semibold"> N/A</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label for="promo-goal" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Campaign Goal *</label>
-                        <select id="promo-goal" onchange="handlePromoGoalChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                            <option value="views">Views (Awareness — No Destination Link Needed)</option>
-                            <option value="clicks">Clicks (Traffic — Destination Link Required)</option>
-                        </select>
-                    </div>
-
-                    <div id="promo-post-select-wrap">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Select Your Post</label>
-                        <select id="promo-post-id" onchange="prefillFromSelectedPost()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                            <option value="">-- Choose one of your posts --</option>
-                        </select>
-                    </div>
-
-                    <div id="promo-book-select-wrap" class="hidden">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Select Book to Promote</label>
-                        <select id="promo-book-id" onchange="prefillFromSelectedBook()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                            <option value="">-- Choose a library book --</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Ad Copy</label>
-                        <textarea id="promo-body" rows="3" maxlength="320" placeholder="Short summary shown to readers..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue"></textarea>
-                    </div>
-
-                    <div id="promo-banner-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Desktop Banner URL (1920×640)</label>
-                            <input type="url" id="promo-desktop-img" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Mobile Banner URL (1080×1080)</label>
-                            <input type="url" id="promo-mobile-img" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                        </div>
-                    </div>
-
-                    <div id="promo-cta-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label id="promo-cta-url-label" for="promo-cta-url" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL (Optional)</label>
-                            <input type="text" id="promo-cta-url" placeholder="https://... or book.html?id=... (optional for views)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                        </div>
-                        <div>
-                            <label for="promo-cta-text" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Label</label>
-                            <input type="text" id="promo-cta-text" value="Learn More" maxlength="30" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Placement *</label>
-                            <select id="promo-placement" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                                <option value="all">All Main Pages (Library, Feed, Music)</option>
-                                <option value="library">Digital Library Only</option>
-                                <option value="feed">Fellowship Feed Only</option>
-                                <option value="music">Music Page Only</option>
+                            <select id="promo-card-select" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                                <option value="">Pay with new card / Mobile Money (Paystack)</option>
                             </select>
+                            <p id="promo-card-hint" class="text-[11px] text-accord-muted">Select an added card to pay for this campaign, or use a new payment method via Paystack.</p>
                         </div>
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Target Country (Optional)</label>
-                            <input type="text" id="promo-target-country" placeholder="e.g. GH, NG, US (leave blank for Global)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                        </div>
-                    </div>
 
-                    <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
-                        <div class="flex items-center justify-between gap-2">
-                            <label for="promo-card-select" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">
-                                <i class="fa-solid fa-credit-card text-accord-blue mr-1"></i> Payment Card
-                            </label>
-                            <button type="button" onclick="openAddCardModal()" class="text-[11px] font-bold text-accord-blue hover:underline inline-flex items-center gap-1">
-                                <i class="fa-solid fa-plus text-[10px]"></i> Add Card
+                        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Promotion Fee</p>
+                                <p id="promo-price-display" class="text-lg font-extrabold text-accord-slate">$7.00</p>
+                                <p id="promo-price-usd-sub" class="text-[11px] text-accord-muted">7 days × $1.00 USD/day</p>
+                            </div>
+                            <button type="submit" id="promo-pay-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-credit-card"></i>
+                                <span>Pay with Paystack &amp; Submit</span>
                             </button>
                         </div>
-                        <select id="promo-card-select" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
-                            <option value="">Pay with new card / Mobile Money (Paystack)</option>
-                        </select>
-                        <p id="promo-card-hint" class="text-[11px] text-accord-muted">Select an added card to pay for this campaign, or use a new payment method via Paystack.</p>
-                    </div>
+                    </form>
+                </section>
 
-                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Promotion Fee</p>
-                            <p id="promo-price-display" class="text-lg font-extrabold text-accord-slate">$7.00</p>
-                            <p id="promo-price-usd-sub" class="text-[11px] text-accord-muted">7 days × $1.00 USD/day</p>
+                <!-- Right Column: Live Ad Preview -->
+                <aside class="lg:col-span-5 lg:sticky lg:top-20 space-y-4">
+                    <section class="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h2 class="text-base font-bold text-accord-slate flex items-center gap-2">
+                                    <i class="fa-regular fa-eye text-accord-blue text-sm"></i>
+                                    <span>Ad Preview</span>
+                                </h2>
+                                <p class="text-[11px] text-accord-muted">How your promotion will appear to readers.</p>
+                            </div>
+                            <span id="promo-preview-type-badge" class="px-2.5 py-1 rounded-full bg-slate-100 text-accord-slate text-[10px] font-bold uppercase">Feed Post</span>
                         </div>
-                        <button type="submit" id="promo-pay-btn" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-credit-card"></i>
-                            <span>Pay with Paystack &amp; Submit</span>
-                        </button>
-                    </div>
-                </form>
-            </section>
+                        <div id="promo-live-preview" class="rounded-2xl bg-slate-50/80 border border-dashed border-slate-200 p-3 min-h-[180px] flex items-center justify-center">
+                            <p class="text-xs text-accord-muted text-center py-8">Select a post or book on the left to preview your ad.</p>
+                        </div>
+                    </section>
+                </aside>
+            </div>
 
-            <!-- Right Column: Added Payment Cards + My Promotions -->
-            <div class="lg:col-span-5 space-y-6">
-                <!-- Added Payment Cards -->
-                <section id="saved-cards-section" class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+            <!-- TAB 2: My Promotions (Meta-Style Content & Campaign List) -->
+            <div id="promo-tab-panel-campaigns" class="hidden space-y-4">
+                <section class="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-7 shadow-sm space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-bold text-accord-slate">My Promotions</h2>
+                            <p class="text-[11px] text-accord-muted">Preview, pause, resume, or re-boost your submitted promotions.</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <select id="promo-status-filter" onchange="renderMyPromotionsList()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                                <option value="all">All Statuses</option>
+                                <option value="approved">Approved</option>
+                                <option value="pending_approval">Pending Approval</option>
+                                <option value="paused">Paused</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                            <button type="button" onclick="loadMyPromotions()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-accord-slate inline-flex items-center gap-1.5">
+                                <i class="fa-solid fa-rotate text-[10px]"></i>
+                                <span>Refresh</span>
+                            </button>
+                            <button type="button" onclick="switchPromoTab('create')" class="px-3.5 py-1.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold inline-flex items-center gap-1.5">
+                                <i class="fa-solid fa-plus text-[10px]"></i>
+                                <span>New Promotion</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="my-promotions-list" class="divide-y divide-slate-100 border border-slate-200/80 rounded-2xl overflow-hidden bg-white">
+                        <p class="text-xs text-accord-muted py-8 text-center">Loading your campaigns...</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 3: Payment Cards -->
+            <div id="promo-tab-panel-cards" class="hidden">
+                <section id="saved-cards-section" class="max-w-2xl bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
                     <div class="flex items-center justify-between gap-2">
                         <div>
                             <h2 class="text-base font-bold text-accord-slate">Payment Cards</h2>
                             <p class="text-[11px] text-accord-muted">Manage added cards for your ad payments.</p>
                         </div>
-                        <button type="button" onclick="openAddCardModal()" class="px-3 py-1.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-[11px] font-bold transition-colors inline-flex items-center gap-1">
+                        <button type="button" onclick="openAddCardModal()" class="px-3.5 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-colors inline-flex items-center gap-1.5">
                             <i class="fa-solid fa-plus text-[10px]"></i>
                             <span>Add Card</span>
                         </button>
                     </div>
                     <div id="saved-cards-list" class="space-y-2.5">
                         <p class="text-xs text-accord-muted py-4 text-center">Loading saved cards...</p>
-                    </div>
-                </section>
-
-                <!-- My Promotions List -->
-                <section class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-base font-bold text-accord-slate">My Promotions</h2>
-                        <button type="button" onclick="loadMyPromotions()" class="text-xs font-bold text-accord-blue hover:underline">Refresh</button>
-                    </div>
-                    <div id="my-promotions-list" class="space-y-3">
-                        <p class="text-xs text-accord-muted py-6 text-center">Loading your campaigns...</p>
                     </div>
                 </section>
             </div>
@@ -361,6 +450,8 @@
     <script src="footer.js?v=2"></script>
     <script src="currency.js"></script>
     <script src="paystack-helper.js"></script>
+    <script src="feed-shared.js"></script>
+    <script src="ads.js"></script>
     <script src="promote.js"></script>
 </body>
 </html>
