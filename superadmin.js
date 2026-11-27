@@ -1067,7 +1067,7 @@ function renderSuperadminPromotionsList() {
                         </div>
                         ${p.promo_type === 'banner'
                             ? `<p class="text-xs font-semibold text-accord-slate truncate">${escapeSuperHtml(p.body || p.cta_url || 'Display Banner')}</p>`
-                            : `<h3 class="text-sm font-bold text-accord-slate truncate">${escapeSuperHtml(p.title)}</h3>`
+                            : `<h3 class="text-sm font-bold text-accord-slate truncate">${escapeSuperHtml((p.title || '').trim() || p.body || p.cta_url || (p.promo_type === 'book' ? 'Promoted Book' : 'Promoted Post'))}</h3>`
                         }
                         <p class="text-[11px] text-accord-muted">Locations: <strong class="text-accord-slate">${escapeSuperHtml(placements.join(', '))}</strong> • Countries: ${escapeSuperHtml((p.target_countries || ['GLOBAL']).join(', '))}</p>
                         <p class="text-[11px] text-slate-600">By ${escapeSuperHtml(p.advertiser_name || 'Superadmin')} • Views: <strong>${views}</strong> • Clicks: <strong>${clicks}</strong> (${ctr}% CTR)</p>

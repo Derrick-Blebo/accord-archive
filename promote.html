@@ -156,9 +156,17 @@
                             <i class="fa-solid fa-chart-line text-accord-blue text-xs mt-0.5"></i>
                             <div class="text-[11px]">
                                 <span class="font-bold text-accord-slate">Estimated Daily Views:</span>
-                                <span id="promo-estimated-views" class="text-accord-muted"> Coming soon — as site traffic grows, we'll show estimated daily views for your chosen daily budget.</span>
+                                <span id="promo-estimated-views" class="text-accord-muted font-semibold"> N/A</span>
                             </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label for="promo-goal" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Campaign Goal *</label>
+                        <select id="promo-goal" onchange="handlePromoGoalChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                            <option value="views">Views (Awareness — No Destination Link Needed)</option>
+                            <option value="clicks">Clicks (Traffic — Destination Link Required)</option>
+                        </select>
                     </div>
 
                     <div id="promo-post-select-wrap">
@@ -173,11 +181,6 @@
                         <select id="promo-book-id" onchange="prefillFromSelectedBook()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                             <option value="">-- Choose a library book --</option>
                         </select>
-                    </div>
-
-                    <div id="promo-title-wrap">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Headline / Title *</label>
-                        <input type="text" id="promo-title" required maxlength="140" placeholder="Catchy headline for your promotion" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                     </div>
 
                     <div>
@@ -196,13 +199,13 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div id="promo-cta-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL *</label>
-                            <input type="text" id="promo-cta-url" required placeholder="https://... or book.html?id=..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            <label id="promo-cta-url-label" for="promo-cta-url" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Destination URL (Optional)</label>
+                            <input type="text" id="promo-cta-url" placeholder="https://... or book.html?id=... (optional for views)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                         </div>
                         <div>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Label</label>
+                            <label for="promo-cta-text" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Button Label</label>
                             <input type="text" id="promo-cta-text" value="Learn More" maxlength="30" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                         </div>
                     </div>

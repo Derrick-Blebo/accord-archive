@@ -162,20 +162,24 @@
     };
 
     function buildBannerSlideHtml(promo) {
-        const href = promo.cta_url || (promo.target_book_id ? `book.html?id=${promo.target_book_id}` : promo.target_post_id ? `post.html?id=${promo.target_post_id}` : 'promote.html');
+        const href = (promo.cta_url || '').trim() || (promo.ad_goal !== 'views'
+            ? (promo.target_book_id ? `book.html?id=${promo.target_book_id}` : promo.target_post_id ? `post.html?id=${promo.target_post_id}` : '')
+            : '');
         const isExternal = /^https?:\/\//i.test(href);
         const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
         const desktopImg = promo.desktop_image_url || promo.mobile_image_url || '';
         const mobileImg = promo.mobile_image_url || promo.desktop_image_url || '';
 
         if (desktopImg || mobileImg) {
-            return `
-                <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" data-promo-id="${promo.id}" class="block relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-md group bg-white">
-                    <span class="absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 rounded-full bg-accord-slate/80 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">Sponsored</span>
-                    ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="Sponsored banner" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
-                    ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="Sponsored banner" class="sm:hidden w-full max-h-80 object-cover">` : ''}
-                </a>
+            const innerImgs = `
+                <span class="absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 rounded-full bg-accord-slate/80 text-white text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">Sponsored</span>
+                ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="Sponsored banner" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover ${href ? 'group-hover:scale-[1.01] transition-transform duration-300' : ''}">` : ''}
+                ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="Sponsored banner" class="sm:hidden w-full max-h-80 object-cover">` : ''}
             `;
+            if (href) {
+                return `<a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" data-promo-id="${promo.id}" class="block relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-md group bg-white">${innerImgs}</a>`;
+            }
+            return `<div data-promo-id="${promo.id}" class="block relative rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200/90 shadow-md bg-white">${innerImgs}</div>`;
         }
 
         return `
@@ -186,9 +190,11 @@
                     </span>
                     ${promo.body ? `<p class="text-xs sm:text-sm text-slate-200 line-clamp-2">${escapeAdHtml(promo.body)}</p>` : ''}
                 </div>
+                ${href ? `
                 <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="px-5 py-2.5 rounded-xl bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold shrink-0 transition-all shadow">
                     ${escapeAdHtml(promo.cta_text || 'Learn More')}
                 </a>
+                ` : ''}
             </div>
         `;
     }
@@ -427,19 +433,26 @@
         card.className = 'bg-gradient-to-br from-amber-50/60 via-white to-blue-50/40 border border-accord-gold/40 rounded-xl sm:rounded-2xl shadow-sm p-4 space-y-3';
         card.setAttribute('data-promo-id', promo.id);
 
-        const href = promo.cta_url || (promo.target_book_id ? `book.html?id=${promo.target_book_id}` : promo.target_post_id ? `post.html?id=${promo.target_post_id}` : 'promote.html');
+        const href = (promo.cta_url || '').trim() || (promo.ad_goal !== 'views'
+            ? (promo.target_book_id ? `book.html?id=${promo.target_book_id}` : promo.target_post_id ? `post.html?id=${promo.target_post_id}` : '')
+            : '');
         const isExternal = /^https?:\/\//i.test(href);
         const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
         const desktopImg = promo.desktop_image_url || promo.mobile_image_url || '';
         const mobileImg = promo.mobile_image_url || promo.desktop_image_url || '';
         const typeLabel = promo.promo_type === 'book' ? 'Promoted Book' : 'Sponsored Post';
+        const altText = escapeAdHtml(promo.title || promo.body || typeLabel);
 
-        const mediaHtml = (desktopImg || mobileImg) ? `
-            <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="block rounded-xl overflow-hidden border border-slate-200/80 bg-slate-50 group">
-                ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${escapeAdHtml(promo.title)}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover group-hover:scale-[1.01] transition-transform duration-300">` : ''}
-                ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${escapeAdHtml(promo.title)}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
-            </a>
-        ` : '';
+        const mediaImgs = `
+            ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${altText}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover ${href ? 'group-hover:scale-[1.01] transition-transform duration-300' : ''}">` : ''}
+            ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${altText}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
+        `;
+
+        const mediaHtml = (desktopImg || mobileImg)
+            ? (href
+                ? `<a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="block rounded-xl overflow-hidden border border-slate-200/80 bg-slate-50 group">${mediaImgs}</a>`
+                : `<div class="block rounded-xl overflow-hidden border border-slate-200/80 bg-slate-50">${mediaImgs}</div>`)
+            : '';
 
         card.innerHTML = `
             <div class="flex items-center justify-between gap-2">
@@ -454,13 +467,15 @@
             ${mediaHtml}
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
                 <div class="flex-1 min-w-0 space-y-1">
-                    <h3 class="text-[15px] sm:text-base font-bold text-slate-900 leading-snug">${escapeAdHtml(promo.title)}</h3>
-                    ${promo.body ? `<p class="text-xs sm:text-[13px] text-slate-600 leading-relaxed line-clamp-2">${escapeAdHtml(promo.body)}</p>` : ''}
+                    ${promo.title ? `<h3 class="text-[15px] sm:text-base font-bold text-slate-900 leading-snug">${escapeAdHtml(promo.title)}</h3>` : ''}
+                    ${promo.body ? `<p class="text-xs sm:text-[13px] text-slate-600 leading-relaxed line-clamp-3">${escapeAdHtml(promo.body)}</p>` : ''}
                 </div>
+                ${href ? `
                 <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0 self-start sm:self-center">
                     <span>${escapeAdHtml(promo.cta_text || 'View Details')}</span>
                     <i class="fa-solid fa-arrow-right text-[10px]"></i>
                 </a>
+                ` : ''}
             </div>
         `;
         return card;

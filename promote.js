@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         await window.AccordCurrency.init();
     }
     updatePromoPriceDisplay();
+    handlePromoTypeChange();
+    handlePromoGoalChange();
     await Promise.all([loadPromoteChoices(), loadMyPromotions()]);
 
     const params = new URLSearchParams(window.location.search);
@@ -156,13 +158,21 @@ function handlePromoTypeChange() {
     document.getElementById('promo-post-select-wrap')?.classList.toggle('hidden', type !== 'post');
     document.getElementById('promo-book-select-wrap')?.classList.toggle('hidden', type !== 'book');
     document.getElementById('promo-banner-fields')?.classList.toggle('hidden', !isBanner);
+}
 
-    const titleWrap = document.getElementById('promo-title-wrap');
-    const titleInput = document.getElementById('promo-title');
-    if (titleWrap) titleWrap.classList.toggle('hidden', isBanner);
-    if (titleInput) {
-        titleInput.required = !isBanner;
-        if (isBanner) titleInput.value = '';
+function handlePromoGoalChange() {
+    const goal = document.getElementById('promo-goal')?.value || 'views';
+    const isClicks = goal === 'clicks';
+    const ctaInput = document.getElementById('promo-cta-url');
+    const ctaLabel = document.getElementById('promo-cta-url-label');
+    if (ctaInput) {
+        ctaInput.required = isClicks;
+        ctaInput.placeholder = isClicks
+            ? 'https://... or book.html?id=...'
+            : 'https://... or book.html?id=... (optional for views)';
+    }
+    if (ctaLabel) {
+        ctaLabel.textContent = isClicks ? 'Destination URL *' : 'Destination URL (Optional)';
     }
 }
 
@@ -170,7 +180,6 @@ function prefillFromSelectedPost() {
     const id = document.getElementById('promo-post-id')?.value;
     const post = myPostsCache.find(p => String(p.id) === String(id));
     if (!post) return;
-    document.getElementById('promo-title').value = (post.body || '').trim().slice(0, 70);
     document.getElementById('promo-body').value = (post.body || '').slice(0, 260);
     document.getElementById('promo-cta-url').value = `post.html?id=${encodeURIComponent(post.id)}`;
 }
@@ -179,7 +188,6 @@ function prefillFromSelectedBook() {
     const id = document.getElementById('promo-book-id')?.value;
     const book = booksCache.find(b => String(b.id) === String(id));
     if (!book) return;
-    document.getElementById('promo-title').value = book.title || '';
     document.getElementById('promo-body').value = (book.description || '').slice(0, 260);
     document.getElementById('promo-cta-url').value = `book.html?id=${encodeURIComponent(book.id)}`;
 }
@@ -298,7 +306,7 @@ function updatePromoPriceDisplay() {
         const est = estimateDailyViews(daily_budget_usd);
         estViewsEl.textContent = est.available
             ? ` ~${est.minViews.toLocaleString()} – ${est.maxViews.toLocaleString()} views/day`
-            : " Coming soon — as site traffic grows, we'll show estimated daily views for your chosen daily budget.";
+            : ' N/A';
     }
 
     const priceEl = document.getElementById('promo-price-display');
@@ -317,7 +325,8 @@ async function handlePromotionSubmit(e) {
 
     const promoType = document.getElementById('promo-type').value;
     const isBanner = promoType === 'banner';
-    const title = isBanner ? '' : document.getElementById('promo-title').value.trim();
+    const adGoal = document.getElementById('promo-goal')?.value || 'views';
+    const title = '';
     const body = document.getElementById('promo-body').value.trim();
     const ctaUrl = document.getElementById('promo-cta-url').value.trim();
     const ctaText = document.getElementById('promo-cta-text').value.trim() || 'Learn More';
@@ -339,7 +348,12 @@ async function handlePromotionSubmit(e) {
         return;
     }
 
-    if (/^(javascript|data|vbscript):/i.test(ctaUrl)) {
+    if (adGoal === 'clicks' && !ctaUrl) {
+        showToast('Please enter a destination URL for a clicks campaign.', true);
+        return;
+    }
+
+    if (ctaUrl && /^(javascript|data|vbscript):/i.test(ctaUrl)) {
         showToast('Please enter a valid destination URL.', true);
         return;
     }
@@ -405,6 +419,7 @@ async function handlePromotionSubmit(e) {
         metadata: {
             type: 'paid_promotion',
             promo_type: promoType,
+            ad_goal: adGoal,
             user_id: promoUser.id,
             daily_budget_usd,
             duration_days,
@@ -417,6 +432,7 @@ async function handlePromotionSubmit(e) {
                 advertiser_name: promoUser.user_metadata?.full_name || promoUser.email?.split('@')[0] || 'Member',
                 advertiser_email: promoUser.email,
                 promo_type: promoType,
+                ad_goal: adGoal,
                 target_post_id: targetPostId,
                 target_book_id: targetBookId,
                 title,
@@ -424,7 +440,7 @@ async function handlePromotionSubmit(e) {
                 desktop_image_url: desktopImg,
                 mobile_image_url: mobileImg,
                 cta_text: ctaText,
-                cta_url: ctaUrl,
+                cta_url: ctaUrl || null,
                 placements: [placement],
                 target_countries: targetCountries,
                 duration_days,
@@ -440,8 +456,8 @@ async function handlePromotionSubmit(e) {
             };
 
             let { error } = await supabaseClient.from('promotions').insert([insertPayload]);
-            if (error && /(daily_budget_usd|local_currency|local_budget_amount)/i.test(error.message || '')) {
-                const { daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, ...fallbackPayload } = insertPayload;
+            if (error && /(ad_goal|daily_budget_usd|local_currency|local_budget_amount)/i.test(error.message || '')) {
+                const { ad_goal: _ag, daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, ...fallbackPayload } = insertPayload;
                 ({ error } = await supabaseClient.from('promotions').insert([fallbackPayload]));
             }
 
@@ -455,6 +471,7 @@ async function handlePromotionSubmit(e) {
             syncDailyBudget(1, 'reset');
             syncDurationDays(7);
             handlePromoTypeChange();
+            handlePromoGoalChange();
             await loadMyPromotions();
         },
         onError: (msg) => {
@@ -492,9 +509,13 @@ async function loadMyPromotions() {
     };
 
     listEl.innerHTML = data.map(p => {
-        const displayTitle = p.promo_type === 'banner'
-            ? (p.body ? p.body.slice(0, 70) : 'Display Ad Banner')
-            : (p.title || 'Promotion');
+        const fallbackLabel = p.promo_type === 'banner'
+            ? 'Display Ad Banner'
+            : p.promo_type === 'book'
+                ? 'Promoted Book'
+                : 'Promoted Post';
+        const displayTitle = (p.title || '').trim() || (p.body ? p.body.slice(0, 70) : fallbackLabel);
+        const goalLabel = (p.ad_goal === 'views' || (!p.ad_goal && !p.cta_url)) ? 'Views' : 'Clicks';
         const totalUsd = Number(p.budget_amount || 0);
         const dailyUsd = Number(p.daily_budget_usd || 0) || (totalUsd > 0 ? totalUsd / Math.max(1, Number(p.duration_days || 1)) : 0);
         const localLabel = window.AccordCurrency?.formatLocalFromUsd
@@ -513,6 +534,7 @@ async function loadMyPromotions() {
             <div class="flex items-center gap-3 text-[11px] text-accord-muted">
                 <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
                 <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-200/70 text-[10px] font-bold text-accord-slate">${goalLabel}</span>
             </div>
             ${p.admin_notes ? `<p class="text-[11px] text-accord-blue">Admin note: ${escapePromoHtml(p.admin_notes)}</p>` : ''}
         </div>
