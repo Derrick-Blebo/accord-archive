@@ -112,17 +112,8 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
             <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between md:grid md:grid-cols-[minmax(200px,1fr)_auto_minmax(200px,1fr)] gap-2 sm:gap-4">
                 
                 <!-- Left: Brand Logo -->
-                <a href="index.html" class="flex items-center space-x-2.5 sm:space-x-3 group justify-self-start min-w-0">
-                    <div class="w-9 h-9 sm:w-11 sm:h-11 bg-accord-blue rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
-                        <span class="font-bold text-lg sm:text-xl tracking-tighter">Ac</span>
-                    </div>
-                    <div class="min-w-0">
-                        <div class="flex items-center">
-                            <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-accord-slate">Acco</span>
-                            <span class="text-xl sm:text-2xl font-extrabold tracking-tight text-accord-slate" style="position:relative;">rd<span style="position:absolute; top:-4px; right:0px; width:14px; height:3px; background-color:#F5A623; border-radius:2px;"></span></span>
-                        </div>
-                        <p class="text-[9px] sm:text-[10px] uppercase tracking-wider sm:tracking-widest font-bold text-accord-blue truncate">Official Archive & Library</p>
-                    </div>
+                <a href="index.html" class="flex items-center group justify-self-start min-w-0 shrink-0" aria-label="Accord — Official Archive & Library">
+                    <img src="assets/accord-lockup.svg" alt="Accord — Official Archive & Library" class="h-8 sm:h-10 w-auto group-hover:scale-[1.02] transition-transform" />
                 </a>
 
                 <!-- Center: Navigation Links -->
