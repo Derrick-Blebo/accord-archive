@@ -453,7 +453,9 @@
 
     function openPlaylistPlayerModal(playlistId, pageSource = 'music') {
         const id = String(playlistId || '');
-        const pl = _playlistRegistry.get(id) || (window.musicData?.playlists || []).find(p => String(p.id) === id);
+        const pl = _playlistRegistry.get(id)
+            || (window.musicData?.playlists || []).find(p => String(p.id) === id)
+            || (window.sermonsData?.playlists || []).find(p => String(p.id) === id);
         if (!pl) return;
 
         trackPlaylistEvent(pl.id, pl.title, 'play', null, pageSource);
@@ -461,7 +463,7 @@
         const platformLinks = getPlaylistPlatformLinks(pl);
         openMediaPlayerModal(
             pl.title || 'Playlist Player',
-            pl.curator || pl.genre || 'Curated Gospel Playlist',
+            pl.curator || pl.genre || (pageSource === 'sermons' ? 'Sermon Playlist' : 'Curated Gospel Playlist'),
             platformLinks[0]?.url || pl.link,
             platformLinks,
             { playlistId: pl.id, playlistTitle: pl.title, pageSource }
@@ -515,17 +517,44 @@
         `;
     }
 
+    function applyHydratedPlaylistMeta(pl, cardEl, coverSrc, subtitle, meta) {
+        if (!meta) return;
+        const nextCover = (pl.hasDefaultCover && meta.image) ? meta.image : coverSrc;
+        const nextTitle = (pl.hasDefaultTitle && meta.title) ? meta.title : pl.title;
+        if (pl.hasDefaultCover && meta.image) {
+            pl.image = meta.image;
+            pl.hasDefaultCover = false;
+            const imgEl = cardEl.querySelector('[data-playlist-cover]');
+            if (imgEl) imgEl.src = meta.image;
+        }
+        if (pl.hasDefaultTitle && meta.title) {
+            pl.title = meta.title;
+            pl.hasDefaultTitle = false;
+            const titleEl = cardEl.querySelector('[data-playlist-title]');
+            if (titleEl) titleEl.textContent = meta.title;
+        }
+        if (Array.isArray(meta.tracks) && meta.tracks.length > 0) {
+            const slot = cardEl.querySelector('[data-tracks-slot]');
+            if (slot) slot.innerHTML = buildPlaylistTracksHtml(meta.tracks, nextCover, subtitle, pl);
+        } else if (pl.hasDefaultDesc && meta.description) {
+            pl.description = meta.description;
+            pl.hasDefaultDesc = false;
+            const slot = cardEl.querySelector('[data-tracks-slot]');
+            if (slot) slot.innerHTML = buildPlaylistTracksHtml([], nextCover, subtitle, pl);
+        }
+        _playlistRegistry.set(String(pl.id), pl);
+    }
+
     async function hydratePlaylistTracks(pl, cardEl, coverSrc, subtitle) {
         const metaUrl = pl?.links?.apple || pl?.links?.spotify || pl?.links?.audiomack || pl?.link;
         if (!metaUrl) return;
-        const cacheKey = `accord_pl_tracks_${metaUrl}`;
+        const cacheKey = `accord_pl_meta_${metaUrl}`;
         try {
             const cached = sessionStorage.getItem(cacheKey);
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    const slot = cardEl.querySelector('[data-tracks-slot]');
-                    if (slot) slot.innerHTML = buildPlaylistTracksHtml(parsed, coverSrc, subtitle, pl);
+                if (parsed && ((Array.isArray(parsed.tracks) && parsed.tracks.length > 0) || parsed.image || parsed.title || parsed.description)) {
+                    applyHydratedPlaylistMeta(pl, cardEl, coverSrc, subtitle, parsed);
                     return;
                 }
             }
@@ -535,10 +564,9 @@
             const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(metaUrl)}`);
             if (!resp.ok) return;
             const meta = await resp.json();
-            if (Array.isArray(meta?.tracks) && meta.tracks.length > 0) {
-                try { sessionStorage.setItem(cacheKey, JSON.stringify(meta.tracks)); } catch {}
-                const slot = cardEl.querySelector('[data-tracks-slot]');
-                if (slot) slot.innerHTML = buildPlaylistTracksHtml(meta.tracks, coverSrc, subtitle, pl);
+            if (meta && ((Array.isArray(meta.tracks) && meta.tracks.length > 0) || meta.image || meta.title || meta.description)) {
+                try { sessionStorage.setItem(cacheKey, JSON.stringify(meta)); } catch {}
+                applyHydratedPlaylistMeta(pl, cardEl, coverSrc, subtitle, meta);
             }
         } catch {}
     }
@@ -605,11 +633,11 @@
                         ${saveBtnHtml}
                     </div>
                     <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 shadow-sm">
-                        <img src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+                        <img data-playlist-cover src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
                     </div>
                     <div class="mt-2.5 flex items-start justify-between gap-2">
                         <div class="min-w-0">
-                            <h3 class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
+                            <h3 data-playlist-title class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
                             <p class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHTML(subtitle)}</p>
                         </div>
                         <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" title="Choose Platform / Play" class="w-5 h-5 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center shrink-0 text-[9px] mt-0.5 transition-colors">
@@ -645,11 +673,12 @@
 
     let _activeShareContext = { playlist: null, pageSource: 'music', shareUrl: '' };
 
-    function getPlaylistShareUrl(playlistId) {
+    function getPlaylistShareUrl(playlistId, pageSource = 'music') {
         const origin = window.location.origin && window.location.origin !== 'null'
             ? window.location.origin
             : 'https://www.accordarchives.com';
-        return `${origin}/playlists.html?playlist=${encodeURIComponent(playlistId)}`;
+        const targetPage = pageSource === 'sermons' ? 'sermons.html' : 'playlists.html';
+        return `${origin}/${targetPage}?playlist=${encodeURIComponent(playlistId)}`;
     }
 
     function ensureShareModalDom() {
@@ -723,20 +752,23 @@
 
     async function openSharePlaylistModal(playlistId, pageSource = 'music') {
         const id = String(playlistId || '');
-        const pl = _playlistRegistry.get(id) || (window.musicData?.playlists || []).find(p => String(p.id) === id);
+        const pl = _playlistRegistry.get(id)
+            || (window.musicData?.playlists || []).find(p => String(p.id) === id)
+            || (window.sermonsData?.playlists || []).find(p => String(p.id) === id);
         if (!pl) return;
 
         const modal = ensureShareModalDom();
-        const shareUrl = getPlaylistShareUrl(pl.id);
+        const shareUrl = getPlaylistShareUrl(pl.id, pageSource);
         _activeShareContext = { playlist: pl, pageSource, shareUrl };
 
         const subEl = document.getElementById('share-playlist-subtitle');
-        if (subEl) subEl.innerText = pl.title || 'Curated Gospel Playlist';
+        if (subEl) subEl.innerText = pl.title || (pageSource === 'sermons' ? 'Sermon Playlist' : 'Curated Gospel Playlist');
 
         const noteEl = document.getElementById('share-chat-note');
         if (noteEl) noteEl.value = '';
 
-        const shareText = `Listen to "${pl.title}" on Accord Music Hub`;
+        const hubName = pageSource === 'sermons' ? 'Accord Sermons Hub' : 'Accord Music Hub';
+        const shareText = `Listen to "${pl.title}" on ${hubName}`;
         const waEl = document.getElementById('share-whatsapp-link');
         const xEl = document.getElementById('share-x-link');
         const tgEl = document.getElementById('share-telegram-link');

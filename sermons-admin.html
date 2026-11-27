@@ -179,6 +179,48 @@
                 </div>
             </section>
 
+            <!-- Sermon Playlist Insights (Most Saved & Most Engaged) -->
+            <section id="sermon-playlist-insights-section" class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Playlist Insights: Most Saved &amp; Most Engaged</h2>
+                        <p class="text-xs text-accord-muted mt-0.5">Live sermon playlist saves, play modal opens, and streaming platform clicks.</p>
+                    </div>
+                    <button type="button" onclick="loadAndRenderSermonPlaylistInsights()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-accord-slate text-xs font-bold shadow-xs transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
+                        <i class="fa-solid fa-rotate text-accord-blue"></i>
+                        <span>Refresh Insights</span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div class="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-blue flex items-center gap-1.5">
+                                <i class="fa-solid fa-bookmark"></i>
+                                <span>Most Saved Sermon Playlists</span>
+                            </h3>
+                            <span class="text-[10px] font-semibold text-accord-muted">Ranked by saves</span>
+                        </div>
+                        <div id="sermon-insights-most-saved" class="divide-y divide-slate-100 text-xs">
+                            <p class="text-accord-muted py-4">Loading sermon playlist save insights...</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-chart-line"></i>
+                                <span>Most Engaged Sermon Playlists</span>
+                            </h3>
+                            <span class="text-[10px] font-semibold text-accord-muted">Plays + platform clicks + saves</span>
+                        </div>
+                        <div id="sermon-insights-most-engaged" class="divide-y divide-slate-100 text-xs">
+                            <p class="text-accord-muted py-4">Loading sermon playlist engagement insights...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Sermon Spotlight Section (Individual Sermons) -->
             <section class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -246,24 +288,48 @@
                 </div>
 
                 <!-- Playlist Links + Auto-fill -->
-                <div id="sermon-playlist-links-group" class="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div id="sermon-playlist-links-group" class="space-y-3 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4">
                     <div class="flex items-center justify-between gap-2">
-                        <span class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Streaming Links (Paste any &amp; click Auto-fill)</span>
-                        <button type="button" id="sermon-playlist-autofill-btn" onclick="autoFillSermonMetadata()" class="px-3 py-1.5 rounded-lg bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold transition-all">
+                        <div>
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Sermon Playlist Platform Links</p>
+                            <p class="text-[11px] text-accord-muted">Paste any link to automatically fetch cover art, title, preacher, and episodes.</p>
+                        </div>
+                        <button type="button" id="sermon-playlist-autofill-btn" onclick="autoFillSermonMetadata()" class="px-3 py-2 rounded-xl bg-white hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all shrink-0">
                             <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <input type="url" id="sermon-spotify-link" placeholder="Spotify URL" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-accord-blue">
-                        <input type="url" id="sermon-apple-link" placeholder="Apple Podcasts / Music URL" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-accord-blue">
-                        <input type="url" id="sermon-audiomack-link" placeholder="Audiomack URL" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                    <div class="space-y-2.5">
+                        <div>
+                            <label for="sermon-spotify-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                <i class="fa-brands fa-spotify text-[#1DB954]"></i> Spotify Link
+                            </label>
+                            <input type="url" id="sermon-spotify-link" oninput="scheduleSermonAutoFill(this.value)" onpaste="scheduleSermonAutoFill(this.value, true)" placeholder="https://open.spotify.com/show/... or /playlist/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label for="sermon-audiomack-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                <i class="fa-solid fa-headphones text-amber-500"></i> Audiomack Link
+                            </label>
+                            <input type="url" id="sermon-audiomack-link" oninput="scheduleSermonAutoFill(this.value)" onpaste="scheduleSermonAutoFill(this.value, true)" placeholder="https://audiomack.com/.../playlist/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
+                        <div>
+                            <label for="sermon-apple-link" class="flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate mb-1">
+                                <i class="fa-solid fa-podcast text-purple-600"></i> Apple Podcasts / Apple Music Link
+                            </label>
+                            <input type="url" id="sermon-apple-link" oninput="scheduleSermonAutoFill(this.value)" onpaste="scheduleSermonAutoFill(this.value, true)" placeholder="https://podcasts.apple.com/... or https://music.apple.com/..." class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        </div>
                     </div>
+                    <p id="sermon-autofill-status" class="hidden text-[11px] font-semibold text-accord-blue"></p>
                 </div>
 
                 <!-- Spotlight Primary Link -->
                 <div id="sermon-spotlight-link-group" class="hidden">
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Primary Streaming / Profile Link</label>
-                    <input type="url" id="sermon-item-link" placeholder="https://open.spotify.com/... or https://podcasts.apple.com/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                    <div class="flex items-center gap-2">
+                        <input type="url" id="sermon-item-link" oninput="scheduleSermonAutoFill(this.value)" onpaste="scheduleSermonAutoFill(this.value, true)" placeholder="https://open.spotify.com/... or https://podcasts.apple.com/..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        <button type="button" id="sermon-spotlight-autofill-btn" onclick="autoFillSermonMetadata()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Auto-fill
+                        </button>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -352,7 +418,7 @@
                 <div>
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link * (Spotify, Apple Podcasts, Audiomack)</label>
                     <div class="flex gap-2">
-                        <input type="url" id="sermon-spot-link" required placeholder="https://open.spotify.com/episode/..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                        <input type="url" id="sermon-spot-link" required oninput="scheduleSermonSpotlightAutoFill(this.value)" onpaste="scheduleSermonSpotlightAutoFill(this.value, true)" placeholder="https://open.spotify.com/episode/..." class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                         <button type="button" id="sermon-spot-autofill-btn" onclick="autoFillSingleSermonSpotlight()" class="px-3.5 py-2.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all shrink-0">Auto-fill</button>
                     </div>
                 </div>

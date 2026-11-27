@@ -188,6 +188,87 @@ function renderAll() {
     document.getElementById('stat-sermon-spotlights').textContent = sermonsConfig.sermonSpotlights.length;
     renderSermonsTable();
     renderSermonSpotlightsTable();
+    loadAndRenderSermonPlaylistInsights();
+}
+
+async function loadAndRenderSermonPlaylistInsights() {
+    const savedEl = document.getElementById('sermon-insights-most-saved');
+    const engagedEl = document.getElementById('sermon-insights-most-engaged');
+    if (!savedEl || !engagedEl) return;
+
+    let stats = [];
+    try {
+        const { data, error } = await supabaseClient
+            .from('playlist_stats')
+            .select('playlist_id, playlist_title, save_count, play_count, platform_click_count, engagement_count, last_engaged_at')
+            .order('engagement_count', { ascending: false })
+            .limit(100);
+
+        if (!error && Array.isArray(data)) {
+            stats = data;
+        }
+    } catch {}
+
+    if (stats.length === 0) {
+        try {
+            const localRaw = localStorage.getItem('accord_playlist_analytics_local');
+            if (localRaw) stats = Object.values(JSON.parse(localRaw));
+        } catch {}
+    }
+
+    const sermonPlaylistsById = new Map((sermonsConfig.playlists || []).map(p => [String(p.id), p]));
+    const filtered = stats.filter(row => {
+        const id = String(row.playlist_id || '');
+        return sermonPlaylistsById.has(id) || id.startsWith('serm-') || id.startsWith('profile_sermon_');
+    });
+
+    const normalized = filtered.map(row => {
+        const pl = sermonPlaylistsById.get(String(row.playlist_id));
+        return {
+            playlist_id: String(row.playlist_id),
+            playlist_title: pl?.title || row.playlist_title || row.playlist_id,
+            save_count: Number(row.save_count || 0),
+            play_count: Number(row.play_count || 0),
+            platform_click_count: Number(row.platform_click_count || 0),
+            engagement_count: Number(row.engagement_count || 0)
+        };
+    });
+
+    const mostSaved = [...normalized].sort((a, b) => b.save_count - a.save_count).slice(0, 6);
+    const mostEngaged = [...normalized].sort((a, b) => b.engagement_count - a.engagement_count).slice(0, 6);
+
+    const renderRows = (rows, emptyMsg, metricRenderer) => {
+        if (rows.length === 0) {
+            return `<p class="text-accord-muted py-4">${emptyMsg}</p>`;
+        }
+        return rows.map((row, idx) => `
+            <div class="py-2.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-5 h-5 rounded-full bg-slate-100 text-accord-slate text-[10px] font-extrabold flex items-center justify-center shrink-0">${idx + 1}</span>
+                    <span class="font-semibold text-accord-slate truncate">${escapeHTML(row.playlist_title)}</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 text-[11px]">
+                    ${metricRenderer(row)}
+                </div>
+            </div>
+        `).join('');
+    };
+
+    savedEl.innerHTML = renderRows(
+        mostSaved,
+        'No sermon playlist saves recorded yet.',
+        row => `<span class="px-2.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue font-bold">${row.save_count} saves</span>`
+    );
+
+    engagedEl.innerHTML = renderRows(
+        mostEngaged,
+        'No sermon playlist engagement recorded yet.',
+        row => `
+            <span class="text-accord-muted">${row.play_count} plays</span>
+            <span class="text-accord-muted">• ${row.platform_click_count} clicks</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">${row.engagement_count} total</span>
+        `
+    );
 }
 
 function setSermonTableFilter(filter) {
@@ -364,43 +445,151 @@ async function handleSermonCoverUpload(event) {
     }
 }
 
-async function autoFillSermonMetadata() {
-    const rawUrl = String(
-        document.getElementById('sermon-apple-link')?.value ||
-        document.getElementById('sermon-spotify-link')?.value ||
-        document.getElementById('sermon-audiomack-link')?.value ||
-        ''
-    ).trim();
-    if (!rawUrl) {
-        showToast('Paste a Spotify, Apple Podcasts, or Audiomack link first.');
+let _sermonAutoFillTimer = null;
+let _lastSermonAutoFilledUrl = '';
+
+async function fetchSermonLinkMetadata(url) {
+    const clean = String(url || '').trim();
+    if (!clean || !/^https?:\/\//i.test(clean)) return null;
+    const cacheKey = `accord_sermon_meta_${clean}`;
+    try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && (parsed.title || parsed.image || parsed.curator || parsed.description || (Array.isArray(parsed.tracks) && parsed.tracks.length))) {
+                return parsed;
+            }
+        }
+    } catch {}
+    try {
+        const res = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+        if (!res.ok) return null;
+        const meta = await res.json();
+        if (meta && (meta.title || meta.image || meta.curator || meta.description || (Array.isArray(meta.tracks) && meta.tracks.length))) {
+            try { sessionStorage.setItem(cacheKey, JSON.stringify(meta)); } catch {}
+        }
+        return meta;
+    } catch {
+        return null;
+    }
+}
+
+function setSermonAutoFillStatus(text, isError = false) {
+    const el = document.getElementById('sermon-autofill-status');
+    if (!el) return;
+    if (!text) {
+        el.classList.add('hidden');
+        el.textContent = '';
         return;
     }
-    const btn = document.getElementById('sermon-playlist-autofill-btn');
+    el.textContent = text;
+    el.className = `text-[11px] font-semibold ${isError ? 'text-amber-600' : 'text-accord-blue'}`;
+    el.classList.remove('hidden');
+}
+
+function applySermonMetadataToForm(meta) {
+    if (!meta) return false;
+    let filledAny = false;
+    const titleEl = document.getElementById('sermon-item-title');
+    const imageEl = document.getElementById('sermon-item-image');
+    const curatorEl = document.getElementById('sermon-item-curator');
+    const descEl = document.getElementById('sermon-item-description');
+    const tracksEl = document.getElementById('sermon-item-tracks');
+
+    if (meta.title && titleEl && (!titleEl.value.trim() || titleEl.dataset.autoFilled === 'true')) {
+        titleEl.value = meta.title;
+        titleEl.dataset.autoFilled = 'true';
+        filledAny = true;
+    }
+    if (meta.image && imageEl && (!imageEl.value.trim() || imageEl.dataset.autoFilled === 'true')) {
+        imageEl.value = meta.image;
+        imageEl.dataset.autoFilled = 'true';
+        updateSermonCoverPreview(meta.image);
+        filledAny = true;
+    }
+    const curatorVal = meta.curator || meta.artist || '';
+    if (curatorVal && curatorEl && (!curatorEl.value.trim() || curatorEl.dataset.autoFilled === 'true')) {
+        curatorEl.value = curatorVal;
+        curatorEl.dataset.autoFilled = 'true';
+        filledAny = true;
+    }
+    if (meta.description && descEl && (!descEl.value.trim() || descEl.dataset.autoFilled === 'true')) {
+        descEl.value = meta.description;
+        descEl.dataset.autoFilled = 'true';
+        filledAny = true;
+    }
+    if (Array.isArray(meta.tracks) && meta.tracks.length > 0 && tracksEl && (!tracksEl.value.trim() || tracksEl.dataset.autoFilled === 'true')) {
+        tracksEl.value = meta.tracks
+            .map(t => t.artist ? `${t.title} - ${t.artist}` : t.title)
+            .join('\n');
+        tracksEl.dataset.autoFilled = 'true';
+        filledAny = true;
+    }
+    return filledAny;
+}
+
+function scheduleSermonAutoFill(rawUrl, immediate = false) {
+    clearTimeout(_sermonAutoFillTimer);
+    const delay = immediate ? 80 : 450;
+    _sermonAutoFillTimer = setTimeout(async () => {
+        const candidate = String(
+            rawUrl ||
+            document.getElementById('sermon-spotify-link')?.value ||
+            document.getElementById('sermon-apple-link')?.value ||
+            document.getElementById('sermon-audiomack-link')?.value ||
+            document.getElementById('sermon-item-link')?.value ||
+            ''
+        ).trim();
+        if (!candidate || !/^https?:\/\//i.test(candidate)) return;
+        if (candidate === _lastSermonAutoFilledUrl) return;
+        _lastSermonAutoFilledUrl = candidate;
+
+        setSermonAutoFillStatus('Fetching cover art, title & details from link...');
+        const meta = await fetchSermonLinkMetadata(candidate);
+        if (meta && applySermonMetadataToForm(meta)) {
+            setSermonAutoFillStatus('Details auto-filled from link!');
+        } else if (meta && (meta.title || meta.image)) {
+            setSermonAutoFillStatus('Link checked.');
+        } else {
+            setSermonAutoFillStatus('Could not auto-fetch from this link — you can enter details manually.', true);
+        }
+    }, delay);
+}
+
+async function autoFillSermonMetadata(explicitUrl = '') {
+    const type = document.getElementById('sermon-item-type')?.value || 'playlist';
+    const isPlaylist = type === 'playlist';
+    const rawUrl = String(
+        explicitUrl ||
+        (isPlaylist
+            ? (document.getElementById('sermon-apple-link')?.value ||
+               document.getElementById('sermon-spotify-link')?.value ||
+               document.getElementById('sermon-audiomack-link')?.value ||
+               '')
+            : (document.getElementById('sermon-item-link')?.value || ''))
+    ).trim();
+    if (!rawUrl) {
+        showToast('Paste a Spotify, Apple Podcasts, Audiomack, or YouTube link first.');
+        return;
+    }
+    const btn = document.getElementById(isPlaylist ? 'sermon-playlist-autofill-btn' : 'sermon-spotlight-autofill-btn');
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Fetching...';
     }
+    setSermonAutoFillStatus('Fetching cover art, title & details from link...');
     try {
-        const res = await fetch(`/api/music-metadata?url=${encodeURIComponent(rawUrl)}`);
-        const meta = await res.json();
-        if (meta.title) document.getElementById('sermon-item-title').value = meta.title;
-        if (meta.image && !document.getElementById('sermon-item-image').value) {
-            document.getElementById('sermon-item-image').value = meta.image;
-            updateSermonCoverPreview(meta.image);
+        const meta = await fetchSermonLinkMetadata(rawUrl);
+        _lastSermonAutoFilledUrl = rawUrl;
+        if (meta && applySermonMetadataToForm(meta)) {
+            setSermonAutoFillStatus('Details auto-filled from link!');
+            showToast('Details auto-filled from link!');
+        } else {
+            setSermonAutoFillStatus('Could not auto-fetch from link. Please enter details manually.', true);
+            showToast('Could not auto-fill from link. Please enter details manually.');
         }
-        if (meta.curator && !document.getElementById('sermon-item-curator').value) {
-            document.getElementById('sermon-item-curator').value = meta.curator;
-        }
-        if (meta.description && !document.getElementById('sermon-item-description').value) {
-            document.getElementById('sermon-item-description').value = meta.description;
-        }
-        if (Array.isArray(meta.tracks) && meta.tracks.length > 0) {
-            document.getElementById('sermon-item-tracks').value = meta.tracks
-                .map(t => t.artist ? `${t.title} - ${t.artist}` : t.title)
-                .join('\n');
-        }
-        showToast('Details auto-filled from link!');
     } catch {
+        setSermonAutoFillStatus('Could not auto-fill from link. Please enter details manually.', true);
         showToast('Could not auto-fill from link. Please enter details manually.');
     } finally {
         if (btn) {
@@ -413,6 +602,12 @@ async function autoFillSermonMetadata() {
 function openSermonItemModal(mode = 'add', id = null, defaultType = 'playlist') {
     const form = document.getElementById('sermon-item-form');
     form.reset();
+    _lastSermonAutoFilledUrl = '';
+    setSermonAutoFillStatus('');
+    ['sermon-item-title', 'sermon-item-image', 'sermon-item-curator', 'sermon-item-description', 'sermon-item-tracks'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (el) delete el.dataset.autoFilled;
+    });
     document.getElementById('edit-sermon-id').value = '';
     document.getElementById('sermon-item-image').value = '';
     document.getElementById('spotlight-sermons-container').innerHTML = '';
@@ -441,10 +636,15 @@ function openSermonItemModal(mode = 'add', id = null, defaultType = 'playlist') 
             document.getElementById('sermon-item-visible').checked = item.hidden !== true;
 
             if (defaultType === 'playlist') {
-                const links = item.links || {};
-                document.getElementById('sermon-spotify-link').value = links.spotify || '';
-                document.getElementById('sermon-apple-link').value = links.apple || '';
-                document.getElementById('sermon-audiomack-link').value = links.audiomack || '';
+                const links = item.links && typeof item.links === 'object' ? item.links : {};
+                const legacyLink = String(item.link || '').trim();
+                const legacyLower = legacyLink.toLowerCase();
+                document.getElementById('sermon-spotify-link').value =
+                    links.spotify || item.spotifyLink || (legacyLower.includes('spotify.com') ? legacyLink : '');
+                document.getElementById('sermon-apple-link').value =
+                    links.apple || item.appleMusicLink || ((legacyLower.includes('music.apple.com') || legacyLower.includes('podcasts.apple.com')) ? legacyLink : '');
+                document.getElementById('sermon-audiomack-link').value =
+                    links.audiomack || item.audiomackLink || (legacyLower.includes('audiomack.com') ? legacyLink : '');
                 if (Array.isArray(item.tracks)) {
                     document.getElementById('sermon-item-tracks').value = item.tracks
                         .map(t => t.artist ? `${t.title} - ${t.artist}` : t.title)
@@ -479,30 +679,18 @@ async function handleSaveSermonItem(e) {
     const existingId = document.getElementById('edit-sermon-id').value;
     const id = existingId || 'serm-' + Date.now();
     const type = document.getElementById('sermon-item-type').value;
-    const title = document.getElementById('sermon-item-title').value.trim();
+    let title = document.getElementById('sermon-item-title').value.trim();
     const genre = document.getElementById('sermon-item-genre').value.trim();
-    const curator = document.getElementById('sermon-item-curator').value.trim();
-    const image = document.getElementById('sermon-item-image').value.trim();
+    let curator = document.getElementById('sermon-item-curator').value.trim();
+    let image = document.getElementById('sermon-item-image').value.trim();
     const link = document.getElementById('sermon-item-link').value.trim();
-    const description = document.getElementById('sermon-item-description').value.trim();
+    let description = document.getElementById('sermon-item-description').value.trim();
     const featured = document.getElementById('sermon-item-featured').checked;
     const visible = document.getElementById('sermon-item-visible').checked;
-
-    if (!image) {
-        showToast('Please upload a cover image first.');
-        return;
-    }
 
     const spotify = document.getElementById('sermon-spotify-link')?.value.trim() || '';
     const apple = document.getElementById('sermon-apple-link')?.value.trim() || '';
     const audiomack = document.getElementById('sermon-audiomack-link')?.value.trim() || '';
-
-    const tracks = type === 'playlist'
-        ? document.getElementById('sermon-item-tracks').value.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
-            const idx = line.indexOf(' - ');
-            return idx !== -1 ? { title: line.slice(0, idx).trim(), artist: line.slice(idx + 3).trim() } : { title: line, artist: '' };
-        })
-        : [];
 
     const songs = [];
     if (type !== 'playlist') {
@@ -512,6 +700,53 @@ async function handleSaveSermonItem(e) {
             if (sTitle || sLink) songs.push({ title: sTitle || title, link: sLink || '' });
         });
     }
+
+    if (!image) {
+        const candidateLinks = type === 'playlist'
+            ? [spotify, apple, audiomack, link].filter(Boolean)
+            : [link, ...songs.map(s => s.link)].filter(Boolean);
+        if (candidateLinks.length > 0) {
+            const submitBtn = e.target?.querySelector('button[type="submit"]');
+            const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Pulling cover...';
+            }
+            try {
+                for (const candidate of candidateLinks) {
+                    const meta = await fetchSermonLinkMetadata(candidate);
+                    if (meta) {
+                        if (!image && meta.image) image = meta.image;
+                        if (!title && meta.title) title = meta.title;
+                        if (!curator && (meta.curator || meta.artist)) curator = meta.curator || meta.artist;
+                        if (!description && meta.description) description = meta.description;
+                        if (image) break;
+                    }
+                }
+                if (image) {
+                    document.getElementById('sermon-item-image').value = image;
+                    updateSermonCoverPreview(image);
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            }
+        }
+    }
+
+    if (!image) {
+        showToast('Please upload a cover image or paste a streaming link with cover art.');
+        return;
+    }
+
+    const tracks = type === 'playlist'
+        ? document.getElementById('sermon-item-tracks').value.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+            const idx = line.indexOf(' - ');
+            return idx !== -1 ? { title: line.slice(0, idx).trim(), artist: line.slice(idx + 3).trim() } : { title: line, artist: '' };
+        })
+        : [];
 
     const record = {
         id,
@@ -551,6 +786,8 @@ async function toggleSermonItemFeatured(id, kind) {
     if (!item) return;
     item.featured = item.featured === false;
     await persistSermonsConfig();
+    const offLabel = kind === 'playlist' ? 'All Sermon Playlists Only' : 'Blog Only';
+    showToast(`${item.title} is now ${item.featured ? 'Featured on Sermons Hub' : offLabel}.`);
 }
 
 async function toggleSermonItemVisibility(id, kind) {
@@ -559,6 +796,7 @@ async function toggleSermonItemVisibility(id, kind) {
     if (!item) return;
     item.hidden = !item.hidden;
     await persistSermonsConfig();
+    showToast(`"${item.title}" is now ${item.hidden ? 'hidden from public pages' : 'visible to the public'}.`);
 }
 
 async function deleteSermonItem(id, kind) {
@@ -570,6 +808,7 @@ async function deleteSermonItem(id, kind) {
 }
 
 function openSermonSpotlightModal(mode = 'add', id = null) {
+    _lastSermonSpotUrl = '';
     document.getElementById('edit-sermon-spotlight-id').value = '';
     document.getElementById('sermon-spot-link').value = '';
     document.getElementById('sermon-spot-title').value = '';
@@ -600,6 +839,26 @@ function closeSermonSpotlightModal() {
     modal.classList.remove('flex');
 }
 
+let _sermonSpotAutoFillTimer = null;
+let _lastSermonSpotUrl = '';
+
+function scheduleSermonSpotlightAutoFill(rawUrl, immediate = false) {
+    clearTimeout(_sermonSpotAutoFillTimer);
+    const delay = immediate ? 80 : 450;
+    _sermonSpotAutoFillTimer = setTimeout(async () => {
+        const url = String(rawUrl || document.getElementById('sermon-spot-link')?.value || '').trim();
+        if (!url || !/^https?:\/\//i.test(url) || url === _lastSermonSpotUrl) return;
+        _lastSermonSpotUrl = url;
+        const meta = await fetchSermonLinkMetadata(url);
+        if (!meta) return;
+        const titleEl = document.getElementById('sermon-spot-title');
+        const artistEl = document.getElementById('sermon-spot-artist');
+        if (meta.title && titleEl && !titleEl.value.trim()) titleEl.value = meta.title;
+        const preacher = meta.curator || meta.artist || '';
+        if (preacher && artistEl && !artistEl.value.trim()) artistEl.value = preacher;
+    }, delay);
+}
+
 async function autoFillSingleSermonSpotlight() {
     const url = document.getElementById('sermon-spot-link')?.value.trim();
     if (!url) {
@@ -609,13 +868,17 @@ async function autoFillSingleSermonSpotlight() {
     const btn = document.getElementById('sermon-spot-autofill-btn');
     if (btn) { btn.disabled = true; btn.textContent = '...'; }
     try {
-        const res = await fetch(`/api/music-metadata?url=${encodeURIComponent(url)}`);
-        const meta = await res.json();
-        if (meta.title) document.getElementById('sermon-spot-title').value = meta.title;
-        if (meta.curator && !document.getElementById('sermon-spot-artist').value) {
-            document.getElementById('sermon-spot-artist').value = meta.curator;
+        const meta = await fetchSermonLinkMetadata(url);
+        if (meta) {
+            if (meta.title) document.getElementById('sermon-spot-title').value = meta.title;
+            const preacher = meta.curator || meta.artist || '';
+            if (preacher && !document.getElementById('sermon-spot-artist').value) {
+                document.getElementById('sermon-spot-artist').value = preacher;
+            }
+            showToast('Sermon info auto-filled!');
+        } else {
+            showToast('Could not auto-fill from link.');
         }
-        showToast('Sermon info auto-filled!');
     } catch {
         showToast('Could not auto-fill from link.');
     } finally {

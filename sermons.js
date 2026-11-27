@@ -161,17 +161,23 @@ async function fetchPinnedProfileSermonPlaylists(existingPlaylists = []) {
                 ? `@${String(profile.handle).replace(/^@/, '')}`
                 : displayName;
 
+            const avatarUrl = String(profile.avatar_url || '').trim();
+            const bioText = String(profile.bio || '').trim();
+
             derived.push({
                 id: `profile_sermon_${profile.id}`,
                 title: `${displayName} — Sermons`,
                 genre: 'Creator & Ministry Sermons',
                 curator: handleLabel,
-                image: String(profile.avatar_url || '').trim() || DEFAULT_SERMON_COVER_IMAGE,
-                description: String(profile.bio || '').trim() || `Pinned sermon stream from ${displayName}.`,
+                image: avatarUrl || DEFAULT_SERMON_COVER_IMAGE,
+                description: bioText || `Pinned sermon stream from ${displayName}.`,
                 link: url,
                 featured: false,
                 hidden: false,
-                sourceProfileId: profile.id
+                sourceProfileId: profile.id,
+                hasDefaultCover: !avatarUrl,
+                hasDefaultTitle: true,
+                hasDefaultDesc: !bioText
             });
         });
 

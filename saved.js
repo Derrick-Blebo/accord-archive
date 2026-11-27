@@ -37,13 +37,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadSavedData() {
-    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes, musicConfigRes, playlistBookmarksRes] = await Promise.all([
+    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes, musicConfigRes, sermonsConfigRes, playlistBookmarksRes] = await Promise.all([
         supabaseClient.from('books').select('*').is('deleted_at', null).eq('is_visible', true),
         supabaseClient.from('testimonies').select('*').eq('is_approved', true),
         supabaseClient.from('user_bookmarks').select('book_title').eq('user_id', currentUser.id),
         supabaseClient.from('user_testimony_bookmarks').select('testimony_id').eq('user_id', currentUser.id),
         supabaseClient.from('user_purchases').select('book_id').eq('user_id', currentUser.id),
         supabaseClient.from('books').select('description').eq('title', '__ACCORD_MUSIC_CONFIG__').maybeSingle(),
+        supabaseClient.from('books').select('description').eq('title', '__ACCORD_SERMONS_CONFIG__').maybeSingle(),
         supabaseClient.from('user_playlist_bookmarks').select('playlist_id').eq('user_id', currentUser.id)
     ]);
 
@@ -55,13 +56,25 @@ async function loadSavedData() {
     savedTestimonyIds = testimonyBookmarksRes.data ? testimonyBookmarksRes.data.map(t => Number(t.testimony_id)) : [];
     purchasedBookIds = purchasesRes.data ? purchasesRes.data.map(p => Number(p.book_id)) : [];
 
-    allPlaylists = [];
-    try {
-        if (musicConfigRes.data?.description) {
-            const parsed = JSON.parse(musicConfigRes.data.description);
-            allPlaylists = Array.isArray(parsed?.playlists) ? parsed.playlists : [];
-        }
-    } catch {}
+    const musicPlaylists = (() => {
+        try {
+            if (musicConfigRes.data?.description) {
+                const parsed = JSON.parse(musicConfigRes.data.description);
+                return Array.isArray(parsed?.playlists) ? parsed.playlists.map(p => ({ ...p, _hubPage: 'playlists.html' })) : [];
+            }
+        } catch {}
+        return [];
+    })();
+    const sermonPlaylists = (() => {
+        try {
+            if (sermonsConfigRes.data?.description) {
+                const parsed = JSON.parse(sermonsConfigRes.data.description);
+                return Array.isArray(parsed?.playlists) ? parsed.playlists.map(p => ({ ...p, _hubPage: 'sermons.html' })) : [];
+            }
+        } catch {}
+        return [];
+    })();
+    allPlaylists = [...musicPlaylists, ...sermonPlaylists];
 
     let localPlaylistIds = [];
     try {
@@ -250,7 +263,8 @@ function renderSavedPages() {
         const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
         matchedPlaylists.forEach(pl => {
             const safeId = escapeHTML(pl.id).replace(/'/g, "\\'");
-            const plLink = pl.links?.spotify || pl.links?.apple || pl.links?.audiomack || pl.link || 'playlists.html';
+            const hubPage = pl._hubPage || 'playlists.html';
+            const plLink = pl.links?.spotify || pl.links?.apple || pl.links?.audiomack || pl.link || hubPage;
             const card = document.createElement('div');
             card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-4 shadow-sm hover:shadow-lg transition-all duration-300 flex gap-4 items-center";
             card.innerHTML = `
@@ -266,7 +280,7 @@ function renderSavedPages() {
                             <i class="fa-solid fa-play text-[9px]"></i>
                             <span>Listen</span>
                         </a>
-                        <a href="playlists.html" class="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-all">All Playlists</a>
+                        <a href="${hubPage}" class="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-all">${hubPage === 'sermons.html' ? 'All Sermons' : 'All Playlists'}</a>
                         <button type="button" onclick="removePlaylistBookmark('${safeId}')" class="ml-auto text-red-500 hover:text-red-600 p-1.5" title="Remove Saved Playlist">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
