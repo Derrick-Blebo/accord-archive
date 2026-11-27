@@ -156,14 +156,14 @@
                     .maybeSingle();
                 if (data?.description) {
                     const parsed = JSON.parse(data.description);
-                    approvedArtistes = (Array.isArray(parsed.artistes) ? parsed.artistes : []).filter(a => a.approved !== false);
+                    approvedArtistes = (Array.isArray(parsed.artistes) ? parsed.artistes : []).filter(a => a.approved !== false && !a.hidden);
                 }
             } catch {}
 
             if (approvedArtistes.length === 0) {
                 try {
                     const localSaved = JSON.parse(localStorage.getItem('accord_music_config') || '{}');
-                    approvedArtistes = (Array.isArray(localSaved.artistes) ? localSaved.artistes : []).filter(a => a.approved !== false);
+                    approvedArtistes = (Array.isArray(localSaved.artistes) ? localSaved.artistes : []).filter(a => a.approved !== false && !a.hidden);
                 } catch {}
             }
             renderBlogArticles();

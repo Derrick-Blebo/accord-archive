@@ -249,6 +249,14 @@
                         <textarea id="item-description" rows="4" placeholder="Write the artiste spotlight story or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
                     </div>
 
+                    <label class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                        <div>
+                            <p class="text-xs font-bold text-accord-slate">Visible on Public Pages</p>
+                            <p class="text-[11px] text-accord-muted">Uncheck to temporarily hide this entry without deleting it.</p>
+                        </div>
+                        <input type="checkbox" id="item-visible" checked class="w-4 h-4 accent-emerald-600 rounded">
+                    </label>
+
                     <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
                         <button type="button" onclick="closeMusicModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
                         <button type="submit" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all">
@@ -281,6 +289,13 @@
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Link *</label>
                         <input type="url" id="song-spotlight-link" required placeholder="https://open.spotify.com/track/... or Apple Music / YouTube" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                     </div>
+                    <label class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                        <div>
+                            <p class="text-xs font-bold text-accord-slate">Visible on Public Pages</p>
+                            <p class="text-[11px] text-accord-muted">Uncheck to temporarily hide this song without deleting it.</p>
+                        </div>
+                        <input type="checkbox" id="song-spotlight-visible" checked class="w-4 h-4 accent-emerald-600 rounded">
+                    </label>
                     <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
                         <button type="button" onclick="closeSongSpotlightModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
                         <button type="submit" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all">
@@ -339,6 +354,14 @@
                             <input type="date" id="poll-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                         </div>
                     </div>
+
+                    <label class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
+                        <div>
+                            <p class="text-xs font-bold text-accord-slate">Visible on Public Pages</p>
+                            <p class="text-[11px] text-accord-muted">Uncheck to temporarily hide this poll without deleting it.</p>
+                        </div>
+                        <input type="checkbox" id="poll-visible" checked class="w-4 h-4 accent-emerald-600 rounded">
+                    </label>
 
                     <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
                         <button type="button" onclick="closePollModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
@@ -511,6 +534,7 @@
                                     <th class="py-4 px-6">Type</th>
                                     <th class="py-4 px-6">Genre</th>
                                     <th class="py-4 px-6 text-center">Featured</th>
+                                    <th class="py-4 px-6 text-center">Visibility</th>
                                     <th class="py-4 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -542,6 +566,7 @@
                                 <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
                                     <th class="py-4 px-6">Song Title</th>
                                     <th class="py-4 px-6">Song Link</th>
+                                    <th class="py-4 px-6 text-center">Visibility</th>
                                     <th class="py-4 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -608,6 +633,7 @@
                                     <th class="py-4 px-6">Poll Title & Nominees</th>
                                     <th class="py-4 px-6 text-center">Total Votes</th>
                                     <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-center">Visibility</th>
                                     <th class="py-4 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -662,6 +688,6 @@
     <script src="admin-core.js"></script>
 
     <!-- Script -->
-    <script src="music-admin.js?v=3"></script>
+    <script src="music-admin.js?v=4"></script>
 </body>
 </html>

@@ -37,7 +37,7 @@ async function fetchPollsData() {
         if (!error && data?.description) {
             const parsed = JSON.parse(data.description);
             if (Array.isArray(parsed?.polls)) {
-                allPolls = parsed.polls;
+                allPolls = parsed.polls.filter(p => !p.hidden);
                 localStorage.setItem('accord_music_config', JSON.stringify(parsed));
                 return;
             }
@@ -51,7 +51,7 @@ async function fetchPollsData() {
         try {
             const parsed = JSON.parse(localSaved);
             if (Array.isArray(parsed?.polls)) {
-                allPolls = parsed.polls;
+                allPolls = parsed.polls.filter(p => !p.hidden);
                 return;
             }
         } catch (e) {}

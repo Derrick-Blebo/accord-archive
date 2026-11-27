@@ -193,7 +193,7 @@ function renderSpotlights() {
     if (!grid) return;
 
     grid.innerHTML = '';
-    const featuredArtistes = musicData.artistes.filter(a => a.approved !== false && a.featured !== false);
+    const featuredArtistes = musicData.artistes.filter(a => a.approved !== false && a.featured !== false && !a.hidden);
 
     if (featuredArtistes.length === 0) {
         grid.innerHTML = `<p class="text-xs text-accord-muted">No featured artiste spotlights currently available. <a href="artist-blog.html" class="text-accord-blue font-bold hover:underline">View all artiste articles</a>.</p>`;
@@ -230,7 +230,7 @@ function renderSongSpotlights() {
     if (!grid) return;
 
     grid.innerHTML = '';
-    const songs = musicData.songSpotlights || [];
+    const songs = (musicData.songSpotlights || []).filter(s => !s.hidden);
     if (songs.length === 0) {
         grid.innerHTML = `<p class="text-xs text-accord-muted col-span-full">No featured songs in Song Spotlight yet.</p>`;
         return;
@@ -441,12 +441,13 @@ function renderPlaylists() {
     if (!grid) return;
 
     grid.innerHTML = '';
-    if (musicData.playlists.length === 0) {
+    const visiblePlaylists = (musicData.playlists || []).filter(p => !p.hidden);
+    if (visiblePlaylists.length === 0) {
         grid.innerHTML = `<p class="text-xs text-accord-muted col-span-full">No curated playlists currently available.</p>`;
         return;
     }
 
-    musicData.playlists.forEach(pl => {
+    visiblePlaylists.forEach(pl => {
         const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
         const coverSrc = pl.image || fallbackImg;
         const subtitle = pl.curator || pl.genre || 'SoundSpace PR';
@@ -518,7 +519,7 @@ function normalizeNominee(nominee) {
 function findMatchingArtistPage(nomineeName, explicitArtistLink) {
     if (explicitArtistLink) return explicitArtistLink;
     const lower = String(nomineeName || '').toLowerCase();
-    const matched = musicData.artistes.find(a => a.approved !== false && a.title && lower.includes(a.title.toLowerCase()));
+    const matched = musicData.artistes.find(a => a.approved !== false && !a.hidden && a.title && lower.includes(a.title.toLowerCase()));
     return matched ? `artist.html?id=${encodeURIComponent(matched.id)}` : '';
 }
 
@@ -552,7 +553,7 @@ function renderPollResults() {
     if (!grid) return;
 
     grid.innerHTML = '';
-    const pollsWithNominees = (musicData.polls || []).filter(p => (p.nominees || []).length > 0 && p.status !== 'nominating');
+    const pollsWithNominees = (musicData.polls || []).filter(p => !p.hidden && (p.nominees || []).length > 0 && p.status !== 'nominating');
 
     if (pollsWithNominees.length === 0) {
         grid.innerHTML = `<p class="text-xs text-accord-muted col-span-full">Poll results will appear here once voting begins.</p>`;
@@ -601,12 +602,13 @@ function renderPolls() {
     if (!container) return;
 
     container.innerHTML = '';
-    if (musicData.polls.length === 0) {
+    const visiblePolls = (musicData.polls || []).filter(p => !p.hidden);
+    if (visiblePolls.length === 0) {
         container.innerHTML = `<p class="text-xs text-accord-muted col-span-full">No active award polls right now.</p>`;
         return;
     }
 
-    musicData.polls.forEach(poll => {
+    visiblePolls.forEach(poll => {
         const isOpen = poll.status === 'open';
         const isNominating = poll.status === 'nominating';
         const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
@@ -741,7 +743,7 @@ function openNominationModal(preselectedPollId = '') {
     document.getElementById('nomination-form').reset();
 
     if (select) {
-        const upcomingPolls = musicData.polls.filter(p => p.status === 'nominating' || p.status === 'open');
+        const upcomingPolls = musicData.polls.filter(p => !p.hidden && (p.status === 'nominating' || p.status === 'open'));
         select.innerHTML = upcomingPolls.map(p => `<option value="${escapeHTML(p.id)}">${escapeHTML(p.title)}</option>`).join('')
             + `<option value="__new__">+ Suggest a New Category</option>`;
         if (preselectedPollId && upcomingPolls.some(p => p.id === preselectedPollId)) {

@@ -132,7 +132,7 @@ window.onload = async function () {
 
     const config = await fetchMusicConfig();
     const artistes = Array.isArray(config?.artistes) ? config.artistes : [];
-    const artist = artistes.find(a => a.id === artistId && a.approved !== false);
+    const artist = artistes.find(a => a.id === artistId && a.approved !== false && !a.hidden);
 
     if (loadingEl) loadingEl.classList.add('hidden');
 

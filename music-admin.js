@@ -273,7 +273,7 @@ function updateStats() {
     document.getElementById('stat-playlists').innerText = musicConfig.playlists.length;
     const songEl = document.getElementById('stat-song-spotlights');
     if (songEl) songEl.innerText = musicConfig.songSpotlights.length;
-    document.getElementById('stat-polls').innerText = musicConfig.polls.filter(p => p.status === 'open').length;
+    document.getElementById('stat-polls').innerText = musicConfig.polls.filter(p => p.status === 'open' && !p.hidden).length;
 
     const pendingSpotlights = musicConfig.spotlightSubmissions.filter(s => s.status === 'pending').length;
     const pendingNoms = musicConfig.pollNominations.filter(n => n.status === 'pending').length;
@@ -295,7 +295,7 @@ function renderMusicTable() {
 
     tbody.innerHTML = '';
     if (allItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No spotlights or playlists in this view yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-accord-muted">No spotlights or playlists in this view yet.</td></tr>`;
         return;
     }
 
@@ -303,8 +303,9 @@ function renderMusicTable() {
         const safeId = item.id;
         const isSpotlight = item.entryType === 'spotlight';
         const isFeatured = item.featured !== false;
+        const isHidden = Boolean(item.hidden);
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.className = `hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer ${isHidden ? 'opacity-65 bg-slate-50/40' : ''}`;
         tr.onclick = () => openMusicModal('edit', safeId);
         tr.innerHTML = `
             <td class="py-4 px-6">
@@ -314,7 +315,7 @@ function renderMusicTable() {
                         : `<div class="w-9 h-9 ${isSpotlight ? 'rounded-full' : 'rounded-xl'} bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-xs shrink-0"><i class="fa-solid ${isSpotlight ? 'fa-microphone' : 'fa-list-music'}"></i></div>`
                     }
                     <div>
-                        <p class="font-bold text-accord-slate">${escapeHTML(item.title)}</p>
+                        <p class="font-bold text-accord-slate">${escapeHTML(item.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</p>
                         <p class="text-[11px] text-accord-muted truncate max-w-xs">${escapeHTML(item.article || item.description || '')}</p>
                     </div>
                 </div>
@@ -327,6 +328,11 @@ function renderMusicTable() {
                         <i class="fa-solid fa-star mr-1"></i>${isFeatured ? 'Featured' : 'Blog Only'}
                     </button>
                 ` : '<span class="text-[11px] text-slate-400">—</span>'}
+            </td>
+            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
+                <button type="button" onclick="toggleMusicItemVisibility('${safeId}', '${item.entryType}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isHidden ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}" title="${isHidden ? 'Show on public pages' : 'Hide from public pages'}">
+                    <i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${isHidden ? 'Hidden' : 'Visible'}
+                </button>
             </td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
                 <button type="button" onclick="openMusicModal('edit', '${safeId}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit Entry">
@@ -347,18 +353,24 @@ function renderSongSpotlightsTable() {
 
     tbody.innerHTML = '';
     if (musicConfig.songSpotlights.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-accord-muted">No song spotlights added yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-accord-muted">No song spotlights added yet.</td></tr>`;
         return;
     }
 
     musicConfig.songSpotlights.forEach(song => {
+        const isHidden = Boolean(song.hidden);
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.className = `hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer ${isHidden ? 'opacity-65 bg-slate-50/40' : ''}`;
         tr.onclick = () => openSongSpotlightModal('edit', song.id);
         tr.innerHTML = `
-            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(song.title)}</td>
+            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(song.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</td>
             <td class="py-4 px-6 text-accord-blue truncate max-w-md" onclick="event.stopPropagation()">
                 <a href="${escapeHTML(song.link)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHTML(song.link)}</a>
+            </td>
+            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
+                <button type="button" onclick="toggleSongSpotlightVisibility('${song.id}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isHidden ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}" title="${isHidden ? 'Show on Music Hub' : 'Hide from Music Hub'}">
+                    <i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${isHidden ? 'Hidden' : 'Visible'}
+                </button>
             </td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
                 <button type="button" onclick="openSongSpotlightModal('edit', '${song.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit">
@@ -438,7 +450,7 @@ function renderPollsTable() {
 
     tbody.innerHTML = '';
     if (musicConfig.polls.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="py-10 text-center text-accord-muted">No award voting polls created yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No award voting polls created yet.</td></tr>`;
         return;
     }
 
@@ -446,6 +458,7 @@ function renderPollsTable() {
         const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
         const isOpen = poll.status === 'open';
         const isNominating = poll.status === 'nominating';
+        const isHidden = Boolean(poll.hidden);
         const safeId = poll.id;
 
         const statusBadge = isOpen
@@ -457,17 +470,22 @@ function renderPollsTable() {
         const nomineeNames = (poll.nominees || []).map(getNomineeLabel).filter(Boolean);
 
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.className = `hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer ${isHidden ? 'opacity-65 bg-slate-50/40' : ''}`;
         tr.onclick = () => openPollModal('edit', safeId);
         tr.innerHTML = `
             <td class="py-4 px-6">
                 <div>
-                    <p class="font-bold text-accord-slate">${escapeHTML(poll.title)}</p>
+                    <p class="font-bold text-accord-slate">${escapeHTML(poll.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</p>
                     <p class="text-[11px] text-accord-muted">Nominees: ${escapeHTML(nomineeNames.join(', ') || 'None yet (awaiting nominations)')}</p>
                 </div>
             </td>
             <td class="py-4 px-6 text-center font-bold text-accord-slate">${totalVotes}</td>
             <td class="py-4 px-6 text-center">${statusBadge}</td>
+            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
+                <button type="button" onclick="togglePollVisibility('${safeId}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isHidden ? 'bg-slate-200 text-slate-600 hover:bg-slate-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}" title="${isHidden ? 'Show poll on public pages' : 'Hide poll from public pages'}">
+                    <i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'} mr-1"></i>${isHidden ? 'Hidden' : 'Visible'}
+                </button>
+            </td>
             <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
                 <button type="button" onclick="openPollModal('edit', '${safeId}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit Poll">
                     <i class="fa-solid fa-pen text-xs"></i>
@@ -751,6 +769,7 @@ function openMusicModal(mode = 'add', id = null) {
             document.getElementById('item-link').value = item.link || '';
             document.getElementById('item-description').value = item.article || item.description || '';
             document.getElementById('item-featured').checked = item.featured !== false;
+            document.getElementById('item-visible').checked = item.hidden !== true;
 
             if (isSpotlight) {
                 const songs = Array.isArray(item.songs) ? item.songs : [];
@@ -768,6 +787,7 @@ function openMusicModal(mode = 'add', id = null) {
     } else {
         heading.innerText = 'Add Spotlight or Playlist';
         document.getElementById('item-featured').checked = true;
+        document.getElementById('item-visible').checked = true;
         addSpotlightSongRow();
     }
 
@@ -794,6 +814,7 @@ async function handleSaveMusicItem(e) {
     const link = document.getElementById('item-link').value.trim();
     const description = document.getElementById('item-description').value.trim();
     const featured = document.getElementById('item-featured').checked;
+    const isVisible = document.getElementById('item-visible')?.checked !== false;
 
     if (!image) {
         showToast('Please upload a cover art photo first.');
@@ -826,6 +847,7 @@ async function handleSaveMusicItem(e) {
         songs,
         approved: true,
         featured: type === 'spotlight' ? featured : true,
+        hidden: !isVisible,
         createdAt: new Date().toISOString()
     };
 
@@ -853,6 +875,15 @@ async function toggleSpotlightFeatured(id) {
     showToast(`${artist.title} is now ${artist.featured ? 'Featured on Music Hub' : 'Blog Only'}.`);
 }
 
+async function toggleMusicItemVisibility(id, entryType) {
+    const list = entryType === 'playlist' ? musicConfig.playlists : musicConfig.artistes;
+    const item = list.find(x => x.id === id);
+    if (!item) return;
+    item.hidden = !Boolean(item.hidden);
+    await persistMusicConfig();
+    showToast(`"${item.title}" is now ${item.hidden ? 'hidden from public pages' : 'visible to the public'}.`);
+}
+
 // ==========================================
 // SONG SPOTLIGHT HANDLERS
 // ==========================================
@@ -870,9 +901,11 @@ function openSongSpotlightModal(mode = 'add', id = null) {
             document.getElementById('edit-song-spotlight-id').value = song.id;
             document.getElementById('song-spotlight-title').value = song.title || '';
             document.getElementById('song-spotlight-link').value = song.link || '';
+            document.getElementById('song-spotlight-visible').checked = song.hidden !== true;
         }
     } else {
         heading.innerText = 'Add Song Spotlight';
+        document.getElementById('song-spotlight-visible').checked = true;
     }
 
     modal.classList.remove('hidden');
@@ -890,13 +923,22 @@ async function handleSaveSongSpotlight(e) {
     const id = document.getElementById('edit-song-spotlight-id').value || 'song-' + Date.now();
     const title = document.getElementById('song-spotlight-title').value.trim();
     const link = document.getElementById('song-spotlight-link').value.trim();
+    const isVisible = document.getElementById('song-spotlight-visible')?.checked !== false;
 
     musicConfig.songSpotlights = musicConfig.songSpotlights.filter(s => s.id !== id);
-    musicConfig.songSpotlights.unshift({ id, title, link, createdAt: new Date().toISOString() });
+    musicConfig.songSpotlights.unshift({ id, title, link, hidden: !isVisible, createdAt: new Date().toISOString() });
 
     closeSongSpotlightModal();
     await persistMusicConfig();
     showToast('Song spotlight saved!');
+}
+
+async function toggleSongSpotlightVisibility(id) {
+    const song = musicConfig.songSpotlights.find(s => s.id === id);
+    if (!song) return;
+    song.hidden = !Boolean(song.hidden);
+    await persistMusicConfig();
+    showToast(`"${song.title}" is now ${song.hidden ? 'hidden from Music Hub' : 'visible on Music Hub'}.`);
 }
 
 function promptDeleteSongSpotlight(id) {
@@ -980,6 +1022,7 @@ function openPollModal(mode = 'add', id = null) {
             document.getElementById('poll-title').value = poll.title || '';
             document.getElementById('poll-status').value = poll.status || 'open';
             document.getElementById('poll-end-date').value = poll.endDate || '';
+            document.getElementById('poll-visible').checked = poll.hidden !== true;
             const nominees = Array.isArray(poll.nominees) ? poll.nominees : [];
             if (nominees.length > 0) {
                 nominees.forEach(n => {
@@ -995,6 +1038,7 @@ function openPollModal(mode = 'add', id = null) {
         }
     } else {
         heading.innerText = 'Create Award Voting Poll';
+        document.getElementById('poll-visible').checked = true;
         addPollNomineeRow();
         addPollNomineeRow();
     }
@@ -1016,6 +1060,7 @@ async function handleSavePoll(e) {
     const title = document.getElementById('poll-title').value.trim();
     const status = document.getElementById('poll-status').value;
     const endDate = document.getElementById('poll-end-date').value;
+    const isVisible = document.getElementById('poll-visible')?.checked !== false;
 
     const nominees = [];
     document.querySelectorAll('#poll-nominees-container .poll-nominee-row').forEach(row => {
@@ -1046,7 +1091,8 @@ async function handleSavePoll(e) {
         votes,
         voters: existingPoll?.voters || {},
         status,
-        endDate
+        endDate,
+        hidden: !isVisible
     };
 
     if (existingPoll) {
@@ -1110,6 +1156,14 @@ async function togglePollStatus(id) {
     poll.status = poll.status === 'open' ? 'closed' : 'open';
     await persistMusicConfig();
     showToast(`Poll "${poll.title}" status updated.`);
+}
+
+async function togglePollVisibility(id) {
+    const poll = musicConfig.polls.find(p => p.id === id);
+    if (!poll) return;
+    poll.hidden = !Boolean(poll.hidden);
+    await persistMusicConfig();
+    showToast(`Poll "${poll.title}" is now ${poll.hidden ? 'hidden from public pages' : 'visible to the public'}.`);
 }
 
 function promptDeleteMusicItem(id, type) {
