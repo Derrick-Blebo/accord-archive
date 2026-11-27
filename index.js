@@ -728,7 +728,7 @@ function renderBooks() {
 
     topBooks.forEach(book => gridTop.appendChild(buildBookCardElement(book)));
     renderMidGridBanner(filtered.length > splitIndex);
-    const adChunkSize = 6;
+    const adChunkSize = 8;
     bottomBooks.forEach((book, idx) => {
         gridBottom.appendChild(buildBookCardElement(book));
         if ((idx + 1) % adChunkSize === 0 && idx < bottomBooks.length - 1) {
