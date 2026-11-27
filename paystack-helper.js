@@ -42,6 +42,7 @@
         email,
         amount,
         currency,
+        channels,
         metadata = {},
         onVerified,
         onError,
@@ -63,7 +64,7 @@
         const resolvedCurrency = String(currency || cfg.currency || 'GHS').toUpperCase();
         const reference = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         try {
-            const handler = window.PaystackPop.setup({
+            const setupOptions = {
                 key: cfg.publicKey,
                 email: email || 'member@accordarchives.com',
                 amount: Math.max(100, Math.round(Number(amount || 0) * 100)),
@@ -92,7 +93,11 @@
                 onClose: function () {
                     if (typeof onCancel === 'function') onCancel();
                 }
-            });
+            };
+            if (Array.isArray(channels) && channels.length > 0) {
+                setupOptions.channels = channels;
+            }
+            const handler = window.PaystackPop.setup(setupOptions);
 
             handler.openIframe();
         } catch (err) {

@@ -9,6 +9,8 @@ let managedAuthorPages = [];
 let activeAuthorPageId = '';
 let authorBooks = [];
 let authorWithdrawals = [];
+let authorPayoutAccount = null;
+let usingLocalPayoutFallback = false;
 let salesStatsByBook = {};
 let availableBalance = 0;
 
@@ -568,6 +570,7 @@ async function loadAuthorDashboardData() {
     renderAuthorMetrics();
     renderAuthorBooksTable();
     renderAuthorWithdrawalsTable();
+    await loadAuthorPayoutAccount();
 }
 
 function renderAuthorMetrics() {
@@ -782,6 +785,18 @@ function openWithdrawModal() {
         amountInput.max = availableBalance.toFixed(2);
         amountInput.value = '';
     }
+    if (authorPayoutAccount) {
+        const methodEl = document.getElementById('withdraw-method');
+        const bankEl = document.getElementById('withdraw-bank-code');
+        const numEl = document.getElementById('withdraw-account-number');
+        const nameEl = document.getElementById('withdraw-account-name');
+        const notesEl = document.getElementById('withdraw-details');
+        if (methodEl && authorPayoutAccount.payout_method) methodEl.value = authorPayoutAccount.payout_method;
+        if (bankEl) bankEl.value = authorPayoutAccount.bank_code || '';
+        if (numEl) numEl.value = authorPayoutAccount.account_number || '';
+        if (nameEl) nameEl.value = authorPayoutAccount.account_name || '';
+        if (notesEl) notesEl.value = authorPayoutAccount.notes || '';
+    }
     const modal = document.getElementById('withdraw-modal');
     modal?.classList.remove('hidden');
     modal?.classList.add('flex');
@@ -861,8 +876,248 @@ async function handleWithdrawSubmit(e) {
     }
 
     closeWithdrawModal();
+    if (!authorPayoutAccount) {
+        await saveAuthorPayoutAccount({
+            payout_method: payoutMethod,
+            bank_code: bankCode,
+            account_number: accountNumber,
+            account_name: accountName,
+            notes: extraNotes
+        }, { silent: true });
+    }
     showToast('Withdrawal request submitted.');
     await loadAuthorDashboardData();
+}
+
+function getPayoutStorageKey(targetId) {
+    return targetId ? `accord_payout_account:${targetId}` : null;
+}
+
+function readLocalPayoutAccount(targetId) {
+    const key = getPayoutStorageKey(targetId);
+    if (!key) return null;
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeLocalPayoutAccount(targetId, data) {
+    const key = getPayoutStorageKey(targetId);
+    if (!key) return;
+    try {
+        if (data) localStorage.setItem(key, JSON.stringify(data));
+        else localStorage.removeItem(key);
+    } catch (_) {}
+}
+
+async function loadAuthorPayoutAccount() {
+    const ctx = getActiveAuthorContext();
+    const targetId = ctx.targetAuthorId;
+    if (!targetId) return;
+
+    usingLocalPayoutFallback = false;
+    const { data, error } = await supabaseClient
+        .from('author_payout_accounts')
+        .select('*')
+        .eq('author_id', targetId)
+        .maybeSingle();
+
+    if (error) {
+        usingLocalPayoutFallback = true;
+        authorPayoutAccount = readLocalPayoutAccount(targetId);
+    } else {
+        authorPayoutAccount = data || null;
+    }
+
+    // Fallback: if no saved payout account yet, infer from most recent withdrawal request if present
+    if (!authorPayoutAccount && authorWithdrawals.length > 0) {
+        const latest = authorWithdrawals.find(w => w.account_number && w.bank_code && w.account_name);
+        if (latest) {
+            authorPayoutAccount = {
+                author_id: targetId,
+                payout_method: latest.payout_method || 'Mobile Money (Paystack)',
+                bank_code: latest.bank_code,
+                account_number: latest.account_number,
+                account_name: latest.account_name,
+                notes: '',
+                inferred_from_withdrawal: true
+            };
+        }
+    }
+
+    renderAuthorPayoutAccount();
+}
+
+function renderAuthorPayoutAccount() {
+    const bodyEl = document.getElementById('author-payout-account-body');
+    const editBtn = document.getElementById('author-payout-edit-btn');
+    const editLabel = document.getElementById('author-payout-edit-label');
+    const removeBtn = document.getElementById('author-payout-remove-btn');
+    const ctx = getActiveAuthorContext();
+
+    if (editBtn) {
+        editBtn.disabled = !ctx.canWithdrawFunds;
+        editBtn.classList.toggle('opacity-50', !ctx.canWithdrawFunds);
+        editBtn.classList.toggle('cursor-not-allowed', !ctx.canWithdrawFunds);
+    }
+
+    if (!bodyEl) return;
+
+    if (!authorPayoutAccount) {
+        if (editLabel) editLabel.textContent = 'Add Payout Account';
+        removeBtn?.classList.add('hidden');
+        bodyEl.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p class="text-xs text-accord-muted">No payout account added yet for <strong>${escapeAuthorHtml(ctx.targetAuthorName)}</strong>. Add your Bank or Mobile Money account to receive payments.</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (editLabel) editLabel.textContent = 'Edit Account';
+    removeBtn?.classList.toggle('hidden', !ctx.canWithdrawFunds || Boolean(authorPayoutAccount.inferred_from_withdrawal));
+
+    bodyEl.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Payout Method</p>
+                <p class="font-bold text-accord-slate mt-0.5">${escapeAuthorHtml(authorPayoutAccount.payout_method || 'Paystack')}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Bank / MoMo Code</p>
+                <p class="font-bold text-accord-slate mt-0.5">${escapeAuthorHtml(authorPayoutAccount.bank_code || '-')}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Account / MoMo Number</p>
+                <p class="font-bold font-mono text-accord-slate mt-0.5">${escapeAuthorHtml(authorPayoutAccount.account_number || '-')}</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Account Holder Name</p>
+                <p class="font-bold text-accord-slate mt-0.5">${escapeAuthorHtml(authorPayoutAccount.account_name || '-')}</p>
+            </div>
+        </div>
+        ${authorPayoutAccount.notes ? `<p class="text-[11px] text-accord-muted mt-3 pt-2.5 border-t border-slate-200/80"><span class="font-semibold text-accord-slate">Notes:</span> ${escapeAuthorHtml(authorPayoutAccount.notes)}</p>` : ''}
+    `;
+}
+
+function openPayoutAccountModal() {
+    const ctx = getActiveAuthorContext();
+    if (!ctx.canWithdrawFunds) {
+        showToast('You do not have permission to manage payout accounts for this page.', true);
+        return;
+    }
+    const methodEl = document.getElementById('payout-acct-method');
+    const bankEl = document.getElementById('payout-acct-bank-code');
+    const numEl = document.getElementById('payout-acct-number');
+    const nameEl = document.getElementById('payout-acct-name');
+    const notesEl = document.getElementById('payout-acct-notes');
+
+    if (authorPayoutAccount) {
+        if (methodEl && authorPayoutAccount.payout_method) methodEl.value = authorPayoutAccount.payout_method;
+        if (bankEl) bankEl.value = authorPayoutAccount.bank_code || '';
+        if (numEl) numEl.value = authorPayoutAccount.account_number || '';
+        if (nameEl) nameEl.value = authorPayoutAccount.account_name || '';
+        if (notesEl) notesEl.value = authorPayoutAccount.notes || '';
+    } else {
+        if (methodEl) methodEl.value = 'Mobile Money (Paystack)';
+        if (bankEl) bankEl.value = '';
+        if (numEl) numEl.value = '';
+        if (nameEl) nameEl.value = ctx.targetAuthorName || '';
+        if (notesEl) notesEl.value = '';
+    }
+
+    const modal = document.getElementById('payout-account-modal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closePayoutAccountModal() {
+    const modal = document.getElementById('payout-account-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+}
+
+async function saveAuthorPayoutAccount(fields, { silent = false } = {}) {
+    const ctx = getActiveAuthorContext();
+    const targetId = ctx.targetAuthorId;
+    if (!targetId) return false;
+
+    const payload = {
+        author_id: targetId,
+        payout_method: fields.payout_method,
+        bank_code: fields.bank_code,
+        account_number: fields.account_number,
+        account_name: fields.account_name,
+        notes: fields.notes || null,
+        updated_by: authorUser?.id || null,
+        updated_at: new Date().toISOString()
+    };
+
+    if (usingLocalPayoutFallback) {
+        writeLocalPayoutAccount(targetId, payload);
+        authorPayoutAccount = payload;
+        renderAuthorPayoutAccount();
+        if (!silent) showToast('Payout account details saved.');
+        return true;
+    }
+
+    const { error } = await supabaseClient
+        .from('author_payout_accounts')
+        .upsert([payload], { onConflict: 'author_id' });
+
+    if (error) {
+        usingLocalPayoutFallback = true;
+        writeLocalPayoutAccount(targetId, payload);
+        authorPayoutAccount = payload;
+        renderAuthorPayoutAccount();
+        if (!silent) showToast('Payout account details saved.');
+        return true;
+    }
+
+    authorPayoutAccount = payload;
+    renderAuthorPayoutAccount();
+    if (!silent) showToast('Payout account details saved.');
+    return true;
+}
+
+async function handlePayoutAccountSubmit(e) {
+    e.preventDefault();
+    const payout_method = document.getElementById('payout-acct-method')?.value || 'Mobile Money (Paystack)';
+    const bank_code = document.getElementById('payout-acct-bank-code')?.value.trim() || '';
+    const account_number = document.getElementById('payout-acct-number')?.value.trim() || '';
+    const account_name = document.getElementById('payout-acct-name')?.value.trim() || '';
+    const notes = document.getElementById('payout-acct-notes')?.value.trim() || '';
+
+    if (!bank_code || !account_number || !account_name) {
+        showToast('Please enter bank/MoMo code, account number, and account holder name.', true);
+        return;
+    }
+
+    const btn = document.getElementById('payout-acct-submit-btn');
+    if (btn) btn.disabled = true;
+    const ok = await saveAuthorPayoutAccount({ payout_method, bank_code, account_number, account_name, notes });
+    if (btn) btn.disabled = false;
+    if (ok) closePayoutAccountModal();
+}
+
+async function removeAuthorPayoutAccount() {
+    const ctx = getActiveAuthorContext();
+    const targetId = ctx.targetAuthorId;
+    if (!targetId || !ctx.canWithdrawFunds) return;
+
+    if (!usingLocalPayoutFallback) {
+        await supabaseClient
+            .from('author_payout_accounts')
+            .delete()
+            .eq('author_id', targetId);
+    }
+    writeLocalPayoutAccount(targetId, null);
+    authorPayoutAccount = null;
+    renderAuthorPayoutAccount();
+    showToast('Payout account removed.');
 }
 
 function renderAuthorWithdrawalsTable() {

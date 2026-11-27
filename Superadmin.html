@@ -42,10 +42,10 @@
             }
         }
     </script>
-    <!-- Google Fonts Inter & Playfair Display -->
+    <!-- Google Fonts Inter & Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -58,7 +58,7 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .serif-heading { font-family: 'Playfair Display', serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
         .logo-rd-bar { position: relative; }
         .logo-rd-bar::after {
             content: '';
@@ -688,7 +688,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="superadmin-ad-type" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Ad Format *</label>
-                        <select id="superadmin-ad-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                        <select id="superadmin-ad-type" onchange="handleSuperadminAdTypeChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
                             <option value="banner">Banner Ad (Dynamic Site-Wide)</option>
                             <option value="post">Sponsored Post Card</option>
                             <option value="book">Promoted Book Card</option>
@@ -697,15 +697,14 @@
                     <div>
                         <label for="superadmin-ad-slot-position" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Placement Mode</label>
                         <select id="superadmin-ad-slot-position" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                            <option value="dynamic">Dynamic (Recommended — Auto-places across zones)</option>
-                            <option value="top">Top of Page Content</option>
+                            <option value="dynamic">Dynamic (Recommended — Auto-places across mid &amp; bottom)</option>
                             <option value="mid">Mid-Page (Between Sections / Grid)</option>
                             <option value="bottom">Bottom of Page (Above Footer)</option>
                         </select>
                     </div>
                 </div>
 
-                <div>
+                <div id="superadmin-ad-title-wrap">
                     <label for="superadmin-ad-title" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Ad Title / Headline *</label>
                     <input type="text" id="superadmin-ad-title" required maxlength="140" placeholder="e.g., Accord 2026 Digital Revival Conference" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
                 </div>

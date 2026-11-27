@@ -62,7 +62,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -74,7 +74,7 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .serif-heading { font-family: 'Playfair Display', serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
     </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
@@ -378,6 +378,33 @@
             </div>
         </div>
 
+        <!-- Payout Account Details Card (Shows which account is added to receive payments) -->
+        <section id="author-payout-account-card" class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-building-columns"></i>
+                    </div>
+                    <div>
+                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Payout Account Details</h2>
+                        <p class="text-xs text-accord-muted">The account configured to receive your author book sales payments.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 self-start sm:self-auto">
+                    <button type="button" id="author-payout-edit-btn" onclick="openPayoutAccountModal()" class="px-4 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-colors inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                        <span id="author-payout-edit-label">Add Payout Account</span>
+                    </button>
+                    <button type="button" id="author-payout-remove-btn" onclick="removeAuthorPayoutAccount()" class="hidden px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 text-xs font-bold transition-colors">
+                        Remove
+                    </button>
+                </div>
+            </div>
+            <div id="author-payout-account-body" class="rounded-2xl bg-slate-50 border border-slate-200/80 p-4">
+                <p class="text-xs text-accord-muted">Loading payout account details...</p>
+            </div>
+        </section>
+
         <!-- Uploaded Books Table (Hide toggle + Takedown Request with Reason) -->
         <section class="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -454,6 +481,52 @@
         </section>
 
     </main>
+
+    <!-- Add / Edit Payout Account Modal -->
+    <div id="payout-account-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Payout Account Details</h3>
+                    <p class="text-[11px] text-accord-muted">Save the Bank or Mobile Money account where you receive payments.</p>
+                </div>
+                <button type="button" onclick="closePayoutAccountModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <form id="payout-account-form" onsubmit="handlePayoutAccountSubmit(event)" class="space-y-3.5">
+                <div>
+                    <label for="payout-acct-method" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Payout Method (Paystack) *</label>
+                    <select id="payout-acct-method" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-semibold focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <option value="Mobile Money (Paystack)">Mobile Money (Paystack)</option>
+                        <option value="Bank Transfer (Paystack)">Bank Transfer (Paystack)</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="payout-acct-bank-code" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Bank / MoMo Code *</label>
+                        <input type="text" id="payout-acct-bank-code" required placeholder="e.g. MTN, VOD, 058" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="payout-acct-number" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Account / MoMo Number *</label>
+                        <input type="text" id="payout-acct-number" required placeholder="024XXXXXXX or Account No." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+                <div>
+                    <label for="payout-acct-name" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Account Holder Name *</label>
+                    <input type="text" id="payout-acct-name" required placeholder="Full legal name on account" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div>
+                    <label for="payout-acct-notes" class="block text-xs font-bold uppercase tracking-wider text-accord-slate mb-1.5">Additional Notes (Optional)</label>
+                    <input type="text" id="payout-acct-notes" placeholder="Branch or network notes" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button type="button" onclick="closePayoutAccountModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="payout-acct-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Save Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Counter-Notice Modal -->
     <div id="counter-notice-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">

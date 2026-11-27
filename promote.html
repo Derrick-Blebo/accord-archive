@@ -40,12 +40,12 @@
             }
         }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .serif-heading { font-family: 'Playfair Display', serif; }
+        .serif-heading { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
     </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between">
@@ -226,6 +226,21 @@
                         </div>
                     </div>
 
+                    <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <label for="promo-card-select" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">
+                                <i class="fa-solid fa-credit-card text-accord-blue mr-1"></i> Payment Card
+                            </label>
+                            <button type="button" onclick="openAddCardModal()" class="text-[11px] font-bold text-accord-blue hover:underline inline-flex items-center gap-1">
+                                <i class="fa-solid fa-plus text-[10px]"></i> Add Card
+                            </button>
+                        </div>
+                        <select id="promo-card-select" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
+                            <option value="">Pay with new card / Mobile Money (Paystack)</option>
+                        </select>
+                        <p id="promo-card-hint" class="text-[11px] text-accord-muted">Select an added card to pay for this campaign, or use a new payment method via Paystack.</p>
+                    </div>
+
                     <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Total Promotion Fee</p>
@@ -240,18 +255,85 @@
                 </form>
             </section>
 
-            <!-- My Promotions List -->
-            <section class="lg:col-span-5 bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
-                <div class="flex items-center justify-between">
-                    <h2 class="text-base font-bold text-accord-slate">My Promotions</h2>
-                    <button type="button" onclick="loadMyPromotions()" class="text-xs font-bold text-accord-blue hover:underline">Refresh</button>
-                </div>
-                <div id="my-promotions-list" class="space-y-3">
-                    <p class="text-xs text-accord-muted py-6 text-center">Loading your campaigns...</p>
-                </div>
-            </section>
+            <!-- Right Column: Added Payment Cards + My Promotions -->
+            <div class="lg:col-span-5 space-y-6">
+                <!-- Added Payment Cards -->
+                <section id="saved-cards-section" class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-base font-bold text-accord-slate">Payment Cards</h2>
+                            <p class="text-[11px] text-accord-muted">Manage added cards for your ad payments.</p>
+                        </div>
+                        <button type="button" onclick="openAddCardModal()" class="px-3 py-1.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-[11px] font-bold transition-colors inline-flex items-center gap-1">
+                            <i class="fa-solid fa-plus text-[10px]"></i>
+                            <span>Add Card</span>
+                        </button>
+                    </div>
+                    <div id="saved-cards-list" class="space-y-2.5">
+                        <p class="text-xs text-accord-muted py-4 text-center">Loading saved cards...</p>
+                    </div>
+                </section>
+
+                <!-- My Promotions List -->
+                <section class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-base font-bold text-accord-slate">My Promotions</h2>
+                        <button type="button" onclick="loadMyPromotions()" class="text-xs font-bold text-accord-blue hover:underline">Refresh</button>
+                    </div>
+                    <div id="my-promotions-list" class="space-y-3">
+                        <p class="text-xs text-accord-muted py-6 text-center">Loading your campaigns...</p>
+                    </div>
+                </section>
+            </div>
         </div>
     </main>
+
+    <!-- Add Payment Card Modal -->
+    <div id="add-card-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Add Payment Card</h3>
+                    <p class="text-[11px] text-accord-muted">Save a card to select during ad promotion checkout.</p>
+                </div>
+                <button type="button" onclick="closeAddCardModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <form id="add-card-form" onsubmit="handleAddCardSubmit(event)" class="space-y-3.5">
+                <div>
+                    <label for="card-holder-input" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Cardholder Name *</label>
+                    <input type="text" id="card-holder-input" required placeholder="Name on card" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div>
+                    <label for="card-number-input" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Card Number *</label>
+                    <input type="text" id="card-number-input" required inputmode="numeric" maxlength="23" oninput="formatCardNumberInput(this)" placeholder="4242 4242 4242 4242" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="card-exp-month" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Exp. Month *</label>
+                        <input type="text" id="card-exp-month" required inputmode="numeric" maxlength="2" placeholder="MM" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                    <div>
+                        <label for="card-exp-year" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Exp. Year *</label>
+                        <input type="text" id="card-exp-year" required inputmode="numeric" maxlength="4" placeholder="YY or YYYY" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none focus:border-accord-blue focus:bg-white">
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer pt-1">
+                    <input type="checkbox" id="card-default-checkbox" checked class="rounded text-accord-blue focus:ring-accord-blue w-4 h-4">
+                    <span class="text-xs text-accord-slate font-medium">Set as default payment card</span>
+                </label>
+                <p class="text-[10px] text-accord-muted leading-relaxed bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+                    <i class="fa-solid fa-lock text-accord-blue mr-1"></i>
+                    Only your card brand, last 4 digits, and expiry date are stored for selection. Actual payments are processed securely by Paystack.
+                </p>
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button type="button" onclick="closeAddCardModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="add-card-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Save Card</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="accord-footer"></div>
     <script src="footer.js"></script>

@@ -69,12 +69,15 @@
 
     function getPromoSlotPosition(promo) {
         const raw = String(promo?.slot_position || '').trim().toLowerCase();
-        if (raw === 'top' || raw === 'mid' || raw === 'bottom' || raw === 'dynamic') {
-            return raw;
-        }
+        // Never allow 'top' right below the header bar; remap 'top' to 'mid'
+        if (raw === 'top' || raw === 'mid') return 'mid';
+        if (raw === 'bottom' || raw === 'dynamic') return raw;
         const notes = String(promo?.admin_notes || '');
         const match = notes.match(/\[slot:(top|mid|bottom|dynamic)\]/i);
-        if (match) return match[1].toLowerCase();
+        if (match) {
+            const matched = match[1].toLowerCase();
+            return matched === 'top' ? 'mid' : matched;
+        }
         return 'dynamic';
     }
 
@@ -225,7 +228,8 @@
     }
 
     function insertBannerAtZone(container, zone, promo) {
-        const existing = container.querySelector(`.accord-dynamic-banner-slot[data-accord-slot-zone="${zone}"]`);
+        const safeZone = zone === 'top' ? 'mid' : zone;
+        const existing = container.querySelector(`.accord-dynamic-banner-slot[data-accord-slot-zone="${safeZone}"]`);
         if (existing) {
             existing.innerHTML = renderPromoSlotHtml(promo);
             existing.classList.remove('hidden');
@@ -234,21 +238,12 @@
 
         const slot = document.createElement('div');
         slot.className = 'accord-dynamic-banner-slot my-5 w-full';
-        slot.setAttribute('data-accord-slot-zone', zone);
+        slot.setAttribute('data-accord-slot-zone', safeZone);
         slot.innerHTML = renderPromoSlotHtml(promo);
 
         const anchors = getContentAnchorChildren(container);
 
-        if (zone === 'top') {
-            if (anchors.length > 0) {
-                container.insertBefore(slot, anchors[0]);
-            } else {
-                container.prepend(slot);
-            }
-            return;
-        }
-
-        if (zone === 'mid') {
+        if (safeZone === 'mid') {
             const bookGridBottom = document.getElementById('book-grid-bottom');
             if (bookGridBottom && bookGridBottom.parentElement === container) {
                 container.insertBefore(slot, bookGridBottom);
@@ -349,12 +344,12 @@
         const promos = await fetchActivePromotions();
         const currentPlacement = getCurrentPagePlacement();
         // On feed.html, feed.js renders inline ads (including banners) directly between posts in #feed-stream;
-        // only render explicitly top/bottom-pinned banners as page-level zones on feed.html.
+        // only render explicitly bottom-pinned banners as page-level zones on feed.html (never at the very top).
         const banners = currentPlacement === 'feed'
             ? promos.filter(p => {
                 if (p.promo_type !== 'banner') return false;
                 const pos = getPromoSlotPosition(p);
-                return pos === 'top' || pos === 'bottom';
+                return pos === 'bottom';
             })
             : promos;
 
@@ -371,8 +366,8 @@
         const container = getDynamicBannerContainer();
         if (!container) return;
 
-        // Group or assign banners to dynamic zones: top, mid, bottom
-        const zoneOrder = ['mid', 'top', 'bottom'];
+        // Group or assign banners to dynamic zones: mid and bottom (never top right below header)
+        const zoneOrder = ['mid', 'bottom'];
         const zoneAssignments = {};
         const dynamicQueue = [];
 

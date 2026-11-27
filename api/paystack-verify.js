@@ -83,6 +83,7 @@ export default async function handler(req, res) {
         }
 
         const tx = payload.data;
+        const auth = tx.authorization || null;
         return res.status(200).json({
             verified: true,
             reference: tx.reference,
@@ -90,7 +91,14 @@ export default async function handler(req, res) {
             currency: tx.currency || 'USD',
             paid_at: tx.paid_at,
             customer_email: tx.customer?.email || null,
-            metadata: tx.metadata || {}
+            metadata: tx.metadata || {},
+            authorization: auth ? {
+                last4: auth.last4 || null,
+                brand: auth.brand || null,
+                exp_month: auth.exp_month || null,
+                exp_year: auth.exp_year || null,
+                channel: auth.channel || null
+            } : null
         });
     } catch (err) {
         console.error('Paystack verification error:', err);

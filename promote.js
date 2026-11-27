@@ -8,6 +8,8 @@ let myPostsCache = [];
 let booksCache = [];
 let promotablePageIds = [];
 let promotablePagesById = {};
+let savedCardsCache = [];
+let usingLocalCardsFallback = false;
 
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
@@ -46,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updatePromoPriceDisplay();
     handlePromoTypeChange();
     handlePromoGoalChange();
-    await Promise.all([loadPromoteChoices(), loadMyPromotions()]);
+    await Promise.all([loadPromoteChoices(), loadSavedPaymentCards(), loadMyPromotions()]);
 
     const params = new URLSearchParams(window.location.search);
     const prePost = params.get('post');
@@ -412,10 +414,15 @@ async function handlePromotionSubmit(e) {
         ? window.AccordCurrency.fromUsd(budget_amount, paystackCurrency)
         : budget_amount;
 
+    const selectedCardId = document.getElementById('promo-card-select')?.value || '';
+    const selectedCard = savedCardsCache.find(c => String(c.id) === String(selectedCardId)) || null;
+    const selectedCardLabel = selectedCard ? `${selectedCard.brand} •••• ${selectedCard.last4}` : null;
+
     window.launchAccordPaystackCheckout({
         email: promoUser.email,
         amount: chargeAmount,
         currency: paystackCurrency,
+        channels: selectedCard ? ['card'] : undefined,
         metadata: {
             type: 'paid_promotion',
             promo_type: promoType,
@@ -424,9 +431,21 @@ async function handlePromotionSubmit(e) {
             daily_budget_usd,
             duration_days,
             total_usd: budget_amount,
-            local_currency: localInfo.code
+            local_currency: localInfo.code,
+            ...(selectedCard ? {
+                selected_card_id: selectedCard.id,
+                selected_card_brand: selectedCard.brand,
+                selected_card_last4: selectedCard.last4
+            } : {})
         },
         onVerified: async (tx) => {
+            if (!selectedCard && tx?.authorization?.last4) {
+                await maybeSavePaystackCard(tx.authorization);
+            }
+
+            const cardLabel = selectedCardLabel
+                || (tx?.authorization?.last4 ? `${(tx.authorization.brand || 'Card').toUpperCase()} •••• ${tx.authorization.last4}` : null);
+
             const insertPayload = {
                 advertiser_id: promoUser.id,
                 advertiser_name: promoUser.user_metadata?.full_name || promoUser.email?.split('@')[0] || 'Member',
@@ -452,12 +471,13 @@ async function handlePromotionSubmit(e) {
                 payment_provider: 'paystack',
                 payment_reference: tx.reference,
                 payment_status: 'paid',
+                payment_card_label: cardLabel,
                 status: 'pending_approval'
             };
 
             let { error } = await supabaseClient.from('promotions').insert([insertPayload]);
-            if (error && /(ad_goal|daily_budget_usd|local_currency|local_budget_amount)/i.test(error.message || '')) {
-                const { ad_goal: _ag, daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, ...fallbackPayload } = insertPayload;
+            if (error && /(ad_goal|daily_budget_usd|local_currency|local_budget_amount|payment_card_label)/i.test(error.message || '')) {
+                const { ad_goal: _ag, daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, payment_card_label: _pcl, ...fallbackPayload } = insertPayload;
                 ({ error } = await supabaseClient.from('promotions').insert([fallbackPayload]));
             }
 
@@ -524,20 +544,367 @@ async function loadMyPromotions() {
         const dailyLabel = window.AccordCurrency?.formatLocalFromUsd
             ? window.AccordCurrency.formatLocalFromUsd(dailyUsd)
             : `USD ${dailyUsd.toFixed(2)}`;
+        const canPause = p.status === 'approved';
+        const canResume = p.status === 'paused';
+        const pauseBtnHtml = canPause
+            ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'paused')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-pause text-[9px]"></i> Pause Ad</button>`
+            : canResume
+                ? `<button type="button" onclick="togglePromotionPause('${escapePromoHtml(p.id)}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold transition-colors inline-flex items-center gap-1"><i class="fa-solid fa-play text-[9px]"></i> Resume Ad</button>`
+                : '';
+
         return `
-        <div class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-1.5">
+        <div class="p-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-2">
             <div class="flex items-center justify-between gap-2">
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadge[p.status] || 'bg-slate-100 text-slate-600'}">${escapePromoHtml(p.status.replace('_', ' '))}</span>
                 <span class="text-[11px] font-semibold text-accord-muted">${p.duration_days}d · ${escapePromoHtml(localLabel)} (${escapePromoHtml(dailyLabel)}/day)</span>
             </div>
             <p class="text-xs font-bold text-accord-slate truncate">${escapePromoHtml(displayTitle)}</p>
-            <div class="flex items-center gap-3 text-[11px] text-accord-muted">
-                <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
-                <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
-                <span class="px-1.5 py-0.5 rounded bg-slate-200/70 text-[10px] font-bold text-accord-slate">${goalLabel}</span>
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-3 text-[11px] text-accord-muted">
+                    <span><i class="fa-regular fa-eye mr-1"></i>${p.impressions_count || 0} views</span>
+                    <span><i class="fa-solid fa-arrow-pointer mr-1"></i>${p.clicks_count || 0} clicks</span>
+                    <span class="px-1.5 py-0.5 rounded bg-slate-200/70 text-[10px] font-bold text-accord-slate">${goalLabel}</span>
+                </div>
+                ${pauseBtnHtml}
             </div>
+            ${p.payment_card_label ? `<p class="text-[10px] text-accord-muted"><i class="fa-regular fa-credit-card mr-1"></i>Paid with ${escapePromoHtml(p.payment_card_label)}</p>` : ''}
             ${p.admin_notes ? `<p class="text-[11px] text-accord-blue">Admin note: ${escapePromoHtml(p.admin_notes)}</p>` : ''}
         </div>
         `;
     }).join('');
+}
+
+async function togglePromotionPause(promoId, nextStatus) {
+    if (!promoUser || !promoId) return;
+    if (nextStatus !== 'paused' && nextStatus !== 'approved') return;
+
+    const { error } = await supabaseClient
+        .from('promotions')
+        .update({ status: nextStatus })
+        .eq('id', promoId)
+        .eq('advertiser_id', promoUser.id);
+
+    if (error) {
+        showToast(`Could not update ad status: ${error.message}`, true);
+        return;
+    }
+
+    showToast(nextStatus === 'paused'
+        ? 'Ad paused. It will not appear across the site until you resume it.'
+        : 'Ad resumed and is active again.');
+    await loadMyPromotions();
+}
+
+// =========================================================
+// ADDED PAYMENT CARDS MANAGEMENT
+// =========================================================
+
+function getSavedCardsStorageKey() {
+    return promoUser ? `accord_saved_cards:${promoUser.id}` : null;
+}
+
+function readLocalSavedCards() {
+    const key = getSavedCardsStorageKey();
+    if (!key) return [];
+    try {
+        const raw = localStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function writeLocalSavedCards(cards) {
+    const key = getSavedCardsStorageKey();
+    if (!key) return;
+    try {
+        localStorage.setItem(key, JSON.stringify(cards || []));
+    } catch (_) {}
+}
+
+function detectCardBrand(digits) {
+    if (/^4/.test(digits)) return 'Visa';
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return 'Mastercard';
+    if (/^(506|650|507)/.test(digits)) return 'Verve';
+    if (/^3[47]/.test(digits)) return 'Amex';
+    return 'Card';
+}
+
+function getCardBrandIcon(brand) {
+    const b = String(brand || '').toLowerCase();
+    if (b.includes('visa')) return 'fa-brands fa-cc-visa text-blue-600';
+    if (b.includes('master')) return 'fa-brands fa-cc-mastercard text-orange-600';
+    if (b.includes('amex')) return 'fa-brands fa-cc-amex text-sky-600';
+    return 'fa-solid fa-credit-card text-accord-blue';
+}
+
+function formatCardNumberInput(input) {
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, 19);
+    input.value = digits.replace(/(.{4})/g, '$1 ').trim();
+}
+
+async function loadSavedPaymentCards() {
+    if (!promoUser) return;
+    usingLocalCardsFallback = false;
+
+    const { data, error } = await supabaseClient
+        .from('user_payment_cards')
+        .select('*')
+        .eq('user_id', promoUser.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        usingLocalCardsFallback = true;
+        savedCardsCache = readLocalSavedCards();
+    } else {
+        savedCardsCache = data || [];
+    }
+
+    renderSavedPaymentCards();
+}
+
+function renderSavedPaymentCards() {
+    const listEl = document.getElementById('saved-cards-list');
+    const selectEl = document.getElementById('promo-card-select');
+
+    if (selectEl) {
+        const previousVal = selectEl.value;
+        const defaultCard = savedCardsCache.find(c => c.is_default) || savedCardsCache[0] || null;
+        selectEl.innerHTML = [
+            ...savedCardsCache.map(c => {
+                const label = `${c.brand} •••• ${c.last4} (Exp ${c.exp_month}/${String(c.exp_year).slice(-2)})${c.is_default ? ' — Default' : ''}`;
+                return `<option value="${escapePromoHtml(c.id)}">${escapePromoHtml(label)}</option>`;
+            }),
+            `<option value="">Pay with new card / Mobile Money (Paystack)</option>`
+        ].join('');
+
+        if (previousVal && savedCardsCache.some(c => String(c.id) === String(previousVal))) {
+            selectEl.value = previousVal;
+        } else if (defaultCard) {
+            selectEl.value = String(defaultCard.id);
+        } else {
+            selectEl.value = '';
+        }
+    }
+
+    if (!listEl) return;
+    if (savedCardsCache.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-accord-muted py-4 text-center">No payment cards added yet. Add a card to choose which card to use for your ads.</p>`;
+        return;
+    }
+
+    listEl.innerHTML = savedCardsCache.map(c => `
+        <div class="p-3 rounded-2xl border ${c.is_default ? 'border-accord-blue/50 bg-blue-50/40' : 'border-slate-200/80 bg-slate-50/70'} flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                    <i class="${getCardBrandIcon(c.brand)} text-lg"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <p class="text-xs font-bold text-accord-slate">${escapePromoHtml(c.brand)} •••• ${escapePromoHtml(c.last4)}</p>
+                        ${c.is_default ? `<span class="px-1.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue text-[9px] font-extrabold uppercase">Default</span>` : ''}
+                    </div>
+                    <p class="text-[11px] text-accord-muted truncate">${escapePromoHtml(c.card_holder)} · Exp ${escapePromoHtml(c.exp_month)}/${escapePromoHtml(String(c.exp_year).slice(-2))}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                ${!c.is_default ? `<button type="button" onclick="setDefaultPaymentCard('${escapePromoHtml(c.id)}')" class="px-2 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[10px] font-bold text-accord-slate">Set Default</button>` : ''}
+                <button type="button" onclick="removePaymentCard('${escapePromoHtml(c.id)}')" class="w-7 h-7 rounded-lg bg-white hover:bg-red-50 border border-slate-200 text-slate-400 hover:text-red-600 flex items-center justify-center transition-colors" title="Remove card">
+                    <i class="fa-solid fa-trash text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function openAddCardModal() {
+    const modal = document.getElementById('add-card-modal');
+    const holderInput = document.getElementById('card-holder-input');
+    if (holderInput && !holderInput.value && promoUser) {
+        holderInput.value = promoUser.user_metadata?.full_name || promoUser.email?.split('@')[0] || '';
+    }
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeAddCardModal() {
+    const modal = document.getElementById('add-card-modal');
+    modal?.classList.remove('flex');
+    modal?.classList.add('hidden');
+}
+
+async function handleAddCardSubmit(e) {
+    e.preventDefault();
+    if (!promoUser) return;
+
+    const cardHolder = document.getElementById('card-holder-input')?.value.trim() || '';
+    const rawDigits = (document.getElementById('card-number-input')?.value || '').replace(/\D/g, '');
+    const expMonthRaw = (document.getElementById('card-exp-month')?.value || '').replace(/\D/g, '');
+    const expYearRaw = (document.getElementById('card-exp-year')?.value || '').replace(/\D/g, '');
+    const isDefault = Boolean(document.getElementById('card-default-checkbox')?.checked) || savedCardsCache.length === 0;
+
+    if (!cardHolder) {
+        showToast('Please enter the cardholder name.', true);
+        return;
+    }
+    if (rawDigits.length < 13 || rawDigits.length > 19) {
+        showToast('Please enter a valid card number.', true);
+        return;
+    }
+    const expMonthNum = Number(expMonthRaw);
+    if (!expMonthRaw || expMonthNum < 1 || expMonthNum > 12) {
+        showToast('Please enter a valid expiry month (01-12).', true);
+        return;
+    }
+    if (expYearRaw.length !== 2 && expYearRaw.length !== 4) {
+        showToast('Please enter a valid expiry year (YY or YYYY).', true);
+        return;
+    }
+
+    const expMonth = String(expMonthNum).padStart(2, '0');
+    const expYear = expYearRaw.length === 2 ? `20${expYearRaw}` : expYearRaw;
+    const brand = detectCardBrand(rawDigits);
+    const last4 = rawDigits.slice(-4);
+
+    const btn = document.getElementById('add-card-submit-btn');
+    if (btn) btn.disabled = true;
+
+    if (usingLocalCardsFallback) {
+        const next = savedCardsCache.map(c => ({ ...c, is_default: isDefault ? false : c.is_default }));
+        next.unshift({
+            id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            user_id: promoUser.id,
+            card_holder: cardHolder,
+            brand,
+            last4,
+            exp_month: expMonth,
+            exp_year: expYear,
+            is_default: isDefault,
+            created_at: new Date().toISOString()
+        });
+        writeLocalSavedCards(next);
+        savedCardsCache = next;
+    } else {
+        if (isDefault && savedCardsCache.length > 0) {
+            await supabaseClient
+                .from('user_payment_cards')
+                .update({ is_default: false })
+                .eq('user_id', promoUser.id);
+        }
+        const { error } = await supabaseClient
+            .from('user_payment_cards')
+            .insert([{
+                user_id: promoUser.id,
+                card_holder: cardHolder,
+                brand,
+                last4,
+                exp_month: expMonth,
+                exp_year: expYear,
+                is_default: isDefault
+            }]);
+        if (error) {
+            if (btn) btn.disabled = false;
+            showToast(`Could not save card: ${error.message}`, true);
+            return;
+        }
+    }
+
+    if (btn) btn.disabled = false;
+    document.getElementById('add-card-form')?.reset();
+    closeAddCardModal();
+    showToast(`${brand} •••• ${last4} added to your payment cards.`);
+    await loadSavedPaymentCards();
+}
+
+async function setDefaultPaymentCard(cardId) {
+    if (!promoUser || !cardId) return;
+    if (usingLocalCardsFallback) {
+        const next = savedCardsCache.map(c => ({ ...c, is_default: String(c.id) === String(cardId) }));
+        writeLocalSavedCards(next);
+        savedCardsCache = next;
+        renderSavedPaymentCards();
+        showToast('Default payment card updated.');
+        return;
+    }
+
+    await supabaseClient
+        .from('user_payment_cards')
+        .update({ is_default: false })
+        .eq('user_id', promoUser.id);
+    const { error } = await supabaseClient
+        .from('user_payment_cards')
+        .update({ is_default: true })
+        .eq('id', cardId)
+        .eq('user_id', promoUser.id);
+
+    if (error) {
+        showToast(`Could not update default card: ${error.message}`, true);
+        return;
+    }
+    showToast('Default payment card updated.');
+    await loadSavedPaymentCards();
+}
+
+async function removePaymentCard(cardId) {
+    if (!promoUser || !cardId) return;
+    if (usingLocalCardsFallback) {
+        const next = savedCardsCache.filter(c => String(c.id) !== String(cardId));
+        if (next.length > 0 && !next.some(c => c.is_default)) next[0].is_default = true;
+        writeLocalSavedCards(next);
+        savedCardsCache = next;
+        renderSavedPaymentCards();
+        showToast('Payment card removed.');
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('user_payment_cards')
+        .delete()
+        .eq('id', cardId)
+        .eq('user_id', promoUser.id);
+    if (error) {
+        showToast(`Could not remove card: ${error.message}`, true);
+        return;
+    }
+    showToast('Payment card removed.');
+    await loadSavedPaymentCards();
+}
+
+async function maybeSavePaystackCard(auth) {
+    if (!promoUser || !auth?.last4) return;
+    const brand = String(auth.brand || 'Card').replace(/\b\w/g, ch => ch.toUpperCase());
+    const last4 = String(auth.last4).slice(-4);
+    const expMonth = String(auth.exp_month || '01').padStart(2, '0');
+    const expYear = String(auth.exp_year || '2028');
+    if (savedCardsCache.some(c => c.last4 === last4 && String(c.exp_month) === expMonth)) return;
+
+    const cardHolder = promoUser.user_metadata?.full_name || promoUser.email?.split('@')[0] || 'Cardholder';
+    const isDefault = savedCardsCache.length === 0;
+    if (usingLocalCardsFallback) {
+        const next = [...savedCardsCache, {
+            id: `local_${Date.now()}`,
+            user_id: promoUser.id,
+            card_holder: cardHolder,
+            brand,
+            last4,
+            exp_month: expMonth,
+            exp_year: expYear,
+            is_default: isDefault,
+            created_at: new Date().toISOString()
+        }];
+        writeLocalSavedCards(next);
+    } else {
+        await supabaseClient.from('user_payment_cards').insert([{
+            user_id: promoUser.id,
+            card_holder: cardHolder,
+            brand,
+            last4,
+            exp_month: expMonth,
+            exp_year: expYear,
+            is_default: isDefault
+        }]);
+    }
+    await loadSavedPaymentCards();
 }
