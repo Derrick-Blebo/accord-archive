@@ -113,7 +113,7 @@ function getVerifiedCheckmarkSvg(className = 'w-full h-full block') {
                 
                 <!-- Left: Brand Logo -->
                 <a href="index.html" class="flex items-center group justify-self-start min-w-0 shrink-0" aria-label="Accord — Official Archive & Library">
-                    <img src="assets/accord-lockup.svg" alt="Accord — Official Archive & Library" class="h-8 sm:h-10 w-auto group-hover:scale-[1.02] transition-transform" />
+                    <img src="assets/new-accord-logo.svg" alt="Accord — Official Archive & Library" class="h-8 sm:h-10 w-auto group-hover:scale-[1.02] transition-transform" />
                 </a>
 
                 <!-- Center: Navigation Links -->
