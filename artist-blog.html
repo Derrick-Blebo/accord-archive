@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artiste Spotlight Blog — Accord Music Hub</title>
+    <link rel="icon" type="image/svg+xml" href="assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="Explore all approved artiste spotlight articles, stories, and playable gospel tracks on Accord Music Hub." />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <div id="accord-header"></div>
+    <script src="header.js?v=4"></script>
+
+    <main class="flex-grow max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <a href="music.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-muted hover:text-accord-blue transition-colors mb-2">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back to Music Hub</span>
+                </a>
+                <h1 class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate">Artiste Spotlight Blog</h1>
+                <p class="text-xs sm:text-sm text-accord-muted mt-1">All approved artiste stories, ministry features, and embedded tracks.</p>
+            </div>
+            <div class="w-full sm:w-72">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="blog-search" oninput="renderBlogArticles()" placeholder="Search artistes or genres..." class="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs focus:outline-none focus:border-accord-blue shadow-sm">
+                </div>
+            </div>
+        </div>
+
+        <div id="blog-articles-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Populated dynamically -->
+        </div>
+    </main>
+
+    <div id="accord-footer"></div>
+    <script src="footer.js"></script>
+    <script>
+        const SUPABASE_URL = 'https://mzblgajftvyyosyrawcx.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16YmxnYWpmdHZ5eW9zeXJhd2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NzYxNTQsImV4cCI6MjExMDA1MjE1NH0.Xs9MeioNfqb5DzxDYP-9ZqfywBeOlUreAY-yKrcBmJM';
+        window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabaseClient;
+        const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
+        let approvedArtistes = [];
+
+        function escapeHTML(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function renderBlogArticles() {
+            const grid = document.getElementById('blog-articles-grid');
+            const query = (document.getElementById('blog-search')?.value || '').trim().toLowerCase();
+            if (!grid) return;
+
+            const filtered = approvedArtistes.filter(a => {
+                if (!query) return true;
+                return (a.title || '').toLowerCase().includes(query)
+                    || (a.genre || '').toLowerCase().includes(query)
+                    || (a.article || a.description || '').toLowerCase().includes(query);
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full bg-white border border-slate-200 rounded-3xl p-10 text-center text-xs text-accord-muted">No approved artiste articles match your search.</div>`;
+                return;
+            }
+
+            const fallbackImg = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=800';
+            grid.innerHTML = filtered.map(a => {
+                const body = a.article || a.description || '';
+                const songCount = Array.isArray(a.songs) ? a.songs.filter(s => s && (s.link || s.title)).length : (a.link ? 1 : 0);
+                return `
+                    <a href="artist.html?id=${encodeURIComponent(a.id)}" class="group bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-lg hover:border-accord-blue/40 transition-all flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-full overflow-hidden ring-2 ring-accord-lightBlue shrink-0 bg-slate-100">
+                                    <img src="${escapeHTML(a.image || fallbackImg)}" alt="${escapeHTML(a.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                                        <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full">${escapeHTML(a.genre || 'Gospel')}</span>
+                                        ${a.featured !== false ? `<span class="inline-block bg-accord-goldLight text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">Featured</span>` : ''}
+                                    </div>
+                                    <h2 class="serif-heading text-lg font-bold text-accord-slate truncate group-hover:text-accord-blue transition-colors">${escapeHTML(a.title)}</h2>
+                                </div>
+                            </div>
+                            <p class="text-xs text-accord-muted leading-relaxed line-clamp-4">${escapeHTML(body)}</p>
+                        </div>
+                        <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-accord-blue">
+                            <span>${songCount} playable ${songCount === 1 ? 'track' : 'tracks'}</span>
+                            <span class="inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">Read Article <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        window.onload = async function () {
+            try {
+                const { data } = await supabaseClient
+                    .from('books')
+                    .select('description')
+                    .eq('title', MUSIC_CONFIG_RECORD_NAME)
+                    .maybeSingle();
+                if (data?.description) {
+                    const parsed = JSON.parse(data.description);
+                    approvedArtistes = (Array.isArray(parsed.artistes) ? parsed.artistes : []).filter(a => a.approved !== false);
+                }
+            } catch {}
+
+            if (approvedArtistes.length === 0) {
+                try {
+                    const localSaved = JSON.parse(localStorage.getItem('accord_music_config') || '{}');
+                    approvedArtistes = (Array.isArray(localSaved.artistes) ? localSaved.artistes : []).filter(a => a.approved !== false);
+                } catch {}
+            }
+            renderBlogArticles();
+        };
+    </script>
+</body>
+</html>

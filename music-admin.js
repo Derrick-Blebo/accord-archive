@@ -2,15 +2,17 @@
 // ACCORD GOSPEL MUSIC & POLLS ADMIN
 // ==========================================
 
-
-
 let musicConfig = {
     artistes: [],
     playlists: [],
+    songSpotlights: [],
     polls: [],
-    submissions: []
+    submissions: [],
+    spotlightSubmissions: [],
+    pollNominations: []
 };
 
+let musicTableFilter = 'all';
 let deleteTarget = { type: null, id: null };
 
 // ==========================================
@@ -132,6 +134,18 @@ async function handleLogout() {
 // DATA PERSISTENCE (STORED IN BOOKS TABLE)
 // ==========================================
 
+function normalizeConfig(parsed) {
+    return {
+        artistes: Array.isArray(parsed?.artistes) ? parsed.artistes : [],
+        playlists: Array.isArray(parsed?.playlists) ? parsed.playlists : [],
+        songSpotlights: Array.isArray(parsed?.songSpotlights) ? parsed.songSpotlights : [],
+        polls: Array.isArray(parsed?.polls) ? parsed.polls : [],
+        submissions: Array.isArray(parsed?.submissions) ? parsed.submissions : [],
+        spotlightSubmissions: Array.isArray(parsed?.spotlightSubmissions) ? parsed.spotlightSubmissions : [],
+        pollNominations: Array.isArray(parsed?.pollNominations) ? parsed.pollNominations : []
+    };
+}
+
 async function loadMusicConfigFromSupabase() {
     const { data, error } = await supabaseClient
         .from('books')
@@ -142,12 +156,7 @@ async function loadMusicConfigFromSupabase() {
     if (!error && data?.description) {
         try {
             const parsed = JSON.parse(data.description);
-            musicConfig = {
-                artistes: Array.isArray(parsed.artistes) ? parsed.artistes : [],
-                playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
-                polls: Array.isArray(parsed.polls) ? parsed.polls : [],
-                submissions: Array.isArray(parsed.submissions) ? parsed.submissions : []
-            };
+            musicConfig = normalizeConfig(parsed);
             localStorage.setItem('accord_music_config', JSON.stringify(musicConfig));
             return;
         } catch (e) {}
@@ -157,29 +166,22 @@ async function loadMusicConfigFromSupabase() {
     if (localSaved) {
         try {
             const parsed = JSON.parse(localSaved);
-            musicConfig = {
-                artistes: Array.isArray(parsed.artistes) ? parsed.artistes : [],
-                playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
-                polls: Array.isArray(parsed.polls) ? parsed.polls : [],
-                submissions: Array.isArray(parsed.submissions) ? parsed.submissions : []
-            };
+            musicConfig = normalizeConfig(parsed);
             return;
         } catch (e) {}
     }
 
-    // Default seed data
-    musicConfig = {
+    musicConfig = normalizeConfig({
         artistes: [
-            { id: 'art-1', title: 'RichieO', genre: 'Contemporary Gospel', image: '', link: 'https://open.spotify.com/track/sample', description: 'Featured artiste for the UNVL Project.' }
+            { id: 'art-1', title: 'RichieO', genre: 'Contemporary Gospel', image: '', link: 'https://open.spotify.com/track/sample', description: 'Featured artiste for the UNVL Project.', approved: true, featured: true, songs: [] }
         ],
         playlists: [
             { id: 'pl-1', title: 'AfroGospel Vol. 1', genre: 'Afrobeat Gospel', image: '', link: 'https://open.spotify.com/playlist/sample', description: 'Curated by DJ ChristCentric.' }
         ],
         polls: [
             { id: 'poll-1', title: 'Song of the Year - 2026 Awards', nominees: ['RichieO - Higher Ground', 'OK Muziq - Gratitude', 'Pacome Ben Elohim - Grace'], votes: { 'RichieO - Higher Ground': 120, 'OK Muziq - Gratitude': 95, 'Pacome Ben Elohim - Grace': 140 }, status: 'open', endDate: '2026-12-31' }
-        ],
-        submissions: []
-    };
+        ]
+    });
 }
 
 async function persistMusicConfig() {
@@ -223,58 +225,110 @@ async function persistMusicConfig() {
 }
 
 // ==========================================
+// NAVIGATION & CLICKABLE CARDS
+// ==========================================
+
+function focusAdminSection(sectionId, filterType) {
+    if (filterType) {
+        setMusicTableFilter(filterType);
+    }
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-emerald-400', 'ring-offset-4', 'rounded-3xl');
+    setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-emerald-400', 'ring-offset-4', 'rounded-3xl');
+    }, 1200);
+}
+
+function setMusicTableFilter(filter) {
+    musicTableFilter = filter;
+    ['all', 'spotlight', 'playlist'].forEach(key => {
+        const btn = document.getElementById(`filter-btn-${key}`);
+        if (!btn) return;
+        if (key === filter) {
+            btn.className = 'px-3 py-1.5 rounded-lg bg-white text-accord-slate shadow-sm transition-all';
+        } else {
+            btn.className = 'px-3 py-1.5 rounded-lg text-accord-muted hover:text-accord-slate transition-all';
+        }
+    });
+    renderMusicTable();
+}
+
+// ==========================================
 // RENDERING UI
 // ==========================================
 
 function renderAll() {
     updateStats();
     renderMusicTable();
+    renderSongSpotlightsTable();
+    renderSpotlightSubmissionsTable();
     renderPollsTable();
+    renderPollNominationsTable();
 }
 
 function updateStats() {
     document.getElementById('stat-spotlights').innerText = musicConfig.artistes.length;
     document.getElementById('stat-playlists').innerText = musicConfig.playlists.length;
+    const songEl = document.getElementById('stat-song-spotlights');
+    if (songEl) songEl.innerText = musicConfig.songSpotlights.length;
     document.getElementById('stat-polls').innerText = musicConfig.polls.filter(p => p.status === 'open').length;
-    document.getElementById('stat-submissions').innerText = musicConfig.submissions.length;
+
+    const pendingSpotlights = musicConfig.spotlightSubmissions.filter(s => s.status === 'pending').length;
+    const pendingNoms = musicConfig.pollNominations.filter(n => n.status === 'pending').length;
+    document.getElementById('stat-submissions').innerText = pendingSpotlights + pendingNoms + musicConfig.submissions.length;
 }
 
 function renderMusicTable() {
     const tbody = document.getElementById('music-table-body');
     if (!tbody) return;
 
-    const allItems = [
+    let allItems = [
         ...musicConfig.artistes.map(a => ({ ...a, entryType: 'spotlight', typeLabel: 'Artiste Spotlight' })),
         ...musicConfig.playlists.map(p => ({ ...p, entryType: 'playlist', typeLabel: 'Curated Playlist' }))
     ];
 
+    if (musicTableFilter !== 'all') {
+        allItems = allItems.filter(x => x.entryType === musicTableFilter);
+    }
+
     tbody.innerHTML = '';
     if (allItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No spotlights or playlists added yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-accord-muted">No spotlights or playlists in this view yet.</td></tr>`;
         return;
     }
 
     allItems.forEach(item => {
         const safeId = item.id;
+        const isSpotlight = item.entryType === 'spotlight';
+        const isFeatured = item.featured !== false;
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.onclick = () => openMusicModal('edit', safeId);
         tr.innerHTML = `
             <td class="py-4 px-6">
                 <div class="flex items-center space-x-3">
                     ${item.image
-                        ? `<img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.title)}" class="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200">`
-                        : `<div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-xs shrink-0"><i class="fa-solid ${item.entryType === 'spotlight' ? 'fa-microphone' : 'fa-list-music'}"></i></div>`
+                        ? `<img src="${escapeHTML(item.image)}" alt="${escapeHTML(item.title)}" class="w-9 h-9 ${isSpotlight ? 'rounded-full' : 'rounded-xl'} object-cover shrink-0 border border-slate-200">`
+                        : `<div class="w-9 h-9 ${isSpotlight ? 'rounded-full' : 'rounded-xl'} bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-xs shrink-0"><i class="fa-solid ${isSpotlight ? 'fa-microphone' : 'fa-list-music'}"></i></div>`
                     }
                     <div>
                         <p class="font-bold text-accord-slate">${escapeHTML(item.title)}</p>
-                        <p class="text-[11px] text-accord-muted truncate max-w-xs">${escapeHTML(item.description || '')}</p>
+                        <p class="text-[11px] text-accord-muted truncate max-w-xs">${escapeHTML(item.article || item.description || '')}</p>
                     </div>
                 </div>
             </td>
             <td class="py-4 px-6"><span class="bg-slate-100 text-accord-slate text-[10px] font-bold px-2.5 py-1 rounded-lg">${item.typeLabel}</span></td>
             <td class="py-4 px-6 text-accord-muted">${escapeHTML(item.genre || 'General')}</td>
-            <td class="py-4 px-6 text-accord-blue truncate max-w-xs"><a href="${escapeHTML(item.link || '#')}" target="_blank" class="hover:underline">${escapeHTML(item.link || 'No link')}</a></td>
-            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+            <td class="py-4 px-6 text-center" onclick="event.stopPropagation()">
+                ${isSpotlight ? `
+                    <button type="button" onclick="toggleSpotlightFeatured('${safeId}')" class="px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${isFeatured ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+                        <i class="fa-solid fa-star mr-1"></i>${isFeatured ? 'Featured' : 'Blog Only'}
+                    </button>
+                ` : '<span class="text-[11px] text-slate-400">—</span>'}
+            </td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
                 <button type="button" onclick="openMusicModal('edit', '${safeId}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit Entry">
                     <i class="fa-solid fa-pen text-xs"></i>
                 </button>
@@ -285,6 +339,97 @@ function renderMusicTable() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+function renderSongSpotlightsTable() {
+    const tbody = document.getElementById('song-spotlights-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (musicConfig.songSpotlights.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-accord-muted">No song spotlights added yet.</td></tr>`;
+        return;
+    }
+
+    musicConfig.songSpotlights.forEach(song => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.onclick = () => openSongSpotlightModal('edit', song.id);
+        tr.innerHTML = `
+            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(song.title)}</td>
+            <td class="py-4 px-6 text-accord-blue truncate max-w-md" onclick="event.stopPropagation()">
+                <a href="${escapeHTML(song.link)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHTML(song.link)}</a>
+            </td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
+                <button type="button" onclick="openSongSpotlightModal('edit', '${song.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
+                <button type="button" onclick="promptDeleteSongSpotlight('${song.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderSpotlightSubmissionsTable() {
+    const tbody = document.getElementById('spotlight-submissions-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (musicConfig.spotlightSubmissions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No user artist spotlight submissions yet.</td></tr>`;
+        return;
+    }
+
+    musicConfig.spotlightSubmissions.forEach(sub => {
+        const status = sub.status || 'pending';
+        const statusBadge = status === 'approved'
+            ? `<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Approved</span>`
+            : status === 'rejected'
+                ? `<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`
+                : `<span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700">Pending</span>`;
+
+        const songsCount = Array.isArray(sub.songs) ? sub.songs.length : 0;
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <div class="flex items-center gap-3">
+                    ${sub.image
+                        ? `<img src="${escapeHTML(sub.image)}" alt="${escapeHTML(sub.title)}" class="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0">`
+                        : `<div class="w-9 h-9 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xs font-bold shrink-0"><i class="fa-solid fa-user"></i></div>`
+                    }
+                    <div class="min-w-0">
+                        <p class="font-bold text-accord-slate">${escapeHTML(sub.title)} <span class="text-[10px] text-accord-muted font-normal">• ${escapeHTML(sub.genre || 'Gospel')}</span></p>
+                        <p class="text-[11px] text-accord-muted truncate max-w-xs">${escapeHTML(sub.article || sub.description || '')}</p>
+                    </div>
+                </div>
+            </td>
+            <td class="py-4 px-6 text-accord-muted">${songsCount} ${songsCount === 1 ? 'song' : 'songs'}</td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(sub.submittedByEmail || 'Registered User')}</td>
+            <td class="py-4 px-6 text-center">${statusBadge}</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                ${status === 'pending' ? `
+                    <button type="button" onclick="approveSpotlightSubmission('${sub.id}', true)" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all" title="Approve & Feature on Music Page">
+                        Approve &amp; Feature
+                    </button>
+                    <button type="button" onclick="approveSpotlightSubmission('${sub.id}', false)" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[10px] font-bold transition-all" title="Approve for Blog Only">
+                        Blog Only
+                    </button>
+                ` : ''}
+                <button type="button" onclick="deleteSpotlightSubmission('${sub.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Remove">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function getNomineeLabel(nominee) {
+    return typeof nominee === 'string' ? nominee : (nominee?.name || '');
 }
 
 function renderPollsTable() {
@@ -300,24 +445,33 @@ function renderPollsTable() {
     musicConfig.polls.forEach(poll => {
         const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
         const isOpen = poll.status === 'open';
+        const isNominating = poll.status === 'nominating';
         const safeId = poll.id;
 
         const statusBadge = isOpen
             ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Open</span>`
-            : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700">Closed</span>`;
+            : isNominating
+                ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">Nominating</span>`
+                : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700">Closed</span>`;
+
+        const nomineeNames = (poll.nominees || []).map(getNomineeLabel).filter(Boolean);
 
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.className = "hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer";
+        tr.onclick = () => openPollModal('edit', safeId);
         tr.innerHTML = `
             <td class="py-4 px-6">
                 <div>
                     <p class="font-bold text-accord-slate">${escapeHTML(poll.title)}</p>
-                    <p class="text-[11px] text-accord-muted">Nominees: ${(poll.nominees || []).join(', ')}</p>
+                    <p class="text-[11px] text-accord-muted">Nominees: ${escapeHTML(nomineeNames.join(', ') || 'None yet (awaiting nominations)')}</p>
                 </div>
             </td>
             <td class="py-4 px-6 text-center font-bold text-accord-slate">${totalVotes}</td>
             <td class="py-4 px-6 text-center">${statusBadge}</td>
-            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap" onclick="event.stopPropagation()">
+                <button type="button" onclick="openPollModal('edit', '${safeId}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-all inline-flex items-center justify-center" title="Edit Poll">
+                    <i class="fa-solid fa-pen text-xs"></i>
+                </button>
                 <button type="button" onclick="togglePollStatus('${safeId}')" class="w-8 h-8 rounded-xl ${isOpen ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'} hover:opacity-80 transition-all inline-flex items-center justify-center" title="${isOpen ? 'Close Poll' : 'Open Poll'}">
                     <i class="fa-solid ${isOpen ? 'fa-lock' : 'fa-lock-open'} text-xs"></i>
                 </button>
@@ -330,35 +484,96 @@ function renderPollsTable() {
     });
 }
 
+function renderPollNominationsTable() {
+    const tbody = document.getElementById('poll-nominations-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (musicConfig.pollNominations.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-accord-muted">No user nominations submitted yet.</td></tr>`;
+        return;
+    }
+
+    musicConfig.pollNominations.forEach(nom => {
+        const isPending = nom.status !== 'approved';
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100 last:border-0";
+        tr.innerHTML = `
+            <td class="py-4 px-6">
+                <p class="font-bold text-accord-slate">${escapeHTML(nom.nomineeName)}</p>
+                <p class="text-[11px] text-accord-muted">Category: ${escapeHTML(nom.categoryTitle || nom.pollId || 'General')}</p>
+            </td>
+            <td class="py-4 px-6 space-x-2">
+                ${nom.songLink ? `<a href="${escapeHTML(nom.songLink)}" target="_blank" class="text-accord-blue hover:underline">Song Link</a>` : '<span class="text-slate-400">No song link</span>'}
+                ${nom.artistLink ? `<span class="text-slate-300">•</span><a href="${escapeHTML(nom.artistLink)}" target="_blank" class="text-emerald-700 hover:underline">Artiste Page</a>` : ''}
+            </td>
+            <td class="py-4 px-6 text-accord-muted">${escapeHTML(nom.submittedByEmail || 'Registered User')}</td>
+            <td class="py-4 px-6 text-right space-x-1.5 whitespace-nowrap">
+                ${isPending ? `
+                    <button type="button" onclick="approvePollNomination('${nom.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all">
+                        Add to Poll
+                    </button>
+                ` : `<span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 mr-1">Added</span>`}
+                <button type="button" onclick="deletePollNomination('${nom.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-500 transition-all inline-flex items-center justify-center" title="Delete">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 // ==========================================
 // MODAL & FORM HANDLERS
 // ==========================================
 
-function togglePlaylistFields() {
+function toggleMusicTypeFields() {
     const type = document.getElementById('item-type')?.value;
     const tracksGroup = document.getElementById('playlist-tracks-group');
-    if (!tracksGroup) return;
-    if (type === 'playlist') {
-        tracksGroup.classList.remove('hidden');
-    } else {
-        tracksGroup.classList.add('hidden');
-    }
+    const spotlightGroup = document.getElementById('spotlight-extra-group');
+    if (tracksGroup) tracksGroup.classList.toggle('hidden', type !== 'playlist');
+    if (spotlightGroup) spotlightGroup.classList.toggle('hidden', type !== 'spotlight');
+}
+
+function addSpotlightSongRow(title = '', link = '') {
+    const container = document.getElementById('spotlight-songs-container');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center spotlight-song-row';
+    row.innerHTML = `
+        <input type="text" value="${escapeHTML(title)}" placeholder="Song Title" class="song-title-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+        <input type="url" value="${escapeHTML(link)}" placeholder="Streaming Link (Spotify, Apple, YouTube)" class="song-link-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+        <button type="button" onclick="this.closest('.spotlight-song-row').remove()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 flex items-center justify-center text-xs" title="Remove Song">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    `;
+    container.appendChild(row);
 }
 
 function updateCoverPreview(url) {
     const preview = document.getElementById('item-cover-preview');
     const placeholder = document.getElementById('item-cover-placeholder');
+    const clearBtn = document.getElementById('clear-cover-btn');
     if (!preview || !placeholder) return;
     const clean = String(url || '').trim();
     if (clean) {
         preview.src = clean;
         preview.classList.remove('hidden');
         placeholder.classList.add('hidden');
+        if (clearBtn) clearBtn.classList.remove('hidden');
     } else {
         preview.src = '';
         preview.classList.add('hidden');
         placeholder.classList.remove('hidden');
+        if (clearBtn) clearBtn.classList.add('hidden');
     }
+}
+
+function clearCoverImage() {
+    document.getElementById('item-image').value = '';
+    updateCoverPreview('');
+    const statusEl = document.getElementById('cover-upload-status');
+    if (statusEl) statusEl.innerText = 'Cover removed. Upload a new cover art image.';
 }
 
 function compressCoverImage(file, maxDim = 800, quality = 0.84) {
@@ -421,8 +636,8 @@ async function handleCoverFileUpload(event) {
         const publicUrl = pub?.publicUrl || '';
         document.getElementById('item-image').value = publicUrl;
         updateCoverPreview(publicUrl);
-        if (statusEl) statusEl.innerText = 'Uploaded!';
-        showToast('Cover photo uploaded!');
+        if (statusEl) statusEl.innerText = 'Cover art uploaded!';
+        showToast('Cover art uploaded!');
     } catch (err) {
         console.error('Cover upload error:', err);
         if (statusEl) statusEl.innerText = 'Upload failed';
@@ -457,7 +672,7 @@ async function autoFillMusicMetadata() {
             document.getElementById('item-title').value = meta.title;
             filledAny = true;
         }
-        if (meta.image) {
+        if (meta.image && !document.getElementById('item-image').value) {
             document.getElementById('item-image').value = meta.image;
             updateCoverPreview(meta.image);
             filledAny = true;
@@ -479,12 +694,12 @@ async function autoFillMusicMetadata() {
         }
 
         if (filledAny) {
-            showToast('Playlist details picked up! Review and save.');
+            showToast('Details picked up! Upload cover art if needed and save.');
         } else {
-            showToast('Could not auto-fetch cover/name. Please upload a cover photo and type the name.');
+            showToast('Could not auto-fetch details. Please upload cover art and type the name.');
         }
     } catch (err) {
-        showToast('Could not auto-fetch from link. Please upload a cover photo and type the name.');
+        showToast('Could not auto-fetch from link. Please upload cover art and type the name.');
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -515,8 +730,10 @@ function openMusicModal(mode = 'add', id = null) {
     const heading = document.getElementById('music-modal-heading');
     document.getElementById('music-item-form').reset();
     document.getElementById('edit-music-id').value = '';
+    document.getElementById('item-image').value = '';
+    document.getElementById('spotlight-songs-container').innerHTML = '';
     const statusEl = document.getElementById('cover-upload-status');
-    if (statusEl) statusEl.innerText = '';
+    if (statusEl) statusEl.innerText = 'PNG, JPG, or WebP. Automatically compressed.';
     updateCoverPreview('');
 
     if (mode === 'edit' && id) {
@@ -532,8 +749,17 @@ function openMusicModal(mode = 'add', id = null) {
             document.getElementById('item-image').value = item.image || '';
             updateCoverPreview(item.image || '');
             document.getElementById('item-link').value = item.link || '';
-            document.getElementById('item-description').value = item.description || '';
-            if (Array.isArray(item.tracks)) {
+            document.getElementById('item-description').value = item.article || item.description || '';
+            document.getElementById('item-featured').checked = item.featured !== false;
+
+            if (isSpotlight) {
+                const songs = Array.isArray(item.songs) ? item.songs : [];
+                if (songs.length > 0) {
+                    songs.forEach(s => addSpotlightSongRow(s.title || '', s.link || ''));
+                } else {
+                    addSpotlightSongRow();
+                }
+            } else if (Array.isArray(item.tracks)) {
                 document.getElementById('item-tracks').value = item.tracks
                     .map(t => (t.artist ? `${t.title} - ${t.artist}` : t.title))
                     .join('\n');
@@ -541,9 +767,11 @@ function openMusicModal(mode = 'add', id = null) {
         }
     } else {
         heading.innerText = 'Add Spotlight or Playlist';
+        document.getElementById('item-featured').checked = true;
+        addSpotlightSongRow();
     }
 
-    togglePlaylistFields();
+    toggleMusicTypeFields();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
@@ -556,7 +784,8 @@ function closeMusicModal() {
 
 async function handleSaveMusicItem(e) {
     e.preventDefault();
-    const id = document.getElementById('edit-music-id').value || 'item-' + Date.now();
+    const existingId = document.getElementById('edit-music-id').value;
+    const id = existingId || 'item-' + Date.now();
     const type = document.getElementById('item-type').value;
     const title = document.getElementById('item-title').value.trim();
     const genre = document.getElementById('item-genre').value.trim();
@@ -564,9 +793,41 @@ async function handleSaveMusicItem(e) {
     const image = document.getElementById('item-image').value.trim();
     const link = document.getElementById('item-link').value.trim();
     const description = document.getElementById('item-description').value.trim();
+    const featured = document.getElementById('item-featured').checked;
+
+    if (!image) {
+        showToast('Please upload a cover art photo first.');
+        return;
+    }
+
+    const songs = [];
+    if (type === 'spotlight') {
+        document.querySelectorAll('#spotlight-songs-container .spotlight-song-row').forEach(row => {
+            const sTitle = row.querySelector('.song-title-input')?.value.trim();
+            const sLink = row.querySelector('.song-link-input')?.value.trim();
+            if (sTitle || sLink) {
+                songs.push({ title: sTitle || title, link: sLink || '' });
+            }
+        });
+    }
+
     const tracks = type === 'playlist' ? parseTracksTextarea(document.getElementById('item-tracks').value) : [];
 
-    const record = { id, title, genre, curator, image, link, description, tracks };
+    const record = {
+        id,
+        title,
+        genre,
+        curator,
+        image,
+        link,
+        description,
+        article: description,
+        tracks,
+        songs,
+        approved: true,
+        featured: type === 'spotlight' ? featured : true,
+        createdAt: new Date().toISOString()
+    };
 
     musicConfig.artistes = musicConfig.artistes.filter(x => x.id !== id);
     musicConfig.playlists = musicConfig.playlists.filter(x => x.id !== id);
@@ -584,10 +845,160 @@ async function handleSaveMusicItem(e) {
     }
 }
 
-function openPollModal() {
+async function toggleSpotlightFeatured(id) {
+    const artist = musicConfig.artistes.find(a => a.id === id);
+    if (!artist) return;
+    artist.featured = artist.featured === false;
+    await persistMusicConfig();
+    showToast(`${artist.title} is now ${artist.featured ? 'Featured on Music Hub' : 'Blog Only'}.`);
+}
+
+// ==========================================
+// SONG SPOTLIGHT HANDLERS
+// ==========================================
+
+function openSongSpotlightModal(mode = 'add', id = null) {
+    const modal = document.getElementById('song-spotlight-modal');
+    const heading = document.getElementById('song-spotlight-heading');
+    document.getElementById('song-spotlight-form').reset();
+    document.getElementById('edit-song-spotlight-id').value = '';
+
+    if (mode === 'edit' && id) {
+        heading.innerText = 'Edit Song Spotlight';
+        const song = musicConfig.songSpotlights.find(s => s.id === id);
+        if (song) {
+            document.getElementById('edit-song-spotlight-id').value = song.id;
+            document.getElementById('song-spotlight-title').value = song.title || '';
+            document.getElementById('song-spotlight-link').value = song.link || '';
+        }
+    } else {
+        heading.innerText = 'Add Song Spotlight';
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeSongSpotlightModal() {
+    const modal = document.getElementById('song-spotlight-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+async function handleSaveSongSpotlight(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-song-spotlight-id').value || 'song-' + Date.now();
+    const title = document.getElementById('song-spotlight-title').value.trim();
+    const link = document.getElementById('song-spotlight-link').value.trim();
+
+    musicConfig.songSpotlights = musicConfig.songSpotlights.filter(s => s.id !== id);
+    musicConfig.songSpotlights.unshift({ id, title, link, createdAt: new Date().toISOString() });
+
+    closeSongSpotlightModal();
+    await persistMusicConfig();
+    showToast('Song spotlight saved!');
+}
+
+function promptDeleteSongSpotlight(id) {
+    deleteTarget = { type: 'songSpotlight', id };
+    document.getElementById('confirm-title').innerText = 'Delete Song Spotlight?';
+    document.getElementById('confirm-text').innerText = 'This song will be removed from Song Spotlight.';
+    openConfirmModal();
+}
+
+// ==========================================
+// ARTIST SPOTLIGHT SUBMISSIONS APPROVAL
+// ==========================================
+
+async function approveSpotlightSubmission(subId, isFeatured) {
+    const sub = musicConfig.spotlightSubmissions.find(s => s.id === subId);
+    if (!sub) return;
+
+    sub.status = 'approved';
+    const newArtist = {
+        id: 'art-' + Date.now(),
+        title: sub.title,
+        genre: sub.genre || 'Gospel',
+        curator: sub.submittedByEmail || 'Community Submission',
+        image: sub.image || '',
+        link: (sub.songs && sub.songs[0]?.link) || '',
+        description: sub.article || sub.description || '',
+        article: sub.article || sub.description || '',
+        songs: Array.isArray(sub.songs) ? sub.songs : [],
+        approved: true,
+        featured: Boolean(isFeatured),
+        approvedAt: new Date().toISOString()
+    };
+
+    musicConfig.artistes.unshift(newArtist);
+    await persistMusicConfig();
+    showToast(`Approved "${sub.title}" (${isFeatured ? 'Featured on Music Hub' : 'Blog Only'})!`);
+}
+
+async function deleteSpotlightSubmission(subId) {
+    musicConfig.spotlightSubmissions = musicConfig.spotlightSubmissions.filter(s => s.id !== subId);
+    await persistMusicConfig();
+    showToast('Submission removed.');
+}
+
+// ==========================================
+// POLL & NOMINATION HANDLERS
+// ==========================================
+
+function addPollNomineeRow(name = '', songLink = '', artistLink = '') {
+    const container = document.getElementById('poll-nominees-container');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 poll-nominee-row';
+    row.innerHTML = `
+        <div class="flex items-center gap-2">
+            <input type="text" value="${escapeHTML(name)}" required placeholder="Nominee / Song Name (e.g., RichieO - Higher Ground)" class="nominee-name-input flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+            <button type="button" onclick="this.closest('.poll-nominee-row').remove()" class="w-8 h-8 rounded-xl bg-white hover:bg-red-50 text-slate-500 hover:text-red-500 border border-slate-200 flex items-center justify-center text-xs shrink-0" title="Remove Nominee">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input type="url" value="${escapeHTML(songLink)}" placeholder="Playable Song Link (Spotify, Apple, YouTube)" class="nominee-song-input bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+            <input type="text" value="${escapeHTML(artistLink)}" placeholder="Artiste Page Link (e.g. artist.html?id=...)" class="nominee-artist-input bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500">
+        </div>
+    `;
+    container.appendChild(row);
+}
+
+function openPollModal(mode = 'add', id = null) {
     const modal = document.getElementById('poll-modal');
+    const heading = document.getElementById('poll-modal-heading');
     document.getElementById('poll-form').reset();
     document.getElementById('edit-poll-id').value = '';
+    document.getElementById('poll-nominees-container').innerHTML = '';
+
+    if (mode === 'edit' && id) {
+        heading.innerText = 'Edit Award Voting Poll';
+        const poll = musicConfig.polls.find(p => p.id === id);
+        if (poll) {
+            document.getElementById('edit-poll-id').value = poll.id;
+            document.getElementById('poll-title').value = poll.title || '';
+            document.getElementById('poll-status').value = poll.status || 'open';
+            document.getElementById('poll-end-date').value = poll.endDate || '';
+            const nominees = Array.isArray(poll.nominees) ? poll.nominees : [];
+            if (nominees.length > 0) {
+                nominees.forEach(n => {
+                    if (typeof n === 'string') {
+                        addPollNomineeRow(n, '', '');
+                    } else {
+                        addPollNomineeRow(n.name || '', n.songLink || '', n.artistLink || '');
+                    }
+                });
+            } else {
+                addPollNomineeRow();
+            }
+        }
+    } else {
+        heading.innerText = 'Create Award Voting Poll';
+        addPollNomineeRow();
+        addPollNomineeRow();
+    }
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
@@ -600,27 +1011,97 @@ function closePollModal() {
 
 async function handleSavePoll(e) {
     e.preventDefault();
-    const id = 'poll-' + Date.now();
+    const existingId = document.getElementById('edit-poll-id').value;
+    const id = existingId || 'poll-' + Date.now();
     const title = document.getElementById('poll-title').value.trim();
-    const rawNominees = document.getElementById('poll-nominees').value.trim();
     const status = document.getElementById('poll-status').value;
     const endDate = document.getElementById('poll-end-date').value;
 
-    const nominees = rawNominees.split('\n').map(n => n.trim()).filter(Boolean);
-    if (nominees.length === 0) {
-        showToast('Please provide at least one nominee.');
+    const nominees = [];
+    document.querySelectorAll('#poll-nominees-container .poll-nominee-row').forEach(row => {
+        const name = row.querySelector('.nominee-name-input')?.value.trim();
+        const songLink = row.querySelector('.nominee-song-input')?.value.trim();
+        const artistLink = row.querySelector('.nominee-artist-input')?.value.trim();
+        if (name) {
+            nominees.push({ name, songLink: songLink || '', artistLink: artistLink || '' });
+        }
+    });
+
+    if (nominees.length === 0 && status !== 'nominating') {
+        showToast('Please provide at least one nominee (or set status to Upcoming / Open for Nominations).');
         return;
     }
 
+    const existingPoll = existingId ? musicConfig.polls.find(p => p.id === existingId) : null;
+    const existingVotes = existingPoll?.votes || {};
     const votes = {};
-    nominees.forEach(n => { votes[n] = 0; });
+    nominees.forEach(n => {
+        votes[n.name] = existingVotes[n.name] || 0;
+    });
 
-    const poll = { id, title, nominees, votes, status, endDate };
-    musicConfig.polls.push(poll);
+    const poll = {
+        id,
+        title,
+        nominees,
+        votes,
+        voters: existingPoll?.voters || {},
+        status,
+        endDate
+    };
+
+    if (existingPoll) {
+        musicConfig.polls = musicConfig.polls.map(p => (p.id === id ? poll : p));
+    } else {
+        musicConfig.polls.push(poll);
+    }
 
     closePollModal();
     await persistMusicConfig();
-    showToast('Award poll created successfully!');
+    showToast(existingPoll ? 'Award poll updated!' : 'Award poll created successfully!');
+}
+
+async function approvePollNomination(nomId) {
+    const nom = musicConfig.pollNominations.find(n => n.id === nomId);
+    if (!nom) return;
+
+    let targetPoll = nom.pollId ? musicConfig.polls.find(p => p.id === nom.pollId) : null;
+    if (!targetPoll && nom.categoryTitle) {
+        targetPoll = musicConfig.polls.find(p => (p.title || '').toLowerCase() === nom.categoryTitle.toLowerCase());
+    }
+    if (!targetPoll) {
+        targetPoll = {
+            id: 'poll-' + Date.now(),
+            title: nom.categoryTitle || 'Community Choice Awards',
+            nominees: [],
+            votes: {},
+            voters: {},
+            status: 'nominating',
+            endDate: ''
+        };
+        musicConfig.polls.push(targetPoll);
+    }
+
+    const exists = (targetPoll.nominees || []).some(n => getNomineeLabel(n).toLowerCase() === nom.nomineeName.toLowerCase());
+    if (!exists) {
+        targetPoll.nominees = targetPoll.nominees || [];
+        targetPoll.nominees.push({
+            name: nom.nomineeName,
+            songLink: nom.songLink || '',
+            artistLink: nom.artistLink || ''
+        });
+        targetPoll.votes = targetPoll.votes || {};
+        targetPoll.votes[nom.nomineeName] = targetPoll.votes[nom.nomineeName] || 0;
+    }
+
+    nom.status = 'approved';
+    await persistMusicConfig();
+    showToast(`Added "${nom.nomineeName}" to "${targetPoll.title}"!`);
+}
+
+async function deletePollNomination(nomId) {
+    musicConfig.pollNominations = musicConfig.pollNominations.filter(n => n.id !== nomId);
+    await persistMusicConfig();
+    showToast('Nomination removed.');
 }
 
 async function togglePollStatus(id) {
@@ -655,6 +1136,8 @@ function openConfirmModal() {
             musicConfig.artistes = musicConfig.artistes.filter(x => x.id !== deleteTarget.id);
         } else if (deleteTarget.type === 'playlist') {
             musicConfig.playlists = musicConfig.playlists.filter(x => x.id !== deleteTarget.id);
+        } else if (deleteTarget.type === 'songSpotlight') {
+            musicConfig.songSpotlights = musicConfig.songSpotlights.filter(x => x.id !== deleteTarget.id);
         } else if (deleteTarget.type === 'poll') {
             musicConfig.polls = musicConfig.polls.filter(x => x.id !== deleteTarget.id);
         }

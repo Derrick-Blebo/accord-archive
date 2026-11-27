@@ -29,6 +29,7 @@
     <meta name="twitter:title" content="Accord Music Hub — Curated Gospel Playlists, Artiste Spotlight & Award Polls" />
     <meta name="twitter:description" content="Discover curated gospel playlists, spotlighted Christian artistes, and community music polls on Accord Music Hub." />
     <meta name="twitter:image" content="https://www.accordarchives.com/og-cover.png" />
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -89,56 +90,123 @@
         <span id="toast-message" class="font-medium text-sm">Action completed successfully.</span>
     </div>
 
-    <!-- Song Submission Modal -->
-    <div id="submission-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <!-- Artist Spotlight Submission Modal (Registered Users, Subject to Admin Approval) -->
+    <div id="spotlight-submission-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
                 <div>
-                    <h3 class="font-bold text-accord-slate text-base">Submit Song for Promotion & Playlisting</h3>
-                    <p class="text-xs text-accord-muted">Independent artistes & promotion submissions via SoundSpace PR</p>
+                    <h3 class="font-bold text-accord-slate text-base">Submit to Artiste Spotlight</h3>
+                    <p class="text-xs text-accord-muted">Submissions are reviewed by admins before publishing to the blog &amp; Music Hub.</p>
                 </div>
-                <button type="button" onclick="closeSubmissionModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                <button type="button" onclick="closeSpotlightSubmissionModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <form id="submission-form" onsubmit="handleSongSubmission(event)" class="p-6 space-y-4 overflow-y-auto">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste / Group Name *</label>
-                        <input type="text" id="sub-artist" required placeholder="e.g., RichieO" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Title *</label>
-                        <input type="text" id="sub-title" required placeholder="e.g., Higher Ground" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
-                    </div>
-                </div>
+            <form id="spotlight-submission-form" onsubmit="handleSpotlightSubmission(event)" class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="sub-spotlight-image">
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Contact Email *</label>
-                        <input type="email" id="sub-email" required placeholder="artist@gmail.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste Name *</label>
+                        <input type="text" id="sub-spotlight-name" required placeholder="e.g., RichieO" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Genre / Category</label>
-                        <input type="text" id="sub-genre" placeholder="e.g., AfroGospel / Contemporary" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Genre / Ministry Style</label>
+                        <input type="text" id="sub-spotlight-genre" placeholder="e.g., AfroGospel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Streaming Link (Spotify, Apple Music, Audiomack) *</label>
-                    <input type="url" id="sub-link" required placeholder="https://open.spotify.com/track/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste Cover Art Upload *</label>
+                    <div class="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                        <div class="w-16 h-16 rounded-full bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                            <img id="sub-spotlight-preview" src="" alt="Preview" class="w-full h-full object-cover hidden">
+                            <i id="sub-spotlight-placeholder" class="fa-solid fa-user text-slate-400 text-lg"></i>
+                        </div>
+                        <div class="flex-1 space-y-1.5">
+                            <label for="sub-spotlight-file" id="sub-spotlight-upload-label" class="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold transition-all shadow-sm">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                <span>Upload Photo</span>
+                            </label>
+                            <input type="file" id="sub-spotlight-file" accept="image/*" onchange="handleUserSpotlightCoverUpload(event)" class="hidden">
+                            <p id="sub-spotlight-upload-status" class="text-[11px] text-accord-muted">Square or portrait image works best.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Artiste Songs (Playable Links)</label>
+                        <button type="button" onclick="addUserSpotlightSongRow()" class="text-[11px] font-bold text-accord-blue hover:underline inline-flex items-center gap-1">
+                            <i class="fa-solid fa-plus"></i> Add Song
+                        </button>
+                    </div>
+                    <div id="sub-spotlight-songs-container" class="space-y-2">
+                        <!-- Dynamic song rows -->
+                    </div>
                 </div>
 
                 <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste Bio / Song Background</label>
-                    <textarea id="sub-bio" rows="3" placeholder="Tell us about the song and ministry..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Article / Story About the Artiste *</label>
+                    <textarea id="sub-spotlight-article" rows="4" required placeholder="Share the artiste's story, ministry impact, and inspiration..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
 
                 <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
-                    <button type="button" onclick="closeSubmissionModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                    <button type="button" onclick="closeSpotlightSubmissionModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
                     <button type="submit" class="px-6 py-3 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-md transition-all">
-                        <i class="fa-solid fa-paper-plane mr-1.5"></i> Submit Track
+                        <i class="fa-solid fa-paper-plane mr-1.5"></i> Submit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Poll Nomination Modal (Registered Users) -->
+    <div id="nomination-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+                <div>
+                    <h3 class="font-bold text-accord-slate text-base">Nominate for Upcoming Polls</h3>
+                    <p class="text-xs text-accord-muted">Suggest a song or artiste for upcoming award categories.</p>
+                </div>
+                <button type="button" onclick="closeNominationModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="nomination-form" onsubmit="handlePollNominationSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Poll Category *</label>
+                    <select id="nom-category-select" onchange="toggleCustomNominationCategory()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+
+                <div id="nom-custom-category-wrap" class="hidden">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">New Category Name *</label>
+                    <input type="text" id="nom-custom-category" placeholder="e.g., Best Worship Collaboration 2026" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Nominee / Song &amp; Artiste Name *</label>
+                    <input type="text" id="nom-name" required placeholder="e.g., RichieO - Higher Ground" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Streaming Link (Optional)</label>
+                    <input type="url" id="nom-song-link" placeholder="https://open.spotify.com/track/..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Artiste Page Link (Optional)</label>
+                    <input type="text" id="nom-artist-link" placeholder="e.g., artist.html?id=... or social/profile URL" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                    <button type="button" onclick="closeNominationModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                    <button type="submit" class="px-6 py-3 rounded-xl bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold shadow-md transition-all">
+                        <i class="fa-solid fa-paper-plane mr-1.5"></i> Submit Nomination
                     </button>
                 </div>
             </form>
@@ -162,32 +230,59 @@
                 <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
                     Powered by SoundSpace PR. Discover curated gospel playlists, explore exclusive artiste profiles, and vote in our periodic award polls.
                 </p>
-                <div class="flex items-center space-x-4 pt-2">
+                <div class="flex flex-wrap items-center gap-3 pt-2">
                     <a href="#playlists" class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-6 py-3.5 rounded-xl shadow-md transition-all">
                         Explore Playlists
                     </a>
                     <a href="#polls" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-6 py-3.5 rounded-xl transition-all">
                         Vote in Awards
                     </a>
+                    <a href="artist-blog.html" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-6 py-3.5 rounded-xl transition-all">
+                        Artiste Blog
+                    </a>
                 </div>
             </div>
         </section>
 
-        <!-- Section 1: Artiste Spotlights -->
-        <section class="space-y-6">
-            <div class="flex items-center justify-between">
+        <!-- Section 1: Artiste Spotlights (Circular Portraits) -->
+        <section id="artistes" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlight</h2>
-                    <p class="text-xs text-accord-muted">Highlighting exceptional ministers and emerging Christian talent.</p>
+                    <p class="text-xs text-accord-muted">Click any featured minister to read their story and listen to embedded tracks.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button type="button" onclick="openSpotlightSubmissionModal()" class="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-accord-slate text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus text-accord-blue"></i>
+                        <span>Submit Artiste Spotlight</span>
+                    </button>
+                    <a href="artist-blog.html" class="px-4 py-2.5 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-all inline-flex items-center gap-1.5">
+                        <span>All Artiste Articles on Blog</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </a>
                 </div>
             </div>
 
-            <div id="spotlight-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div id="spotlight-grid" class="flex flex-wrap items-start justify-center sm:justify-start gap-7 sm:gap-10 py-2">
                 <!-- Populated dynamically by music.js -->
             </div>
         </section>
 
-        <!-- Section 2: Curated Playlists -->
+        <!-- Section 2: Song Spotlight -->
+        <section id="song-spotlight" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Song Spotlight</h2>
+                    <p class="text-xs text-accord-muted">Fresh gospel releases featured right now — press play to listen.</p>
+                </div>
+            </div>
+
+            <div id="song-spotlight-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Populated dynamically by music.js -->
+            </div>
+        </section>
+
+        <!-- Section 3: Curated Playlists -->
         <section id="playlists" class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -201,13 +296,42 @@
             </div>
         </section>
 
-        <!-- Section 3: Award Voting Polls -->
-        <section id="polls" class="space-y-6">
+        <!-- Section 4: Poll Results (Category Leaders & Winners) -->
+        <section id="poll-results" class="space-y-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Periodic Award Voting Polls</h2>
-                    <p class="text-xs text-accord-muted">Cast your vote for your favorite songs and ministers.</p>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Poll Results &amp; Category Leaders</h2>
+                    <p class="text-xs text-accord-muted">See who topped each category across our periodic gospel award polls.</p>
                 </div>
+            </div>
+
+            <div id="poll-results-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Populated dynamically by music.js -->
+            </div>
+        </section>
+
+        <!-- Section 5: Award Voting Polls & Upcoming Nominations -->
+        <section id="polls" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">Periodic Award Voting Polls</h2>
+                    <p class="text-xs text-accord-muted">Registered users can vote once per poll. Listen to songs or visit artiste pages before casting your vote.</p>
+                </div>
+                <button type="button" onclick="openNominationModal()" class="px-4 py-2.5 rounded-xl bg-accord-gold hover:bg-amber-500 text-accord-slate text-xs font-extrabold shadow-sm transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
+                    <i class="fa-solid fa-award"></i>
+                    <span>Nominate for Upcoming Polls</span>
+                </button>
+            </div>
+
+            <!-- Auth Notice Banner for Voting -->
+            <div id="polls-auth-banner" class="hidden bg-accord-lightBlue/70 border border-blue-200 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3 text-xs text-accord-slate">
+                    <i class="fa-solid fa-circle-info text-accord-blue text-base"></i>
+                    <span><strong>Sign in required to vote or nominate:</strong> Registered users get one vote per poll category.</span>
+                </div>
+                <a href="signin.html?next=music.html" class="px-4 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold text-center transition-all shrink-0">
+                    Sign In to Vote
+                </a>
             </div>
 
             <div id="polls-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -228,13 +352,13 @@
         </div>
     </footer>
 
-    <!-- Playlist Player Modal -->
+    <!-- Media Player Modal (Playlists, Song Spotlights, Poll Nominee Songs) -->
     <div id="playlist-player-modal" class="fixed inset-0 z-50 bg-accord-slate/75 backdrop-blur-sm hidden items-center justify-center p-4" onclick="if(event.target===this) closePlaylistPlayerModal()">
         <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col">
             <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div class="min-w-0 pr-4">
-                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Playlist Player</h3>
-                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Curated Gospel Playlist</p>
+                    <h3 id="player-modal-title" class="font-bold text-accord-slate text-sm truncate">Music Player</h3>
+                    <p id="player-modal-subtitle" class="text-[11px] text-accord-muted truncate">Accord Music Hub</p>
                 </div>
                 <div class="flex items-center space-x-2 shrink-0">
                     <a id="player-modal-external" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-accord-slate text-[11px] font-bold transition-colors">
@@ -253,6 +377,6 @@
 
     <!-- Script -->
     <script src="ads.js"></script>
-    <script src="music.js?v=4"></script>
+    <script src="music.js?v=5"></script>
 </body>
 </html>

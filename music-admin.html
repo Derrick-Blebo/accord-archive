@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-title" content="Accord" />
     <link rel="apple-touch-icon" href="/assets/icon-180.png" />
     <script src="/pwa-install.js" defer></script>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -151,10 +151,11 @@
 
                 <form id="music-item-form" onsubmit="handleSaveMusicItem(event)" class="p-6 space-y-4 overflow-y-auto">
                     <input type="hidden" id="edit-music-id">
+                    <input type="hidden" id="item-image">
 
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Entry Type *</label>
-                        <select id="item-type" required onchange="togglePlaylistFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                        <select id="item-type" required onchange="toggleMusicTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                             <option value="spotlight">Artiste Spotlight</option>
                             <option value="playlist">Curated Playlist</option>
                         </select>
@@ -186,23 +187,49 @@
                         </div>
                     </div>
 
+                    <!-- Cover Art Upload Only -->
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Cover Photo (Upload or Paste URL)</label>
-                        <div class="flex items-start gap-3">
-                            <div class="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Cover Art Upload *</label>
+                        <div class="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                            <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
                                 <img id="item-cover-preview" src="" alt="Cover preview" class="w-full h-full object-cover hidden">
                                 <i id="item-cover-placeholder" class="fa-solid fa-image text-slate-400 text-lg"></i>
                             </div>
-                            <div class="flex-1 space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <label for="item-cover-file" id="cover-upload-label" class="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-all">
+                            <div class="flex-1 space-y-1.5">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <label for="item-cover-file" id="cover-upload-label" class="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-all shadow-sm">
                                         <i class="fa-solid fa-cloud-arrow-up"></i>
-                                        <span>Upload Cover Photo</span>
+                                        <span>Upload Cover Art</span>
                                     </label>
+                                    <button type="button" id="clear-cover-btn" onclick="clearCoverImage()" class="hidden px-3 py-2 rounded-xl bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200 text-[11px] font-bold transition-all">
+                                        Remove
+                                    </button>
                                     <input type="file" id="item-cover-file" accept="image/*" onchange="handleCoverFileUpload(event)" class="hidden">
-                                    <span id="cover-upload-status" class="text-[11px] text-accord-muted"></span>
                                 </div>
-                                <input type="url" id="item-image" oninput="updateCoverPreview(this.value)" placeholder="https://... (auto-filled on upload or paste URL)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                                <p id="cover-upload-status" class="text-[11px] text-accord-muted">PNG, JPG, or WebP. Automatically compressed.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Spotlight Specific Fields -->
+                    <div id="spotlight-extra-group" class="space-y-4">
+                        <label class="flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 cursor-pointer">
+                            <div>
+                                <p class="text-xs font-bold text-accord-slate">Feature on Music Page</p>
+                                <p class="text-[11px] text-accord-muted">Only featured approved artistes appear on the Music Hub circle row.</p>
+                            </div>
+                            <input type="checkbox" id="item-featured" checked class="w-4 h-4 accent-emerald-600 rounded">
+                        </label>
+
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Artiste Playable Songs</label>
+                                <button type="button" onclick="addSpotlightSongRow()" class="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-plus"></i> Add Song
+                                </button>
+                            </div>
+                            <div id="spotlight-songs-container" class="space-y-2">
+                                <!-- Dynamic song rows -->
                             </div>
                         </div>
                     </div>
@@ -213,8 +240,8 @@
                     </div>
 
                     <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Description / Bio</label>
-                        <textarea id="item-description" rows="2" placeholder="Brief biography or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Blog Article / Bio / Description</label>
+                        <textarea id="item-description" rows="4" placeholder="Write the artiste spotlight story or playlist description..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
                     </div>
 
                     <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
@@ -227,13 +254,45 @@
             </div>
         </div>
 
+        <!-- Add / Edit Song Spotlight Modal (Only Title & Link) -->
+        <div id="song-spotlight-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col">
+                <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                    <div>
+                        <h3 id="song-spotlight-heading" class="font-bold text-accord-slate text-base">Add Song Spotlight</h3>
+                        <p class="text-xs text-accord-muted">Feature a track on the Music page with just title &amp; link</p>
+                    </div>
+                    <button type="button" onclick="closeSongSpotlightModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <form id="song-spotlight-form" onsubmit="handleSaveSongSpotlight(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="edit-song-spotlight-id">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Title *</label>
+                        <input type="text" id="song-spotlight-title" required placeholder="e.g., Higher Ground - RichieO" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Song Link *</label>
+                        <input type="url" id="song-spotlight-link" required placeholder="https://open.spotify.com/track/... or Apple Music / YouTube" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
+                    </div>
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+                        <button type="button" onclick="closeSongSpotlightModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Cancel</button>
+                        <button type="submit" class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all">
+                            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Song
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Add / Edit Award Poll Modal -->
         <div id="poll-modal" class="fixed inset-0 z-50 bg-accord-slate/70 backdrop-blur-sm hidden items-center justify-center p-4">
-            <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
                 <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
                     <div>
                         <h3 id="poll-modal-heading" class="font-bold text-accord-slate text-base">Create Award Voting Poll</h3>
-                        <p class="text-xs text-accord-muted">Set up periodic voting categories and nominees</p>
+                        <p class="text-xs text-accord-muted">Set up voting categories, nominees, song links &amp; artiste pages</p>
                     </div>
                     <button type="button" onclick="closePollModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center">
                         <i class="fa-solid fa-xmark"></i>
@@ -248,10 +307,17 @@
                         <input type="text" id="poll-title" required placeholder="e.g., Song of the Year - 2026 Awards" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                     </div>
 
-                    <div>
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Nominees (Comma separated or one per line) *</label>
-                        <textarea id="poll-nominees" rows="4" required placeholder="RichieO - Higher Ground&#10;OK Muziq - Gratitude&#10;Pacome Ben Elohim - Grace" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white"></textarea>
-                        <p class="text-[10px] text-accord-muted mt-1">Enter each nominee on a new line.</p>
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate">Nominees (with Song &amp; Artiste Page Links)</label>
+                            <button type="button" onclick="addPollNomineeRow()" class="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
+                                <i class="fa-solid fa-plus"></i> Add Nominee
+                            </button>
+                        </div>
+                        <div id="poll-nominees-container" class="space-y-2.5">
+                            <!-- Dynamic nominee rows -->
+                        </div>
+                        <p class="text-[10px] text-accord-muted">Add song streaming links so voters can listen, and artiste page links (e.g. <code>artist.html?id=...</code> or URL) so they can explore before voting.</p>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -259,6 +325,7 @@
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Poll Status</label>
                             <select id="poll-status" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white">
                                 <option value="open">Open for Voting</option>
+                                <option value="nominating">Upcoming (Open for Nominations)</option>
                                 <option value="closed">Closed / Concluded</option>
                             </select>
                         </div>
@@ -308,6 +375,10 @@
 
                 <!-- Admin User Info & Signout -->
                 <div class="flex items-center space-x-3">
+                    <a href="music.html" target="_blank" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        <span>View Music Hub</span>
+                    </a>
                     <div class="hidden sm:flex items-center space-x-3 pl-3 border-l border-slate-200">
                         <div class="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">MA</div>
                         <div class="text-left">
@@ -322,70 +393,103 @@
         <!-- Main Content -->
         <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-12">
 
-            <!-- Stats Overview Row -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+            <!-- Clickable Stats Overview Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <button type="button" onclick="focusAdminSection('admin-spotlights-section', 'spotlight')" class="text-left bg-white border border-slate-200/90 hover:border-emerald-400 hover:shadow-md rounded-3xl p-5 shadow-sm transition-all cursor-pointer group">
                     <div class="flex items-center justify-between">
-                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
                             <i class="fa-solid fa-microphone-lines"></i>
                         </div>
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">Spotlights</span>
                     </div>
                     <div class="mt-4">
                         <h3 id="stat-spotlights" class="text-2xl font-extrabold text-accord-slate">0</h3>
-                        <p class="text-xs text-accord-muted font-medium mt-0.5">Featured Artistes</p>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5 flex items-center justify-between">
+                            <span>Approved Artistes</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
-                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                <button type="button" onclick="focusAdminSection('admin-spotlights-section', 'playlist')" class="text-left bg-white border border-slate-200/90 hover:border-accord-blue hover:shadow-md rounded-3xl p-5 shadow-sm transition-all cursor-pointer group">
                     <div class="flex items-center justify-between">
-                        <div class="w-10 h-10 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center">
+                        <div class="w-10 h-10 rounded-2xl bg-blue-50 text-accord-blue flex items-center justify-center group-hover:scale-105 transition-transform">
                             <i class="fa-solid fa-list-music"></i>
                         </div>
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Playlists</span>
                     </div>
                     <div class="mt-4">
                         <h3 id="stat-playlists" class="text-2xl font-extrabold text-accord-slate">0</h3>
-                        <p class="text-xs text-accord-muted font-medium mt-0.5">Curated Playlists</p>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5 flex items-center justify-between">
+                            <span>Curated Playlists</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-accord-blue"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
-                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                <button type="button" onclick="focusAdminSection('admin-song-spotlights-section')" class="text-left bg-white border border-slate-200/90 hover:border-indigo-400 hover:shadow-md rounded-3xl p-5 shadow-sm transition-all cursor-pointer group">
                     <div class="flex items-center justify-between">
-                        <div class="w-10 h-10 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center">
+                        <div class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <i class="fa-solid fa-music"></i>
+                        </div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">Songs</span>
+                    </div>
+                    <div class="mt-4">
+                        <h3 id="stat-song-spotlights" class="text-2xl font-extrabold text-accord-slate">0</h3>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5 flex items-center justify-between">
+                            <span>Song Spotlights</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600"></i>
+                        </p>
+                    </div>
+                </button>
+
+                <button type="button" onclick="focusAdminSection('admin-polls-section')" class="text-left bg-white border border-slate-200/90 hover:border-accord-gold hover:shadow-md rounded-3xl p-5 shadow-sm transition-all cursor-pointer group">
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-50 text-accord-gold flex items-center justify-center group-hover:scale-105 transition-transform">
                             <i class="fa-solid fa-square-poll-vertical"></i>
                         </div>
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">Voting</span>
                     </div>
                     <div class="mt-4">
                         <h3 id="stat-polls" class="text-2xl font-extrabold text-accord-slate">0</h3>
-                        <p class="text-xs text-accord-muted font-medium mt-0.5">Active Award Polls</p>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5 flex items-center justify-between">
+                            <span>Active Award Polls</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-accord-gold"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
 
-                <div class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+                <button type="button" onclick="focusAdminSection('admin-spotlight-submissions-section')" class="text-left bg-white border border-slate-200/90 hover:border-purple-400 hover:shadow-md rounded-3xl p-5 shadow-sm transition-all cursor-pointer group">
                     <div class="flex items-center justify-between">
-                        <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                            <i class="fa-solid fa-compact-disc"></i>
+                        <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <i class="fa-solid fa-inbox"></i>
                         </div>
                         <span class="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">Queue</span>
                     </div>
                     <div class="mt-4">
                         <h3 id="stat-submissions" class="text-2xl font-extrabold text-accord-slate">0</h3>
-                        <p class="text-xs text-accord-muted font-medium mt-0.5">Song Submissions</p>
+                        <p class="text-xs text-accord-muted font-medium mt-0.5 flex items-center justify-between">
+                            <span>Pending Reviews</span>
+                            <i class="fa-solid fa-arrow-right text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-purple-600"></i>
+                        </p>
                     </div>
-                </div>
+                </button>
             </div>
 
             <!-- Section 1: Artiste Spotlight & Playlists Management -->
-            <section class="space-y-5">
+            <section id="admin-spotlights-section" class="space-y-5 scroll-mt-24">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlights & Curated Playlists</h2>
-                        <p class="text-xs text-accord-muted mt-1">Manage featured artists, gospel playlists, streaming links, and homepage music features.</p>
+                        <p class="text-xs text-accord-muted mt-1">Click any row to edit. Toggle "Featured" to control which approved artistes appear on the Music Hub.</p>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2.5">
+                        <div class="inline-flex bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+                            <button type="button" onclick="setMusicTableFilter('all')" id="filter-btn-all" class="px-3 py-1.5 rounded-lg bg-white text-accord-slate shadow-sm transition-all">All</button>
+                            <button type="button" onclick="setMusicTableFilter('spotlight')" id="filter-btn-spotlight" class="px-3 py-1.5 rounded-lg text-accord-muted hover:text-accord-slate transition-all">Spotlights</button>
+                            <button type="button" onclick="setMusicTableFilter('playlist')" id="filter-btn-playlist" class="px-3 py-1.5 rounded-lg text-accord-muted hover:text-accord-slate transition-all">Playlists</button>
+                        </div>
                         <button type="button" onclick="openMusicModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5">
                             <i class="fa-solid fa-plus"></i>
                             <span>Add Spotlight or Playlist</span>
@@ -401,7 +505,7 @@
                                     <th class="py-4 px-6">Entry Title & Artiste</th>
                                     <th class="py-4 px-6">Type</th>
                                     <th class="py-4 px-6">Genre</th>
-                                    <th class="py-4 px-6">Streaming Link</th>
+                                    <th class="py-4 px-6 text-center">Featured</th>
                                     <th class="py-4 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -413,12 +517,70 @@
                 </div>
             </section>
 
-            <!-- Section 2: Gospel Award Voting Polls -->
-            <section class="space-y-5">
+            <!-- Section 2: Song Spotlight Management -->
+            <section id="admin-song-spotlights-section" class="space-y-5 scroll-mt-24">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Song Spotlight</h2>
+                        <p class="text-xs text-accord-muted mt-1">Feature individual songs on the Music Hub using only a song title and link.</p>
+                    </div>
+                    <button type="button" onclick="openSongSpotlightModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center space-x-1.5 self-start md:self-auto">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Add Song Spotlight</span>
+                    </button>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Song Title</th>
+                                    <th class="py-4 px-6">Song Link</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="song-spotlights-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3: Artist Spotlight Submissions Queue -->
+            <section id="admin-spotlight-submissions-section" class="space-y-5 scroll-mt-24">
+                <div>
+                    <h2 class="serif-heading text-2xl font-bold text-accord-slate">User Artist Spotlight Submissions</h2>
+                    <p class="text-xs text-accord-muted mt-1">Review community-submitted artist spotlights. Approved submissions appear on the blog; featured ones also appear on the Music Hub.</p>
+                </div>
+
+                <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                    <th class="py-4 px-6">Artiste &amp; Article</th>
+                                    <th class="py-4 px-6">Songs</th>
+                                    <th class="py-4 px-6">Submitted By</th>
+                                    <th class="py-4 px-6 text-center">Status</th>
+                                    <th class="py-4 px-6 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="spotlight-submissions-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 4: Gospel Award Voting Polls & Nominations -->
+            <section id="admin-polls-section" class="space-y-5 scroll-mt-24">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 class="serif-heading text-2xl font-bold text-accord-slate">Gospel Award Voting Polls</h2>
-                        <p class="text-xs text-accord-muted mt-1">Configure periodic voting polls, monitor live results, and export voting data to Excel.</p>
+                        <p class="text-xs text-accord-muted mt-1">Configure periodic voting polls, click any poll to edit nominees/links, and export results to Excel.</p>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2.5">
@@ -450,6 +612,31 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- User Poll Nominations Sub-table -->
+                <div class="pt-4 space-y-3">
+                    <div>
+                        <h3 class="font-bold text-base text-accord-slate">User Nominations for Upcoming Polls</h3>
+                        <p class="text-xs text-accord-muted">Approve user-submitted nominations into an active/upcoming poll category.</p>
+                    </div>
+                    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-accord-muted">
+                                        <th class="py-4 px-6">Category &amp; Nominee</th>
+                                        <th class="py-4 px-6">Links</th>
+                                        <th class="py-4 px-6">Submitted By</th>
+                                        <th class="py-4 px-6 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="poll-nominations-table-body" class="divide-y divide-slate-100 text-xs text-accord-slate font-medium">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </section>
 
         </main>
@@ -459,7 +646,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-accord-muted space-y-3 sm:space-y-0">
                 <div class="flex items-center space-x-2">
                     <span class="font-bold text-accord-slate">Accord Gospel Music & Polls Admin</span>
-                    <span>• Management Portal v1.0</span>
+                    <span>• Management Portal v2.0</span>
                 </div>
                 <p>© 2026 Accord Media House. All rights reserved.</p>
             </div>
@@ -470,6 +657,6 @@
     <script src="admin-core.js"></script>
 
     <!-- Script -->
-    <script src="music-admin.js?v=2"></script>
+    <script src="music-admin.js?v=3"></script>
 </body>
 </html>

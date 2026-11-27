@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artiste Spotlight — Accord Music Hub</title>
+    <link rel="icon" type="image/svg+xml" href="assets/accord-mark.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0077FF" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Accord" />
+    <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+    <script src="/pwa-install.js" defer></script>
+    <meta name="description" content="Read artiste spotlight stories and stream featured gospel songs on Accord Music Hub." />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accord: {
+                            blue: '#0077FE',
+                            darkBlue: '#005BC4',
+                            lightBlue: '#E6F0FF',
+                            gold: '#F5A623',
+                            goldLight: '#FEF9E7',
+                            slate: '#0F172A',
+                            muted: '#64748B',
+                            bg: '#F8FAFC'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-heading { font-family: 'Playfair Display', serif; }
+    </style>
+</head>
+<body class="bg-accord-bg text-accord-slate antialiased min-h-screen flex flex-col justify-between selection:bg-accord-blue selection:text-white">
+
+    <!-- Global Header Container -->
+    <div id="accord-header"></div>
+    <script src="header.js?v=4"></script>
+
+    <main class="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+        <!-- Breadcrumb / Top Nav -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <a href="music.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-muted hover:text-accord-blue transition-colors">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Music Hub</span>
+            </a>
+            <a href="artist-blog.html" class="inline-flex items-center space-x-2 text-xs font-bold text-accord-blue hover:text-accord-darkBlue transition-colors">
+                <i class="fa-solid fa-newspaper"></i>
+                <span>All Artiste Articles on Blog</span>
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
+        </div>
+
+        <!-- Loading State -->
+        <div id="artist-loading" class="bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-accord-blue mb-3"></i>
+            <p class="text-xs font-semibold text-accord-muted">Loading artiste spotlight...</p>
+        </div>
+
+        <!-- Not Found State -->
+        <div id="artist-not-found" class="hidden bg-white border border-slate-200/80 rounded-3xl p-12 text-center shadow-sm space-y-4">
+            <div class="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-microphone-slash"></i>
+            </div>
+            <h1 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlight Not Found</h1>
+            <p class="text-xs text-accord-muted max-w-md mx-auto">This spotlight may have been removed or is still pending admin approval.</p>
+            <div class="pt-2 flex items-center justify-center gap-3">
+                <a href="music.html" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold transition-all">Return to Music Hub</a>
+                <a href="artist-blog.html" class="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all">Browse All Articles</a>
+            </div>
+        </div>
+
+        <!-- Artiste Content -->
+        <article id="artist-content" class="hidden space-y-10">
+            <!-- Hero Header -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm">
+                <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8">
+                    <div class="w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden ring-4 ring-accord-lightBlue shadow-lg shrink-0 bg-slate-100">
+                        <img id="artist-avatar" src="" alt="Artiste" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1 text-center sm:text-left space-y-3">
+                        <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                            <span id="artist-genre" class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">Gospel</span>
+                            <span id="artist-featured-badge" class="hidden inline-block bg-accord-goldLight text-amber-800 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full">
+                                <i class="fa-solid fa-star mr-1 text-accord-gold"></i>Featured Spotlight
+                            </span>
+                        </div>
+                        <h1 id="artist-name" class="serif-heading text-3xl sm:text-4xl font-bold text-accord-slate tracking-tight">Artiste Name</h1>
+                        <p id="artist-meta" class="text-xs text-accord-muted font-medium"></p>
+                        <div id="artist-external-wrap" class="pt-2 hidden">
+                            <a id="artist-external-link" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 bg-accord-slate hover:bg-black text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm transition-all">
+                                <i class="fa-solid fa-headphones"></i>
+                                <span>Open Artiste Streaming Profile</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Blog / Story Section -->
+            <section class="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm space-y-5">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-widest text-accord-blue">Artiste Spotlight Blog</span>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate mt-0.5">About the Artiste</h2>
+                    </div>
+                    <i class="fa-solid fa-feather-pointed text-accord-gold text-xl"></i>
+                </div>
+                <div id="artist-article-body" class="text-sm sm:text-[15px] text-slate-700 leading-relaxed space-y-4 whitespace-pre-line">
+                    <!-- Article paragraphs injected dynamically -->
+                </div>
+            </section>
+
+            <!-- Playable Songs Section -->
+            <section class="space-y-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="serif-heading text-2xl font-bold text-accord-slate">Featured Songs</h2>
+                        <p class="text-xs text-accord-muted">Listen directly via embedded players below.</p>
+                    </div>
+                </div>
+                <div id="artist-songs-list" class="grid grid-cols-1 gap-5">
+                    <!-- Playable embeds injected dynamically -->
+                </div>
+            </section>
+        </article>
+    </main>
+
+    <div id="accord-footer"></div>
+    <script src="footer.js"></script>
+    <script src="artist.js?v=1"></script>
+</body>
+</html>
