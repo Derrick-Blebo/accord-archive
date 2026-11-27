@@ -563,6 +563,30 @@
 
                     <div id="audience-geo-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
 
+                    <!-- Page Ad Visibility Controls -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-sm font-bold text-accord-slate">Page Ad Visibility Controls</h3>
+                                    <span id="ad-page-controls-summary" class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">Loading...</span>
+                                </div>
+                                <p class="text-[11px] text-accord-muted mt-0.5">Choose which pages can display ads. Turn any page off to immediately block all banners and sponsored ads from appearing on it.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                                <button type="button" onclick="setAllSuperadminPageAds(true)" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors">
+                                    Enable All Pages
+                                </button>
+                                <button type="button" onclick="setAllSuperadminPageAds(false)" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors">
+                                    Disable All Ads
+                                </button>
+                            </div>
+                        </div>
+                        <div id="superadmin-ad-page-controls" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                            <p class="text-xs text-accord-muted col-span-full py-3">Loading page ad controls...</p>
+                        </div>
+                    </div>
+
                     <!-- Site Locations Overview -->
                     <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -758,6 +782,7 @@
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="library" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Library (index)</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="feed" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Feed</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="music" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Music</label>
+                        <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="sermons" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Sermons</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="book" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Book Detail</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="post" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Post Detail</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="author" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Author</label>
