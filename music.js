@@ -248,13 +248,20 @@ function renderSongSpotlights() {
         const platform = getPlaylistPlatformInfo(song.link);
         const card = document.createElement('div');
         card.className = "bg-accord-blue border border-white/20 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3";
+        const subtitle = song.artist ? `${song.artist}` : 'Song Spotlight';
         card.innerHTML = `
             <div class="flex items-center gap-3 min-w-0">
-                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', 'Song Spotlight', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="w-11 h-11 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm" title="Play Song">
-                    <i class="fa-solid fa-play text-xs ml-0.5"></i>
+                <button type="button" onclick="openMediaPlayerModal('${escapeHTML(song.title).replace(/'/g, "\\'")}', '${escapeHTML(subtitle).replace(/'/g, "\\'")}', '${escapeHTML(song.link).replace(/'/g, "\\'")}')" class="relative w-12 h-12 rounded-2xl bg-white/15 hover:bg-white text-white hover:text-accord-blue border border-white/20 flex items-center justify-center transition-all shrink-0 shadow-sm overflow-hidden group" title="Play Song">
+                    ${song.image
+                        ? `<img src="${escapeHTML(song.image)}" alt="${escapeHTML(song.title)}" class="w-full h-full object-cover">
+                           <span class="absolute inset-0 bg-black/35 group-hover:bg-black/50 flex items-center justify-center transition-colors">
+                               <i class="fa-solid fa-play text-xs text-white ml-0.5"></i>
+                           </span>`
+                        : `<i class="fa-solid fa-play text-xs ml-0.5"></i>`}
                 </button>
                 <div class="min-w-0">
                     <h3 class="text-sm font-bold text-white truncate">${escapeHTML(song.title)}</h3>
+                    ${song.artist ? `<p class="text-[11px] text-white/80 truncate">${escapeHTML(song.artist)}</p>` : ''}
                     <div class="text-[10px] text-slate-800 inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white/95">
                         ${platform.brandHtml}
                     </div>

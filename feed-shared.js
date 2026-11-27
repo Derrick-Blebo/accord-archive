@@ -633,10 +633,11 @@ function createSharedFeedCardElement(post, options = {}) {
         </div>
 
         <!-- Post Content -->
+        ${shownBody ? `
         <div class="px-4 pb-3 space-y-1.5">
             <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeShareHtml(shownBody)}</p>
             ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
-        </div>
+        </div>` : ''}
 
         ${mediaHtml}
         ${linkedBookId ? `<div class="feed-book-link-preview mx-4 mb-3" data-book-id="${escapeShareHtml(linkedBookId)}"></div>` : ''}
@@ -757,7 +758,7 @@ function ensureEditPostModalDom() {
                     <input type="url" id="accord-edit-post-media" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                 </div>
                 <div>
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Content</label>
+                    <label id="accord-edit-post-body-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Content</label>
                     <textarea id="accord-edit-post-body" rows="5" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-2">
@@ -777,7 +778,15 @@ function openSharedEditPostModal(post, onSaved) {
     _editPostTarget = post;
     _editPostCallback = typeof onSaved === 'function' ? onSaved : null;
 
-    document.getElementById('accord-edit-post-body').value = post.body || '';
+    const bodyInput = document.getElementById('accord-edit-post-body');
+    const bodyLabel = document.getElementById('accord-edit-post-body-label');
+    if (bodyInput) {
+        bodyInput.value = post.body || '';
+        bodyInput.required = post.post_type !== 'audio';
+    }
+    if (bodyLabel) {
+        bodyLabel.textContent = post.post_type === 'audio' ? 'Content (Optional)' : 'Content *';
+    }
     const mediaWrap = document.getElementById('accord-edit-post-media-wrap');
     const mediaInput = document.getElementById('accord-edit-post-media');
     const needsMedia = post.post_type === 'video' || post.post_type === 'audio';

@@ -1199,6 +1199,18 @@ function togglePostTypeFields() {
             ? 'Paste Spotify, Audiomack, Apple Music, or Apple Podcasts link...'
             : 'https://www.youtube.com/watch?v=...';
     }
+    const contentInput = document.getElementById('post-content');
+    const contentLabel = document.getElementById('post-content-label');
+    const isAudio = type === 'audio';
+    if (contentInput) {
+        contentInput.required = !isAudio;
+        contentInput.placeholder = isAudio
+            ? 'Add an optional message, reflection, or sermon note...'
+            : 'Write your testimony, reflection, or text post...';
+    }
+    if (contentLabel) {
+        contentLabel.textContent = isAudio ? 'Message / Story (Optional)' : 'Message / Story *';
+    }
     const urlLabel = document.getElementById('post-url-label');
     if (urlLabel) {
         urlLabel.textContent = type === 'audio'

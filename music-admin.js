@@ -434,7 +434,17 @@ function renderSongSpotlightsTable() {
         tr.className = `hover:bg-slate-50/90 transition-colors border-b border-slate-100 last:border-0 cursor-pointer ${isHidden ? 'opacity-65 bg-slate-50/40' : ''}`;
         tr.onclick = () => openSongSpotlightModal('edit', song.id);
         tr.innerHTML = `
-            <td class="py-4 px-6 font-bold text-accord-slate">${escapeHTML(song.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</td>
+            <td class="py-4 px-6 font-bold text-accord-slate">
+                <div class="flex items-center gap-3">
+                    ${song.image
+                        ? `<img src="${escapeHTML(song.image)}" alt="${escapeHTML(song.title)}" class="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0">`
+                        : `<div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100"><i class="fa-solid fa-music text-xs"></i></div>`}
+                    <div class="min-w-0">
+                        <div class="truncate">${escapeHTML(song.title)}${isHidden ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600 ml-1">Hidden</span>' : ''}</div>
+                        ${song.artist ? `<div class="text-[11px] font-normal text-accord-muted truncate">${escapeHTML(song.artist)}</div>` : ''}
+                    </div>
+                </div>
+            </td>
             <td class="py-4 px-6 text-accord-blue truncate max-w-md" onclick="event.stopPropagation()">
                 <a href="${escapeHTML(song.link)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHTML(song.link)}</a>
             </td>
@@ -1005,11 +1015,117 @@ async function toggleMusicItemVisibility(id, entryType) {
 // SONG SPOTLIGHT HANDLERS
 // ==========================================
 
+let _pendingSongSpotlightMeta = null;
+let _songSpotlightMetaTimer = null;
+
+function resetSongSpotlightMetaPreview() {
+    _pendingSongSpotlightMeta = null;
+    clearTimeout(_songSpotlightMetaTimer);
+    document.getElementById('song-spotlight-meta-preview')?.classList.add('hidden');
+}
+
+function renderSongSpotlightMetaPreview({ statusText, title, artist, image, loading = false }) {
+    const box = document.getElementById('song-spotlight-meta-preview');
+    const thumbEl = document.getElementById('song-spotlight-meta-thumb');
+    const statusEl = document.getElementById('song-spotlight-meta-status');
+    const titleEl = document.getElementById('song-spotlight-meta-title');
+    const artistEl = document.getElementById('song-spotlight-meta-artist');
+    if (!box) return;
+
+    box.classList.remove('hidden');
+    if (statusEl) statusEl.textContent = statusText || 'Auto-pulled from source';
+    if (titleEl) titleEl.textContent = title || 'Song Track';
+    if (artistEl) {
+        artistEl.textContent = artist || '';
+        artistEl.classList.toggle('hidden', !artist);
+    }
+    if (thumbEl) {
+        if (loading) {
+            thumbEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        } else if (image) {
+            thumbEl.innerHTML = `<img src="${escapeHTML(image)}" alt="Song cover" class="w-full h-full object-cover">`;
+        } else {
+            thumbEl.innerHTML = '<i class="fa-solid fa-music"></i>';
+        }
+    }
+}
+
+async function fetchSongSpotlightMetadata(url) {
+    const clean = String(url || '').trim();
+    if (!clean || !/^https?:\/\//i.test(clean)) return null;
+    try {
+        const resp = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        return {
+            url: clean,
+            title: String(data?.title || '').trim(),
+            image: String(data?.image || '').trim(),
+            artist: String(data?.curator || '').trim()
+        };
+    } catch {
+        return null;
+    }
+}
+
+function scheduleSongSpotlightMetaPreview() {
+    const linkInput = document.getElementById('song-spotlight-link');
+    const url = linkInput?.value.trim() || '';
+    if (!url || !/^https?:\/\//i.test(url)) {
+        resetSongSpotlightMetaPreview();
+        return;
+    }
+
+    clearTimeout(_songSpotlightMetaTimer);
+    _songSpotlightMetaTimer = setTimeout(async () => {
+        renderSongSpotlightMetaPreview({
+            statusText: 'Pulling title, cover & artiste...',
+            title: url,
+            artist: '',
+            image: '',
+            loading: true
+        });
+
+        const meta = await fetchSongSpotlightMetadata(url);
+        if ((document.getElementById('song-spotlight-link')?.value.trim() || '') !== url) return;
+
+        _pendingSongSpotlightMeta = meta;
+        const titleInput = document.getElementById('song-spotlight-title');
+        const imageInput = document.getElementById('song-spotlight-image');
+        const artistInput = document.getElementById('song-spotlight-artist');
+
+        if (meta && (meta.title || meta.image || meta.artist)) {
+            if (titleInput && !titleInput.value.trim() && meta.title) {
+                titleInput.value = meta.title;
+            }
+            if (imageInput) imageInput.value = meta.image || '';
+            if (artistInput) artistInput.value = meta.artist || '';
+
+            renderSongSpotlightMetaPreview({
+                statusText: 'Auto-pulled from source',
+                title: meta.title || titleInput?.value.trim() || 'Song Track',
+                artist: meta.artist,
+                image: meta.image
+            });
+        } else {
+            renderSongSpotlightMetaPreview({
+                statusText: 'Streaming link attached',
+                title: titleInput?.value.trim() || 'Details could not be auto-pulled from this link',
+                artist: '',
+                image: ''
+            });
+        }
+    }, 350);
+}
+
 function openSongSpotlightModal(mode = 'add', id = null) {
     const modal = document.getElementById('song-spotlight-modal');
     const heading = document.getElementById('song-spotlight-heading');
     document.getElementById('song-spotlight-form').reset();
     document.getElementById('edit-song-spotlight-id').value = '';
+    document.getElementById('song-spotlight-image').value = '';
+    document.getElementById('song-spotlight-artist').value = '';
+    resetSongSpotlightMetaPreview();
 
     if (mode === 'edit' && id) {
         heading.innerText = 'Edit Song Spotlight';
@@ -1018,7 +1134,24 @@ function openSongSpotlightModal(mode = 'add', id = null) {
             document.getElementById('edit-song-spotlight-id').value = song.id;
             document.getElementById('song-spotlight-title').value = song.title || '';
             document.getElementById('song-spotlight-link').value = song.link || '';
+            document.getElementById('song-spotlight-image').value = song.image || '';
+            document.getElementById('song-spotlight-artist').value = song.artist || '';
             document.getElementById('song-spotlight-visible').checked = song.hidden !== true;
+
+            if (song.image || song.artist || song.title) {
+                _pendingSongSpotlightMeta = {
+                    url: song.link || '',
+                    title: song.title || '',
+                    image: song.image || '',
+                    artist: song.artist || ''
+                };
+                renderSongSpotlightMetaPreview({
+                    statusText: 'Saved song details',
+                    title: song.title || 'Song Track',
+                    artist: song.artist || '',
+                    image: song.image || ''
+                });
+            }
         }
     } else {
         heading.innerText = 'Add Song Spotlight';
@@ -1030,6 +1163,7 @@ function openSongSpotlightModal(mode = 'add', id = null) {
 }
 
 function closeSongSpotlightModal() {
+    resetSongSpotlightMetaPreview();
     const modal = document.getElementById('song-spotlight-modal');
     modal.classList.remove('flex');
     modal.classList.add('hidden');
@@ -1037,13 +1171,55 @@ function closeSongSpotlightModal() {
 
 async function handleSaveSongSpotlight(e) {
     e.preventDefault();
-    const id = document.getElementById('edit-song-spotlight-id').value || 'song-' + Date.now();
-    const title = document.getElementById('song-spotlight-title').value.trim();
+    const editId = document.getElementById('edit-song-spotlight-id').value;
+    const id = editId || 'song-' + Date.now();
+    const existing = editId ? musicConfig.songSpotlights.find(s => s.id === editId) : null;
+    let title = document.getElementById('song-spotlight-title').value.trim();
     const link = document.getElementById('song-spotlight-link').value.trim();
+    let image = document.getElementById('song-spotlight-image').value.trim();
+    let artist = document.getElementById('song-spotlight-artist').value.trim();
     const isVisible = document.getElementById('song-spotlight-visible')?.checked !== false;
 
+    const saveBtn = document.getElementById('song-spotlight-save-btn');
+    const originalBtnHtml = saveBtn ? saveBtn.innerHTML : '';
+    const linkChanged = existing && existing.link !== link;
+
+    if (link && (!title || !image || !artist || linkChanged)) {
+        let meta = (_pendingSongSpotlightMeta && _pendingSongSpotlightMeta.url === link) ? _pendingSongSpotlightMeta : null;
+        if (!meta) {
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Pulling details...';
+            }
+            meta = await fetchSongSpotlightMetadata(link);
+        }
+        if (meta) {
+            if (!title && meta.title) title = meta.title;
+            if ((!image || linkChanged) && meta.image) image = meta.image;
+            if ((!artist || linkChanged) && meta.artist) artist = meta.artist;
+        }
+    }
+
+    if (!title) {
+        const platform = typeof getPlaylistPlatformInfo === 'function' ? getPlaylistPlatformInfo(link) : null;
+        title = platform?.name ? `${platform.name} Track` : 'Featured Song';
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalBtnHtml;
+    }
+
     musicConfig.songSpotlights = musicConfig.songSpotlights.filter(s => s.id !== id);
-    musicConfig.songSpotlights.unshift({ id, title, link, hidden: !isVisible, createdAt: new Date().toISOString() });
+    musicConfig.songSpotlights.unshift({
+        id,
+        title,
+        link,
+        ...(image ? { image } : {}),
+        ...(artist ? { artist } : {}),
+        hidden: !isVisible,
+        createdAt: existing?.createdAt || new Date().toISOString()
+    });
 
     closeSongSpotlightModal();
     await persistMusicConfig();
