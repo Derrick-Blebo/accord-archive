@@ -709,22 +709,22 @@ function renderPollResults() {
         const pct = totalVotes > 0 ? Math.round((topCount / totalVotes) * 100) : 0;
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-4";
+        card.className = "bg-gradient-to-br from-accord-goldLight via-amber-50 to-amber-100/90 border border-amber-300/90 rounded-3xl p-6 shadow-sm hover:shadow-md hover:border-amber-400 transition-all flex flex-col justify-between space-y-4";
         card.innerHTML = `
             <div class="space-y-3">
                 <div class="flex items-center justify-between gap-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isClosed ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}">
-                        <i class="fa-solid ${isClosed ? 'fa-trophy text-accord-gold' : 'fa-chart-line'}"></i>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isClosed ? 'bg-amber-200/80 text-amber-900' : 'bg-white/85 text-emerald-700 border border-emerald-200/70'}">
+                        <i class="fa-solid ${isClosed ? 'fa-trophy text-amber-700' : 'fa-chart-line'}"></i>
                         <span>${isClosed ? 'Category Winner' : 'Leading Now'}</span>
                     </span>
-                    <span class="text-[11px] font-bold text-accord-muted">${totalVotes} total votes</span>
+                    <span class="text-[11px] font-bold text-amber-900/70">${totalVotes} total votes</span>
                 </div>
-                <p class="text-xs font-bold text-accord-muted uppercase tracking-wider">${escapeHTML(poll.title)}</p>
+                <p class="text-xs font-bold text-amber-900/75 uppercase tracking-wider">${escapeHTML(poll.title)}</p>
                 <h3 class="serif-heading text-xl font-bold text-accord-slate">${escapeHTML(leaderNames)}</h3>
             </div>
-            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span class="font-bold text-accord-blue">${topCount} votes (${pct}%)</span>
-                <a href="#polls" class="text-[11px] font-bold text-accord-muted hover:text-accord-blue transition-colors">View Poll →</a>
+            <div class="pt-3 border-t border-amber-200/80 flex items-center justify-between text-xs">
+                <span class="font-bold text-amber-900">${topCount} votes (${pct}%)</span>
+                <a href="#polls" class="text-[11px] font-bold text-amber-800 hover:text-accord-slate transition-colors">View Poll →</a>
             </div>
         `;
         grid.appendChild(card);
