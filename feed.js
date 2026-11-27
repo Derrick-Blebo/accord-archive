@@ -369,16 +369,23 @@ async function renderFeedStream() {
     const streamContainer = document.getElementById('feed-stream');
     if (!streamContainer) return;
 
+    const suggestionsSection = document.getElementById('feed-suggestions-section');
+    if (suggestionsSection && suggestionsSection.parentElement === streamContainer) {
+        streamContainer.insertAdjacentElement('afterend', suggestionsSection);
+    }
+
     const isSearching = Boolean(feedSearchQuery.trim());
     const visibleItems = buildRankedFeedItems();
     updateFeedSearchSummary(visibleItems.length);
 
     if (isSearching && feedSearchScope === 'people') {
         streamContainer.innerHTML = '';
+        suggestionsSection?.classList.add('hidden');
         return;
     }
 
     if (visibleItems.length === 0) {
+        suggestionsSection?.classList.add('hidden');
         streamContainer.innerHTML = `
             <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
                 <i class="fa-regular fa-folder-open text-3xl text-slate-300"></i>
@@ -394,9 +401,14 @@ async function renderFeedStream() {
         ? await window.getAccordSponsoredFeedCards()
         : [];
     let adIdx = 0;
+    const suggestionsAfterPosts = 3;
+    const suggestionsTargetIdx = Math.min(suggestionsAfterPosts, visibleItems.length) - 1;
 
     visibleItems.forEach((item, idx) => {
         streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
+        if (idx === suggestionsTargetIdx && suggestionsSection) {
+            streamContainer.appendChild(suggestionsSection);
+        }
         if ((idx + 1) % 4 === 0 && adIdx < sponsoredCards.length && typeof window.createAccordSponsoredCardElement === 'function') {
             streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[adIdx++]));
         }
@@ -404,6 +416,7 @@ async function renderFeedStream() {
     if (adIdx === 0 && sponsoredCards.length > 0 && typeof window.createAccordSponsoredCardElement === 'function') {
         streamContainer.appendChild(window.createAccordSponsoredCardElement(sponsoredCards[0]));
     }
+    renderFeedSuggestions();
     window.observeAccordAds?.();
     hydrateFeedBookLinkPreviews();
     setupFeedViewObserver();
@@ -698,10 +711,14 @@ function renderFeedSuggestions() {
     const listEl = document.getElementById('feed-suggestions-list');
     if (!section || !listEl) return;
 
+    const streamContainer = document.getElementById('feed-stream');
+    const hasPosts = Boolean(streamContainer && streamContainer.querySelector('article[data-post-id]'));
     const isSearching = Boolean(feedSearchQuery.trim());
-    if (isSearching || suggestedAccounts.length === 0) {
+    if (isSearching || suggestedAccounts.length === 0 || !hasPosts) {
         section.classList.add('hidden');
-        listEl.innerHTML = '';
+        if (isSearching || suggestedAccounts.length === 0) {
+            listEl.innerHTML = '';
+        }
         return;
     }
 
