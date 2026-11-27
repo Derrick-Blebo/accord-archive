@@ -150,6 +150,7 @@ export default async function handler(req, res) {
 
     const ogTags = `
     <title>${escapeAttr(title)}</title>
+    <link rel="canonical" href="${escapeAttr(canonicalUrl)}" />
     <meta name="description" content="${escapeAttr(description)}" />
     <meta property="og:type" content="${escapeAttr(ogType)}" />
     <meta property="og:site_name" content="Accord Archive & Library" />
@@ -175,6 +176,7 @@ export default async function handler(req, res) {
 
     html = html
         .replace(/<title>[\s\S]*?<\/title>/i, '')
+        .replace(/<link[^>]+rel=["']canonical["'][^>]*>/gi, '')
         .replace(/<meta[^>]+name=["']description["'][^>]*>/gi, '')
         .replace(/<meta[^>]+property=["']og:[^"']+["'][^>]*>/gi, '')
         .replace(/<meta[^>]+name=["']twitter:[^"']+["'][^>]*>/gi, '');

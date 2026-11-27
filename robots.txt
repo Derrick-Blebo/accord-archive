@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+Allow: /assets/
+Allow: /favicon.ico
+Allow: /og-cover.png
+
+Disallow: /admin.html
+Disallow: /superadmin.html
+Disallow: /Superadmin.html
+Disallow: /feed-admin.html
+Disallow: /library-admin.html
+Disallow: /music-admin.html
+Disallow: /messages.html
+Disallow: /profile.html
+Disallow: /saved.html
+Disallow: /author.html
+Disallow: /promote.html
+Disallow: /signin.html
+Disallow: /api/
+
+Sitemap: https://www.accordarchives.com/sitemap.xml
