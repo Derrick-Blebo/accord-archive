@@ -397,9 +397,15 @@ async function renderFeedStream() {
     }
 
     streamContainer.innerHTML = '';
-    const sponsoredCards = typeof window.getAccordSponsoredFeedCards === 'function'
+    const rawSponsoredCards = typeof window.getAccordSponsoredFeedCards === 'function'
         ? await window.getAccordSponsoredFeedCards()
         : [];
+    const sponsoredCards = currentTab === 'all'
+        ? rawSponsoredCards
+        : [
+            ...rawSponsoredCards.filter(p => p.promo_type === 'post' && p._targetPost?.post_type === currentTab),
+            ...rawSponsoredCards.filter(p => !(p.promo_type === 'post' && p._targetPost?.post_type === currentTab))
+        ];
     let adIdx = 0;
     const postAdChunkSize = 4;
     const suggestionsAfterPosts = 3;

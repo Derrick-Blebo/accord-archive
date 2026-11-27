@@ -133,7 +133,64 @@
             return true;
         });
 
+        await enrichSponsoredPosts(_activePromotionsCache);
+
         return _activePromotionsCache;
+    }
+
+    async function enrichSponsoredPosts(promos) {
+        const client = window.supabaseClient;
+        if (!client || !Array.isArray(promos) || promos.length === 0) return;
+
+        const postIds = [...new Set(
+            promos
+                .filter(p => p.promo_type === 'post' && p.target_post_id)
+                .map(p => String(p.target_post_id))
+        )];
+        if (postIds.length === 0) return;
+
+        try {
+            const [postsRes, commentsRes] = await Promise.all([
+                client.from('feed_posts').select('*').in('id', postIds),
+                client.from('post_comments').select('post_id').in('post_id', postIds)
+            ]);
+
+            const postRows = Array.isArray(postsRes?.data) ? postsRes.data : [];
+            const postById = new Map(postRows.map(post => [String(post.id), post]));
+
+            const commentCounts = new Map();
+            (commentsRes?.data || []).forEach(c => {
+                const key = String(c.post_id);
+                commentCounts.set(key, (commentCounts.get(key) || 0) + 1);
+            });
+
+            const authorIds = [...new Set(
+                postRows
+                    .filter(post => !post.is_anonymous && post.author_id)
+                    .map(post => String(post.author_id))
+            )];
+
+            const profileById = new Map();
+            if (authorIds.length > 0) {
+                const { data: profileRows } = await client
+                    .from('profiles')
+                    .select('id, handle, avatar_url, full_name, account_type, upgrade_status')
+                    .in('id', authorIds);
+                (profileRows || []).forEach(prof => {
+                    profileById.set(String(prof.id), prof);
+                });
+            }
+
+            promos.forEach(promo => {
+                if (promo.promo_type !== 'post' || !promo.target_post_id) return;
+                const post = postById.get(String(promo.target_post_id)) || null;
+                promo._targetPost = post;
+                promo._commentsCount = commentCounts.get(String(promo.target_post_id)) || 0;
+                promo._authorProfile = (post && !post.is_anonymous && post.author_id)
+                    ? (profileById.get(String(post.author_id)) || null)
+                    : null;
+            });
+        } catch (_) {}
     }
 
     function setupAdImpressionObserver() {
@@ -329,6 +386,7 @@
         });
 
         setupAdImpressionObserver();
+        window.hydrateSharedBookLinkPreviews?.();
     };
 
     window.renderAccordCentralAdBanners = async function (containerId) {
@@ -407,6 +465,7 @@
         }
 
         setupAdImpressionObserver();
+        window.hydrateSharedBookLinkPreviews?.();
     };
 
     window.getAccordSponsoredFeedCards = async function () {
@@ -423,7 +482,320 @@
         return shufflePromos(eligible);
     };
 
+    function getSponsoredPostTypeMeta(type) {
+        if (typeof window.getSharedPostTypeMeta === 'function') {
+            return window.getSharedPostTypeMeta(type);
+        }
+        switch (type) {
+            case 'video':
+                return { label: 'Video', icon: 'fa-video', textColor: 'text-accord-blue' };
+            case 'audio':
+                return { label: 'Audio', icon: 'fa-circle-play', textColor: 'text-accord-gold' };
+            case 'text':
+                return { label: 'Text Post', icon: 'fa-align-left', textColor: 'text-emerald-600' };
+            case 'testimony':
+                return { label: 'Testimony', icon: 'fa-heart', textColor: 'text-rose-600' };
+            default:
+                return { label: 'Post', icon: 'fa-bullhorn', textColor: 'text-amber-600' };
+        }
+    }
+
+    function getSponsoredYouTubeEmbedUrl(url) {
+        if (typeof window.getSharedYouTubeEmbedUrl === 'function') {
+            return window.getSharedYouTubeEmbedUrl(url);
+        }
+        if (!url) return '';
+        let videoId = '';
+        if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1]?.split('?')[0];
+        else if (url.includes('watch?v=')) videoId = url.split('watch?v=')[1]?.split('&')[0];
+        else if (url.includes('embed/')) videoId = url.split('embed/')[1]?.split('?')[0];
+        else if (url.includes('/shorts/')) videoId = url.split('/shorts/')[1]?.split('?')[0];
+        else if (url.includes('/live/')) videoId = url.split('/live/')[1]?.split('?')[0];
+        return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+    }
+
+    function extractSponsoredBookId(text) {
+        if (typeof window.extractSharedBookId === 'function') {
+            return window.extractSharedBookId(text);
+        }
+        if (!text) return null;
+        const m = String(text).match(/(?:book\.html\?(?:[^#\s]*&)?(?:id|book)=|[?&]book=)(\d+)/i);
+        return m ? m[1] : null;
+    }
+
+    window.toggleAccordSponsoredBody = function (btn) {
+        if (!btn) return;
+        const bodyEl = btn.previousElementSibling;
+        if (!bodyEl) return;
+        const expanded = btn.dataset.expanded === 'true';
+        if (expanded) {
+            bodyEl.textContent = btn.dataset.shortBody || '';
+            btn.textContent = 'See more';
+            btn.dataset.expanded = 'false';
+        } else {
+            bodyEl.textContent = btn.dataset.fullBody || '';
+            btn.textContent = 'See less';
+            btn.dataset.expanded = 'true';
+        }
+    };
+
+    window.shareAccordSponsoredPost = async function (postId, promoId) {
+        if (promoId) window.trackAccordAdClick(promoId);
+        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+        const url = `${base}post.html?id=${encodeURIComponent(postId)}`;
+        if (typeof window.shareOrCopyPost === 'function') {
+            await window.shareOrCopyPost({ id: postId, post_type: 'post', is_anonymous: true });
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+            if (typeof window.showToast === 'function') window.showToast('Post link copied to clipboard.');
+        } catch {
+            prompt('Copy this post link:', url);
+        }
+    };
+
+    function buildSponsoredPostMediaHtml(post, promo, href, targetAttr, altText) {
+        if (post && post.post_type === 'video' && post.media_url) {
+            if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(post.media_url)) {
+                return `
+                    <div class="relative w-full aspect-video bg-black">
+                        <video controls playsinline preload="metadata" src="${escapeAdHtml(post.media_url)}" class="w-full h-full object-contain"></video>
+                    </div>
+                `;
+            }
+            const embedUrl = getSponsoredYouTubeEmbedUrl(post.media_url);
+            return `
+                <div class="relative w-full aspect-video bg-black">
+                    <iframe src="${escapeAdHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
+                </div>
+            `;
+        }
+
+        if (post && post.post_type === 'audio' && post.media_url) {
+            const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
+            return isDirectAudio
+                ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                       <audio controls src="${escapeAdHtml(post.media_url)}" class="w-full"></audio>
+                   </div>`
+                : `<a href="${escapeAdHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" onclick="trackAccordAdClick('${promo.id}')" class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5 transition-colors">
+                       <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
+                           <i class="fa-solid fa-circle-play text-lg"></i>
+                       </div>
+                       <div class="flex-grow min-w-0">
+                           <p class="text-xs font-bold text-accord-slate truncate">Audio Stream</p>
+                           <span class="text-[11px] text-accord-blue font-semibold hover:underline truncate block">Listen on external platform →</span>
+                       </div>
+                   </a>`;
+        }
+
+        const desktopImg = promo.desktop_image_url || promo.mobile_image_url || '';
+        const mobileImg = promo.mobile_image_url || promo.desktop_image_url || '';
+        if (!desktopImg && !mobileImg) return '';
+
+        const mediaImgs = `
+            ${desktopImg ? `<img src="${escapeAdHtml(desktopImg)}" alt="${altText}" class="hidden sm:block w-full max-h-72 md:max-h-80 object-cover ${href ? 'group-hover:scale-[1.01] transition-transform duration-300' : ''}">` : ''}
+            ${mobileImg ? `<img src="${escapeAdHtml(mobileImg)}" alt="${altText}" class="sm:hidden w-full max-h-80 object-cover">` : ''}
+        `;
+
+        return href
+            ? `<a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="block overflow-hidden border-y border-slate-100 bg-slate-50 group">${mediaImgs}</a>`
+            : `<div class="block overflow-hidden border-y border-slate-100 bg-slate-50">${mediaImgs}</div>`;
+    }
+
+    function createSponsoredFeedPostCard(promo) {
+        const post = promo._targetPost || null;
+        const authorProfile = promo._authorProfile || null;
+        const card = document.createElement('article');
+        card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
+        card.setAttribute('data-promo-id', promo.id);
+
+        const postDetailHref = post ? `post.html?id=${encodeURIComponent(post.id)}` : '';
+        const href = (promo.cta_url || '').trim() || (promo.ad_goal !== 'views' ? postDetailHref : '');
+        const isExternal = /^https?:\/\//i.test(href);
+        const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
+
+        if (post) {
+            const displayAuthor = post.is_anonymous
+                ? 'Anonymous'
+                : (post.author_name || authorProfile?.full_name || promo.advertiser_name || 'Member');
+            const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
+            const authorAvatarUrl = (!post.is_anonymous && authorProfile?.avatar_url) ? authorProfile.avatar_url : '';
+            const authorHandle = (!post.is_anonymous && authorProfile?.handle) ? authorProfile.handle : '';
+            const authorProfileUrl = (!post.is_anonymous && post.author_id)
+                ? `user.html?id=${encodeURIComponent(post.author_id)}`
+                : null;
+
+            const avatarVisual = authorAvatarUrl
+                ? `<img src="${escapeAdHtml(authorAvatarUrl)}" alt="${escapeAdHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+                : `<span>${escapeAdHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
+
+            const avatarInner = `
+                <div class="relative w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
+                    ${avatarVisual}
+                    ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[8px]"></i></span>` : ''}
+                </div>
+            `;
+
+            const authorAvatarHtml = authorProfileUrl
+                ? `<a href="${escapeAdHtml(authorProfileUrl)}" class="shrink-0 hover:opacity-90 transition-opacity">${avatarInner}</a>`
+                : avatarInner;
+
+            const authorNameHtml = authorProfileUrl
+                ? `<a href="${escapeAdHtml(authorProfileUrl)}" class="text-[14px] font-bold text-slate-900 hover:underline truncate">${escapeAdHtml(displayAuthor)}</a>`
+                : `<span class="text-[14px] font-bold text-slate-900 truncate">${escapeAdHtml(displayAuthor)}</span>`;
+
+            const handleHtml = authorHandle
+                ? `<span class="text-xs text-slate-500 font-medium truncate">${escapeAdHtml(authorHandle)}</span>`
+                : '';
+
+            const typeMeta = getSponsoredPostTypeMeta(post.post_type);
+            const bodyText = String(post.body || promo.body || '');
+            const isLongBody = bodyText.length > 260;
+            const shownBody = isLongBody ? bodyText.slice(0, 260).trim() + '...' : bodyText;
+            const linkedBookId = extractSponsoredBookId(bodyText);
+            const mediaHtml = buildSponsoredPostMediaHtml(post, promo, href, targetAttr, escapeAdHtml(promo.title || bodyText || typeMeta.label));
+
+            const likesCount = Number(post.likes_count) || 0;
+            const commentsCount = Number(promo._commentsCount) || 0;
+            const repostsCount = Number(post.reposts_count) || 0;
+
+            const showCustomCtaBar = Boolean(href && href !== postDetailHref);
+
+            card.innerHTML = `
+                <div class="px-4 pt-3.5 pb-2 flex items-start justify-between gap-3">
+                    <div class="flex items-center space-x-2.5 min-w-0">
+                        ${authorAvatarHtml}
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                ${authorNameHtml}
+                                ${isVerifiedAuthor ? '<i class="fa-solid fa-circle-check text-accord-blue text-xs" title="Verified Ministry / Minister"></i>' : ''}
+                                ${handleHtml}
+                            </div>
+                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 flex-wrap">
+                                <span class="inline-flex items-center gap-1 font-semibold text-amber-600">
+                                    <i class="fa-solid fa-bullhorn text-[9px]"></i>
+                                    <span>Sponsored</span>
+                                </span>
+                                <span>·</span>
+                                <span class="inline-flex items-center gap-1 font-semibold ${typeMeta.textColor}">
+                                    <i class="fa-solid ${typeMeta.icon} text-[10px]"></i>
+                                    <span>${typeMeta.label}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="promote.html" class="text-[10px] font-semibold text-slate-400 hover:text-accord-blue shrink-0 pt-1">Advertise</a>
+                </div>
+
+                ${bodyText ? `
+                <div class="px-4 pb-3 space-y-1.5">
+                    <p class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeAdHtml(shownBody)}</p>
+                    ${isLongBody ? `<button type="button" onclick="toggleAccordSponsoredBody(this)" data-expanded="false" data-short-body="${escapeAdHtml(shownBody)}" data-full-body="${escapeAdHtml(bodyText)}" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
+                </div>` : ''}
+
+                ${mediaHtml}
+                ${linkedBookId ? `<div class="feed-book-link-preview mx-4 mt-3 mb-2" data-book-id="${escapeAdHtml(linkedBookId)}"></div>` : ''}
+
+                ${showCustomCtaBar ? `
+                <div class="mx-4 mt-3 mb-1 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-slate-800 truncate">${escapeAdHtml(promo.title || displayAuthor)}</p>
+                        <p class="text-[11px] text-slate-500 truncate">${escapeAdHtml(href)}</p>
+                    </div>
+                    <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="px-3.5 py-1.5 rounded-lg bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shrink-0 transition-colors">
+                        ${escapeAdHtml(promo.cta_text || 'Learn More')}
+                    </a>
+                </div>` : ''}
+
+                <div class="px-4 py-2 flex items-center justify-between text-xs text-slate-500">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px]">
+                            <i class="fa-solid fa-heart"></i>
+                        </span>
+                        <span>${likesCount}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <a href="${escapeAdHtml(postDetailHref)}#comments-section" onclick="trackAccordAdClick('${promo.id}')" class="hover:underline">
+                            ${commentsCount} ${commentsCount === 1 ? 'comment' : 'comments'}
+                        </a>
+                        <span>${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>
+                    </div>
+                </div>
+
+                <div class="mx-4 border-t border-slate-200/80 py-1 grid grid-cols-4 gap-1">
+                    <a href="${escapeAdHtml(postDetailHref)}" onclick="trackAccordAdClick('${promo.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                        <i class="fa-regular fa-heart text-sm"></i>
+                        <span>Like</span>
+                    </a>
+                    <a href="${escapeAdHtml(postDetailHref)}#comments-section" onclick="trackAccordAdClick('${promo.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                        <i class="fa-regular fa-comment text-sm"></i>
+                        <span>Comment</span>
+                    </a>
+                    <a href="${escapeAdHtml(postDetailHref)}" onclick="trackAccordAdClick('${promo.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                        <i class="fa-solid fa-retweet text-sm"></i>
+                        <span>Repost</span>
+                    </a>
+                    <button type="button" onclick="shareAccordSponsoredPost('${escapeAdHtml(post.id)}', '${promo.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                        <i class="fa-solid fa-share text-sm"></i>
+                        <span>Share</span>
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        const displayAuthor = promo.advertiser_name || promo.title || 'Accord Sponsor';
+        const bodyText = String(promo.body || '');
+        const mediaHtml = buildSponsoredPostMediaHtml(null, promo, href, targetAttr, escapeAdHtml(promo.title || bodyText || 'Sponsored Post'));
+
+        card.innerHTML = `
+            <div class="px-4 pt-3.5 pb-2 flex items-start justify-between gap-3">
+                <div class="flex items-center space-x-2.5 min-w-0">
+                    <div class="w-10 h-10 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
+                        <span>${escapeAdHtml(displayAuthor.charAt(0).toUpperCase())}</span>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[14px] font-bold text-slate-900 truncate">${escapeAdHtml(displayAuthor)}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span class="inline-flex items-center gap-1 font-semibold text-amber-600">
+                                <i class="fa-solid fa-bullhorn text-[9px]"></i>
+                                <span>Sponsored</span>
+                            </span>
+                            <span>·</span>
+                            <span class="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                                <i class="fa-solid fa-align-left text-[10px]"></i>
+                                <span>Post</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <a href="promote.html" class="text-[10px] font-semibold text-slate-400 hover:text-accord-blue shrink-0 pt-1">Advertise</a>
+            </div>
+            <div class="px-4 pb-3 space-y-1.5">
+                ${promo.title && promo.title !== displayAuthor ? `<h3 class="text-[15px] font-bold text-slate-900 leading-snug">${escapeAdHtml(promo.title)}</h3>` : ''}
+                ${bodyText ? `<p class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeAdHtml(bodyText)}</p>` : ''}
+            </div>
+            ${mediaHtml}
+            ${href ? `
+            <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-3 bg-slate-50/70 rounded-b-xl sm:rounded-b-2xl">
+                <span class="text-[11px] text-slate-500 truncate">${escapeAdHtml(href)}</span>
+                <a href="${escapeAdHtml(href)}" ${targetAttr} onclick="trackAccordAdClick('${promo.id}')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all shrink-0">
+                    <span>${escapeAdHtml(promo.cta_text || 'Learn More')}</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+            </div>` : ''}
+        `;
+        return card;
+    }
+
     window.createAccordSponsoredCardElement = function (promo) {
+        if (promo && promo.promo_type === 'post') {
+            return createSponsoredFeedPostCard(promo);
+        }
+
         const card = document.createElement('article');
         card.className = 'bg-gradient-to-br from-amber-50/60 via-white to-blue-50/40 border border-accord-gold/40 rounded-xl sm:rounded-2xl shadow-sm p-4 space-y-3';
         card.setAttribute('data-promo-id', promo.id);
