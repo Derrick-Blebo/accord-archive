@@ -8,7 +8,8 @@ const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 const HIDDEN_CONFIG_TITLES = [
     '__ACCORD_ROLES_CONFIG__',
     '__ACCORD_LAYOUT_CONFIG__',
-    '__ACCORD_MUSIC_CONFIG__'
+    '__ACCORD_MUSIC_CONFIG__',
+    '__ACCORD_ADS_CONFIG__'
 ];
 
 let allBooks = [];
@@ -600,11 +601,20 @@ function prevBannerSlide(totalSlides) {
     goToBannerSlide(currentBannerSlideIndex - 1, totalSlides, true);
 }
 
-function renderMidGridBanner(showBanner) {
+async function renderMidGridBanner(showBanner) {
     const bannerEl = document.getElementById('mid-grid-banner');
     if (!bannerEl) return;
 
     stopBannerSliderInterval();
+
+    if (typeof window.isAccordAdsEnabledForPage === 'function') {
+        const adsAllowed = await window.isAccordAdsEnabledForPage('library');
+        if (!adsAllowed) {
+            bannerEl.classList.add('hidden');
+            bannerEl.innerHTML = '';
+            return;
+        }
+    }
 
     if (!showBanner || bannerConfig.enabled === false) {
         bannerEl.classList.add('hidden');

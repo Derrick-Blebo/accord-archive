@@ -13,6 +13,7 @@ const MASTER_ADMIN_EMAIL = 'accordmedia1@gmail.com';
 const ROLES_CONFIG_RECORD_NAME = '__ACCORD_ROLES_CONFIG__';
 const LAYOUT_CONFIG_CATEGORY_NAME = '__ACCORD_LAYOUT_CONFIG__';
 const MUSIC_CONFIG_RECORD_NAME = '__ACCORD_MUSIC_CONFIG__';
+const ADS_CONFIG_RECORD_NAME = '__ACCORD_ADS_CONFIG__';
 
 function escapeHTML(str) {
     return String(str || '')

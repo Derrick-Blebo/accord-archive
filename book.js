@@ -7,7 +7,8 @@ const supabaseClient = window.supabaseClient;
 const HIDDEN_CONFIG_TITLES = [
     '__ACCORD_ROLES_CONFIG__',
     '__ACCORD_LAYOUT_CONFIG__',
-    '__ACCORD_MUSIC_CONFIG__'
+    '__ACCORD_MUSIC_CONFIG__',
+    '__ACCORD_ADS_CONFIG__'
 ];
 
 let currentUser = null;

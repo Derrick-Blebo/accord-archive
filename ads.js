@@ -6,20 +6,24 @@
 
 (function () {
     let _activePromotionsCache = null;
+    let _adPageConfigCache = null;
     let _adImpressionObserver = null;
     let _lastMidPromoId = null;
     const _trackedImpressions = new Set();
+
+    const ADS_CONFIG_RECORD_NAME = '__ACCORD_ADS_CONFIG__';
 
     const MAIN_PAGE_PLACEMENTS = {
         library: ['index.html', ''],
         feed: ['feed.html'],
         music: ['music.html', 'playlists.html'],
+        sermons: ['sermons.html'],
         book: ['book.html'],
         post: ['post.html'],
         author: ['author.html'],
         artist: ['artist.html', 'artist-blog.html'],
         ministry: ['ministry.html'],
-        polls: ['polls.html'],
+        polls: ['polls.html', 'poll.html'],
         saved: ['saved.html'],
         user: ['user.html']
     };
@@ -93,10 +97,53 @@
         return 'GLOBAL';
     }
 
+    async function fetchAdPageConfig(forceRefresh = false) {
+        if (_adPageConfigCache && !forceRefresh) return _adPageConfigCache;
+        const client = window.supabaseClient;
+        if (!client) return { disabledPages: [] };
+        try {
+            const { data, error } = await client
+                .from('books')
+                .select('description')
+                .eq('title', ADS_CONFIG_RECORD_NAME)
+                .limit(1)
+                .maybeSingle();
+            if (!error && data?.description) {
+                const parsed = JSON.parse(data.description);
+                _adPageConfigCache = {
+                    disabledPages: Array.isArray(parsed?.disabledPages)
+                        ? parsed.disabledPages.map(p => String(p).trim().toLowerCase()).filter(Boolean)
+                        : []
+                };
+                return _adPageConfigCache;
+            }
+        } catch (_) {}
+        _adPageConfigCache = { disabledPages: [] };
+        return _adPageConfigCache;
+    }
+
+    function isPagePlacementAllowed(config, placement) {
+        const disabled = Array.isArray(config?.disabledPages) ? config.disabledPages : [];
+        return !disabled.includes(String(placement || '').toLowerCase());
+    }
+
+    window.isAccordAdsEnabledForPage = async function (placement, forceRefresh = false) {
+        if (!placement && !isMainSitePage()) return false;
+        const cfg = await fetchAdPageConfig(forceRefresh);
+        const targetPlacement = placement ? String(placement).toLowerCase() : getCurrentPagePlacement();
+        return isPagePlacementAllowed(cfg, targetPlacement);
+    };
+
     async function fetchActivePromotions(forceRefresh = false) {
         if (_activePromotionsCache && !forceRefresh) return _activePromotionsCache;
         const client = window.supabaseClient;
         if (!client) return [];
+
+        const adConfig = await fetchAdPageConfig(forceRefresh);
+        if (!isMainSitePage() || !isPagePlacementAllowed(adConfig, getCurrentPagePlacement())) {
+            _activePromotionsCache = [];
+            return [];
+        }
 
         const nowIso = new Date().toISOString();
         const { data, error } = await client
@@ -399,8 +446,20 @@
             legacySlot.innerHTML = '';
         }
 
-        const promos = await fetchActivePromotions();
+        const adConfig = await fetchAdPageConfig();
         const currentPlacement = getCurrentPagePlacement();
+        if (!isPagePlacementAllowed(adConfig, currentPlacement)) {
+            document.querySelectorAll('.accord-dynamic-banner-slot').forEach(el => el.remove());
+            document.querySelectorAll('.accord-library-inline-ad').forEach(el => el.remove());
+            const midGridBanner = document.getElementById('mid-grid-banner');
+            if (midGridBanner) {
+                midGridBanner.classList.add('hidden');
+                midGridBanner.innerHTML = '';
+            }
+            return;
+        }
+
+        const promos = await fetchActivePromotions();
         // On feed.html, feed.js renders inline ads (including banners) directly between posts in #feed-stream;
         // only render explicitly bottom-pinned banners as page-level zones on feed.html (never at the very top).
         const banners = currentPlacement === 'feed'

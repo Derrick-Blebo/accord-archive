@@ -216,7 +216,7 @@ async function fetchAllData(isSilentRefresh = false) {
             }
         }
 
-        const systemTitles = [LAYOUT_CONFIG_CATEGORY_NAME, '__ACCORD_MUSIC_CONFIG__', '__ACCORD_ROLES_CONFIG__'];
+        const systemTitles = [LAYOUT_CONFIG_CATEGORY_NAME, '__ACCORD_MUSIC_CONFIG__', '__ACCORD_ROLES_CONFIG__', '__ACCORD_ADS_CONFIG__'];
         const realBooks = books.filter(b => !systemTitles.includes(b.title));
         catalogData = realBooks.filter(b => !b.deleted_at);
         trashData = realBooks.filter(b => b.deleted_at);

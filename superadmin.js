@@ -868,6 +868,7 @@ const SITE_BANNER_LOCATIONS = [
     { key: 'library', label: 'Library', page: 'index.html', icon: 'fa-book-open' },
     { key: 'feed', label: 'Fellowship Feed', page: 'feed.html', icon: 'fa-comments' },
     { key: 'music', label: 'Music Hub', page: 'music.html', icon: 'fa-music' },
+    { key: 'sermons', label: 'Sermons Hub', page: 'sermons.html', icon: 'fa-hands-praying' },
     { key: 'book', label: 'Book Detail', page: 'book.html', icon: 'fa-book' },
     { key: 'post', label: 'Post Detail', page: 'post.html', icon: 'fa-newspaper' },
     { key: 'author', label: 'Author Studio', page: 'author.html', icon: 'fa-feather-pointed' },
@@ -882,6 +883,8 @@ let cachedSuperadminPromos = [];
 let currentAdFilter = 'all';
 let currentLocationFilter = 'all_filter';
 let cachedLibraryLayoutRow = null;
+let adPageConfig = { disabledPages: [] };
+let isSavingAdPageConfig = false;
 
 function getPromoSlotPositionMeta(promo) {
     const raw = String(promo?.slot_position || '').trim().toLowerCase();
@@ -933,16 +936,23 @@ function renderSuperadminBannerLocations() {
             return placements.includes('all') || placements.includes(loc.key);
         }).length;
 
+        const isBlocked = loc.key !== 'all' && Array.isArray(adPageConfig.disabledPages) && adPageConfig.disabledPages.includes(loc.key);
         const isSelected = currentLocationFilter === loc.key;
         const cardClass = isSelected
             ? 'border-accord-blue bg-accord-lightBlue/60 ring-2 ring-accord-blue/20'
-            : 'border-slate-200 bg-slate-50/60 hover:border-accord-blue/50 hover:bg-white';
+            : isBlocked
+                ? 'border-rose-200 bg-rose-50/50 hover:border-rose-300'
+                : 'border-slate-200 bg-slate-50/60 hover:border-accord-blue/50 hover:bg-white';
+
+        const statusBadge = isBlocked
+            ? `<span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-700">No Ads</span>`
+            : `<span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${count > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${count} live</span>`;
 
         return `
             <button type="button" onclick="setSuperadminLocationFilter('${loc.key}')" class="text-left rounded-xl border p-2.5 transition-all ${cardClass}">
                 <div class="flex items-center justify-between gap-1">
-                    <i class="fa-solid ${loc.icon} text-[11px] ${isSelected ? 'text-accord-blue' : 'text-accord-muted'}"></i>
-                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${count > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${count} live</span>
+                    <i class="fa-solid ${loc.icon} text-[11px] ${isBlocked ? 'text-rose-500' : isSelected ? 'text-accord-blue' : 'text-accord-muted'}"></i>
+                    ${statusBadge}
                 </div>
                 <p class="text-xs font-bold text-accord-slate mt-1.5 truncate">${escapeSuperHtml(loc.label)}</p>
                 <p class="text-[10px] text-accord-muted truncate">${escapeSuperHtml(loc.page)}</p>
@@ -951,17 +961,185 @@ function renderSuperadminBannerLocations() {
     }).join('');
 }
 
+function getControllableAdPages() {
+    return SITE_BANNER_LOCATIONS.filter(loc => loc.key !== 'all');
+}
+
+function renderSuperadminAdPageControls() {
+    const grid = document.getElementById('superadmin-ad-page-controls');
+    const summaryEl = document.getElementById('ad-page-controls-summary');
+    if (!grid) return;
+
+    const pages = getControllableAdPages();
+    const disabledSet = new Set((adPageConfig.disabledPages || []).map(p => String(p).toLowerCase()));
+    const enabledCount = pages.filter(p => !disabledSet.has(p.key)).length;
+    const disabledCount = pages.length - enabledCount;
+
+    if (summaryEl) {
+        if (disabledCount === 0) {
+            summaryEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200';
+            summaryEl.textContent = `All ${pages.length} Pages Active`;
+        } else if (enabledCount === 0) {
+            summaryEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200';
+            summaryEl.textContent = `All ${pages.length} Pages Blocked`;
+        } else {
+            summaryEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200';
+            summaryEl.textContent = `${enabledCount} Active • ${disabledCount} Blocked`;
+        }
+    }
+
+    grid.innerHTML = pages.map(loc => {
+        const isEnabled = !disabledSet.has(loc.key);
+        const cardStyle = isEnabled
+            ? 'border-emerald-200/80 bg-emerald-50/30 hover:border-emerald-300'
+            : 'border-rose-200 bg-rose-50/50 hover:border-rose-300';
+        const toggleBg = isEnabled ? 'bg-emerald-500' : 'bg-slate-300';
+        const toggleKnob = isEnabled ? 'translate-x-4' : 'translate-x-0.5';
+        const statusLabel = isEnabled
+            ? '<span class="text-[10px] font-extrabold text-emerald-700">Ads On</span>'
+            : '<span class="text-[10px] font-extrabold text-rose-600">No Ads</span>';
+
+        return `
+            <button type="button" onclick="toggleSuperadminPageAds('${loc.key}')" ${isSavingAdPageConfig ? 'disabled' : ''} class="flex items-center justify-between gap-2.5 text-left rounded-xl border p-3 transition-all ${cardStyle}">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}">
+                        <i class="fa-solid ${loc.icon} text-xs"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-accord-slate truncate">${escapeSuperHtml(loc.label)}</p>
+                        <p class="text-[10px] text-accord-muted truncate">${escapeSuperHtml(loc.page)}</p>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-1 shrink-0">
+                    <span class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${toggleBg}">
+                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${toggleKnob}"></span>
+                    </span>
+                    ${statusLabel}
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+async function persistAdPageConfig(toastMsg) {
+    if (isSavingAdPageConfig) return;
+    isSavingAdPageConfig = true;
+    renderSuperadminAdPageControls();
+
+    const payloadObj = {
+        disabledPages: Array.isArray(adPageConfig.disabledPages) ? [...new Set(adPageConfig.disabledPages)] : [],
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+        const recordName = typeof ADS_CONFIG_RECORD_NAME === 'string' ? ADS_CONFIG_RECORD_NAME : '__ACCORD_ADS_CONFIG__';
+        const { data: existing, error: fetchErr } = await supabaseClient
+            .from('books')
+            .select('id')
+            .eq('title', recordName)
+            .limit(1)
+            .maybeSingle();
+
+        if (fetchErr) throw fetchErr;
+
+        const payload = {
+            title: recordName,
+            author: 'System Ads Config',
+            category: 'System',
+            year: '2026',
+            pages: '0',
+            description: JSON.stringify(payloadObj),
+            is_visible: false,
+            status: 'system_config',
+            is_for_sale: false,
+            price: 0
+        };
+
+        let saveErr = null;
+        if (existing?.id) {
+            const res = await supabaseClient.from('books').update(payload).eq('id', existing.id);
+            saveErr = res.error;
+        } else {
+            const res = await supabaseClient.from('books').insert([payload]);
+            saveErr = res.error;
+        }
+
+        if (saveErr) throw saveErr;
+        if (toastMsg) showToast(toastMsg);
+    } catch (err) {
+        console.error('Failed to save ad page config:', err);
+        showToast('Could not save page ad settings: ' + (err?.message || 'Unknown error'));
+    } finally {
+        isSavingAdPageConfig = false;
+        renderSuperadminAdPageControls();
+        renderSuperadminBannerLocations();
+    }
+}
+
+async function toggleSuperadminPageAds(pageKey) {
+    const key = String(pageKey || '').toLowerCase();
+    const loc = SITE_BANNER_LOCATIONS.find(l => l.key === key);
+    if (!loc || key === 'all') return;
+
+    const current = new Set((adPageConfig.disabledPages || []).map(p => String(p).toLowerCase()));
+    const willEnable = current.has(key);
+    if (willEnable) {
+        current.delete(key);
+    } else {
+        current.add(key);
+    }
+    adPageConfig.disabledPages = Array.from(current);
+
+    renderSuperadminAdPageControls();
+    renderSuperadminBannerLocations();
+
+    const msg = willEnable
+        ? `Ads enabled on ${loc.label} (${loc.page}).`
+        : `Ads disabled on ${loc.label} (${loc.page}). No ads will appear there.`;
+    await persistAdPageConfig(msg);
+}
+
+async function setAllSuperadminPageAds(enableAll) {
+    const pages = getControllableAdPages();
+    adPageConfig.disabledPages = enableAll ? [] : pages.map(p => p.key);
+    renderSuperadminAdPageControls();
+    renderSuperadminBannerLocations();
+
+    const msg = enableAll
+        ? 'Ads enabled on all main site pages.'
+        : 'All ads disabled across every site page.';
+    await persistAdPageConfig(msg);
+}
+
 async function loadSuperadminPromotions() {
     const listEl = document.getElementById('superadmin-promotions-list');
     const geoEl = document.getElementById('audience-geo-summary');
     const badgeEl = document.getElementById('pending-promotions-badge');
     if (!listEl) return;
 
-    const [promosRes, signalsRes, layoutRes] = await Promise.all([
+    const adsConfigTitle = typeof ADS_CONFIG_RECORD_NAME === 'string' ? ADS_CONFIG_RECORD_NAME : '__ACCORD_ADS_CONFIG__';
+    const [promosRes, signalsRes, layoutRes, adsCfgRes] = await Promise.all([
         supabaseClient.from('promotions').select('*').order('created_at', { ascending: false }).limit(100),
         supabaseClient.from('user_audience_signals').select('country, device_type').order('created_at', { ascending: false }).limit(500),
-        supabaseClient.from('books').select('id, description').eq('title', '__ACCORD_LAYOUT_CONFIG__').limit(1).maybeSingle()
+        supabaseClient.from('books').select('id, description').eq('title', '__ACCORD_LAYOUT_CONFIG__').limit(1).maybeSingle(),
+        supabaseClient.from('books').select('id, description').eq('title', adsConfigTitle).limit(1).maybeSingle()
     ]);
+
+    try {
+        if (!adsCfgRes.error && adsCfgRes.data?.description) {
+            const parsed = JSON.parse(adsCfgRes.data.description);
+            adPageConfig = {
+                disabledPages: Array.isArray(parsed?.disabledPages)
+                    ? parsed.disabledPages.map(p => String(p).toLowerCase())
+                    : []
+            };
+        } else {
+            adPageConfig = { disabledPages: [] };
+        }
+    } catch (_) {
+        adPageConfig = { disabledPages: [] };
+    }
+    renderSuperadminAdPageControls();
 
     if (geoEl && !signalsRes.error && Array.isArray(signalsRes.data)) {
         const counts = {};
