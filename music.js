@@ -575,7 +575,7 @@ function renderPollResults() {
         const pct = totalVotes > 0 ? Math.round((topCount / totalVotes) * 100) : 0;
 
         const card = document.createElement('div');
-        card.className = "bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-4";
+        card.className = "bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-4";
         card.innerHTML = `
             <div class="space-y-3">
                 <div class="flex items-center justify-between gap-2">

@@ -85,6 +85,8 @@
             background-color: #F5A623;
             border-radius: 2px;
         }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-accord-bg text-accord-slate antialiased min-h-screen selection:bg-accord-blue selection:text-white">
@@ -223,11 +225,39 @@
     <script src="header.js?v=4"></script>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12 space-y-14">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12 space-y-10">
+        <!-- Quick Section Navigation -->
+        <nav aria-label="Music Hub Sections" class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <a href="#artistes" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-microphone-lines text-[11px] text-accord-blue"></i>
+                <span>Artiste Spotlight</span>
+            </a>
+            <a href="#song-spotlight" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#EAF2FF]/80 hover:bg-accord-lightBlue border border-blue-200/80 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-music text-[11px] text-accord-blue"></i>
+                <span>Song Spotlight</span>
+            </a>
+            <a href="#playlists" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-headphones text-[11px] text-accord-blue"></i>
+                <span>Curated Playlists</span>
+            </a>
+            <a href="#poll-results" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#EAF2FF]/80 hover:bg-accord-lightBlue border border-blue-200/80 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-trophy text-[11px] text-accord-gold"></i>
+                <span>Poll Results</span>
+            </a>
+            <a href="#polls" class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-accord-lightBlue border border-slate-200/90 hover:border-blue-200 text-accord-slate hover:text-accord-blue text-xs font-semibold shadow-sm transition-all">
+                <i class="fa-solid fa-check-to-slot text-[11px] text-accord-blue"></i>
+                <span>Award Voting</span>
+            </a>
+        </nav>
+
         <!-- Section 1: Artiste Spotlights (Circular Portraits) -->
-        <section id="artistes" class="space-y-6">
+        <section id="artistes" class="scroll-mt-24 space-y-6">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                <div>
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Featured Ministers
+                    </span>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Artiste Spotlight</h2>
                     <p class="text-xs text-accord-muted">Click any featured minister to read their story and listen to embedded tracks.</p>
                 </div>
@@ -248,10 +278,14 @@
             </div>
         </section>
 
-        <!-- Section 2: Song Spotlight -->
-        <section id="song-spotlight" class="space-y-6">
+        <!-- Section 2: Song Spotlight (Faded Light Blue Section) -->
+        <section id="song-spotlight" class="scroll-mt-24 rounded-3xl bg-gradient-to-br from-[#E8F1FF]/90 via-[#F1F6FF] to-[#F7FAFF] border border-blue-200/75 p-5 sm:p-8 shadow-[0_4px_20px_-6px_rgba(0,119,254,0.08)] space-y-6">
             <div class="flex items-center justify-between">
-                <div>
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Fresh Releases
+                    </span>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Song Spotlight</h2>
                     <p class="text-xs text-accord-muted">Fresh gospel releases featured right now — press play to listen.</p>
                 </div>
@@ -263,9 +297,13 @@
         </section>
 
         <!-- Section 3: Curated Playlists -->
-        <section id="playlists" class="space-y-6">
+        <section id="playlists" class="scroll-mt-24 space-y-6 py-2">
             <div class="flex items-center justify-between">
-                <div>
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Editorial Selections
+                    </span>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Curated Gospel Playlists</h2>
                     <p class="text-xs text-accord-muted">Stream editorial selections curated by DJ ChristCentric & SoundSpace PR.</p>
                 </div>
@@ -276,14 +314,18 @@
             </div>
         </section>
 
-        <!-- Section 4: Poll Results (Category Leaders & Winners) -->
-        <section id="poll-results" class="space-y-6">
+        <!-- Section 4: Poll Results (Faded Light Blue Section) -->
+        <section id="poll-results" class="scroll-mt-24 rounded-3xl bg-gradient-to-br from-[#E8F1FF]/90 via-[#F1F6FF] to-[#F7FAFF] border border-blue-200/75 p-5 sm:p-8 shadow-[0_4px_20px_-6px_rgba(0,119,254,0.08)] space-y-6">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                <div>
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-gold"></span>
+                        Live Standings &amp; Winners
+                    </span>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Poll Results &amp; Category Leaders</h2>
                     <p class="text-xs text-accord-muted">See who topped each category across our periodic gospel award polls.</p>
                 </div>
-                <a href="polls.html" class="inline-flex items-center gap-1.5 text-xs font-bold text-accord-blue hover:text-accord-darkBlue transition-colors self-start sm:self-auto">
+                <a href="polls.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-accord-blue text-accord-blue hover:text-white border border-blue-200/80 text-xs font-bold shadow-sm transition-all self-start sm:self-auto">
                     <span>View All Polls &amp; Winners</span>
                     <i class="fa-solid fa-arrow-right text-[10px]"></i>
                 </a>
@@ -295,9 +337,13 @@
         </section>
 
         <!-- Section 5: Award Voting Polls & Upcoming Nominations -->
-        <section id="polls" class="space-y-6">
+        <section id="polls" class="scroll-mt-24 space-y-6 py-2">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                <div>
+                <div class="space-y-1">
+                    <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accord-blue">
+                        <span class="w-1.5 h-1.5 rounded-full bg-accord-blue"></span>
+                        Community Vote
+                    </span>
                     <h2 class="serif-heading text-2xl font-bold text-accord-slate">Periodic Award Voting Polls</h2>
                     <p class="text-xs text-accord-muted">Registered users can vote once per poll. Listen to songs or visit artiste pages before casting your vote.</p>
                 </div>
