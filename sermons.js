@@ -197,7 +197,7 @@ function renderFeaturedSermons() {
     const toShow = (featured.length > 0 ? featured : visible).slice(0, 6);
 
     if (toShow.length === 0) {
-        grid.innerHTML = `<div class="col-span-full bg-white border border-slate-200 rounded-2xl p-8 text-center text-xs text-accord-muted">No featured sermon playlists yet. Admins can add sermon playlists from the Sermons Admin panel.</div>`;
+        grid.innerHTML = `<div class="col-span-full bg-white border border-slate-200 rounded-2xl p-8 text-center text-xs text-accord-muted">No featured sermon audios yet. Admins can add sermon audios from the Sermons Admin panel.</div>`;
         return;
     }
 
@@ -342,7 +342,7 @@ function renderAllSermonPlaylists() {
     });
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-10 text-center text-xs text-accord-muted">No sermon playlists match your filter.</div>`;
+        container.innerHTML = `<div class="bg-white border border-slate-200 rounded-3xl p-10 text-center text-xs text-accord-muted">No sermon audios match your filter.</div>`;
         return;
     }
 
@@ -364,7 +364,7 @@ function renderAllSermonPlaylists() {
                     <span class="w-2 h-2 rounded-full bg-accord-blue"></span>
                     <span>${escapeHTML(groupName)}</span>
                 </h3>
-                <span class="text-[11px] font-bold text-accord-muted">${items.length} ${items.length === 1 ? 'playlist' : 'playlists'}</span>
+                <span class="text-[11px] font-bold text-accord-muted">${items.length} ${items.length === 1 ? 'sermon' : 'sermons'}</span>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         `;

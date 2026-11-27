@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accord Sermons Hub Admin — Playlists, Pastors &amp; Ministries</title>
+    <title>Accord Sermons Hub Admin — Sermon Audios, Pastors &amp; Ministries</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/assets/accord-mark.svg" />
     <meta name="theme-color" content="#0077FF" />
@@ -54,7 +54,7 @@
                     <i class="fa-solid fa-church"></i>
                 </div>
                 <h1 class="serif-heading text-2xl font-bold text-accord-slate">Sermons Hub Admin</h1>
-                <p class="text-xs text-accord-muted">Manage Sermon Playlists, Pastor &amp; Ministry Spotlights, and Featured Sermons.</p>
+                <p class="text-xs text-accord-muted">Manage Sermon Audios, Pastor &amp; Ministry Spotlights, and Featured Sermons.</p>
             </div>
             <form onsubmit="handleLogin(event)" class="space-y-4">
                 <div>
@@ -109,7 +109,7 @@
             <!-- Stats -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
-                    <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Sermon Playlists</p>
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-accord-muted">Sermon Audios</p>
                     <p id="stat-sermon-playlists" class="text-2xl font-extrabold text-accord-slate mt-1">0</p>
                 </div>
                 <div class="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm">
@@ -130,8 +130,8 @@
             <section class="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Playlists, Pastors &amp; Ministries</h2>
-                        <p class="text-xs text-accord-muted">Add sermon playlists (with Spotify, Apple Podcasts, Audiomack auto-fill), Pastor Spotlights, and Ministry Spotlights.</p>
+                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Audios, Pastors &amp; Ministries</h2>
+                        <p class="text-xs text-accord-muted">Add sermon audios (with Spotify, Apple Podcasts, Audiomack auto-fill), Pastor Spotlights, and Ministry Spotlights.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <button type="button" onclick="openSermonsExcelImportModal('auto')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
@@ -140,7 +140,7 @@
                         </button>
                         <button type="button" onclick="openSermonItemModal('add', null, 'playlist')" class="px-4 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5">
                             <i class="fa-solid fa-plus"></i>
-                            <span>Add Sermon Playlist</span>
+                            <span>Add Sermon Audio</span>
                         </button>
                         <button type="button" onclick="openSermonItemModal('add', null, 'pastor')" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all inline-flex items-center gap-1.5">
                             <i class="fa-solid fa-user-tie text-accord-blue"></i>
@@ -156,7 +156,7 @@
                 <!-- Filter Tabs -->
                 <div class="flex items-center gap-2 overflow-x-auto pb-1">
                     <button type="button" onclick="setSermonTableFilter('all')" id="sermon-filter-all" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-accord-blue text-white">All</button>
-                    <button type="button" onclick="setSermonTableFilter('playlist')" id="sermon-filter-playlist" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-accord-slate">Sermon Playlists</button>
+                    <button type="button" onclick="setSermonTableFilter('playlist')" id="sermon-filter-playlist" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-accord-slate">Sermon Audios</button>
                     <button type="button" onclick="setSermonTableFilter('pastor')" id="sermon-filter-pastor" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-accord-slate">Pastor Spotlights</button>
                     <button type="button" onclick="setSermonTableFilter('ministry')" id="sermon-filter-ministry" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-accord-slate">Ministry Spotlights</button>
                 </div>
@@ -183,8 +183,8 @@
             <section id="sermon-playlist-insights-section" class="space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Playlist Insights: Most Saved &amp; Most Engaged</h2>
-                        <p class="text-xs text-accord-muted mt-0.5">Live sermon playlist saves, play modal opens, and streaming platform clicks.</p>
+                        <h2 class="serif-heading text-lg font-bold text-accord-slate">Sermon Audio Insights: Most Saved &amp; Most Engaged</h2>
+                        <p class="text-xs text-accord-muted mt-0.5">Live sermon audio saves, play modal opens, and streaming platform clicks.</p>
                     </div>
                     <button type="button" onclick="loadAndRenderSermonPlaylistInsights()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-accord-slate text-xs font-bold shadow-xs transition-all inline-flex items-center gap-1.5 self-start sm:self-auto">
                         <i class="fa-solid fa-rotate text-accord-blue"></i>
@@ -197,12 +197,12 @@
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs font-extrabold uppercase tracking-wider text-accord-blue flex items-center gap-1.5">
                                 <i class="fa-solid fa-bookmark"></i>
-                                <span>Most Saved Sermon Playlists</span>
+                                <span>Most Saved Sermon Audios</span>
                             </h3>
                             <span class="text-[10px] font-semibold text-accord-muted">Ranked by saves</span>
                         </div>
                         <div id="sermon-insights-most-saved" class="divide-y divide-slate-100 text-xs">
-                            <p class="text-accord-muted py-4">Loading sermon playlist save insights...</p>
+                            <p class="text-accord-muted py-4">Loading sermon audio save insights...</p>
                         </div>
                     </div>
 
@@ -210,12 +210,12 @@
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
                                 <i class="fa-solid fa-chart-line"></i>
-                                <span>Most Engaged Sermon Playlists</span>
+                                <span>Most Engaged Sermon Audios</span>
                             </h3>
                             <span class="text-[10px] font-semibold text-accord-muted">Plays + platform clicks + saves</span>
                         </div>
                         <div id="sermon-insights-most-engaged" class="divide-y divide-slate-100 text-xs">
-                            <p class="text-accord-muted py-4">Loading sermon playlist engagement insights...</p>
+                            <p class="text-accord-muted py-4">Loading sermon audio engagement insights...</p>
                         </div>
                     </div>
                 </div>
@@ -276,7 +276,7 @@
                     <div>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Entry Type *</label>
                         <select id="sermon-item-type" onchange="toggleSermonTypeFields()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                            <option value="playlist">Sermon Playlist</option>
+                            <option value="playlist">Sermon Audio</option>
                             <option value="pastor">Pastor Spotlight</option>
                             <option value="ministry">Ministry Spotlight</option>
                         </select>
@@ -291,7 +291,7 @@
                 <div id="sermon-playlist-links-group" class="space-y-3 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4">
                     <div class="flex items-center justify-between gap-2">
                         <div>
-                            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Sermon Playlist Platform Links</p>
+                            <p class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Sermon Audio Platform Links</p>
                             <p class="text-[11px] text-accord-muted">Paste any link to automatically fetch cover art, title, preacher, and episodes.</p>
                         </div>
                         <button type="button" id="sermon-playlist-autofill-btn" onclick="autoFillSermonMetadata()" class="px-3 py-2 rounded-xl bg-white hover:bg-blue-50 text-accord-slate hover:text-accord-blue border border-slate-200 text-[11px] font-bold whitespace-nowrap transition-all shrink-0">
@@ -451,7 +451,7 @@
                         <i class="fa-solid fa-file-excel text-emerald-600"></i>
                         <span>Import Sermons, Pastors &amp; Ministries from Excel</span>
                     </h3>
-                    <p class="text-xs text-accord-muted mt-0.5">Upload an .xlsx, .xls, or .csv file. Supports multi-sheet workbooks (Sermon Playlists, Pastors, Ministries, Sermons) or a single sheet with a Type column. Streaming links auto-fill metadata.</p>
+                    <p class="text-xs text-accord-muted mt-0.5">Upload an .xlsx, .xls, or .csv file. Supports multi-sheet workbooks (Sermon Audios, Pastors, Ministries, Sermons) or a single sheet with a Type column. Streaming links auto-fill metadata.</p>
                 </div>
                 <button type="button" onclick="closeSermonsExcelImportModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center shrink-0">
                     <i class="fa-solid fa-xmark"></i>
@@ -479,7 +479,7 @@
                         <label for="sermons-excel-default-type" class="text-[11px] font-bold uppercase tracking-wider text-accord-slate">Default Row Type:</label>
                         <select id="sermons-excel-default-type" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-accord-slate focus:outline-none focus:border-accord-blue">
                             <option value="auto">Auto-detect (Sheet Name / Type Column)</option>
-                            <option value="playlist">Sermon Playlist</option>
+                            <option value="playlist">Sermon Audio</option>
                             <option value="pastor">Pastor Spotlight</option>
                             <option value="ministry">Ministry Spotlight</option>
                             <option value="sermon">Featured Individual Sermon</option>

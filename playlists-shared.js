@@ -462,8 +462,8 @@
 
         const platformLinks = getPlaylistPlatformLinks(pl);
         openMediaPlayerModal(
-            pl.title || 'Playlist Player',
-            pl.curator || pl.genre || (pageSource === 'sermons' ? 'Sermon Playlist' : 'Curated Gospel Playlist'),
+            pl.title || (pageSource === 'sermons' ? 'Sermon Player' : 'Playlist Player'),
+            pl.curator || pl.genre || (pageSource === 'sermons' ? 'Sermon Audio' : 'Curated Gospel Playlist'),
             platformLinks[0]?.url || pl.link,
             platformLinks,
             { playlistId: pl.id, playlistTitle: pl.title, pageSource }
@@ -582,7 +582,8 @@
 
         const fallbackImg = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800';
         const coverSrc = pl.image || fallbackImg;
-        const subtitle = pl.curator || pl.genre || 'SoundSpace PR';
+        const isSermon = pageSource === 'sermons';
+        const subtitle = pl.curator || pl.genre || (isSermon ? 'Accord Sermons' : 'SoundSpace PR');
         const platformLinks = getPlaylistPlatformLinks(pl);
         const primaryPlatform = getPlaylistPlatformInfo(platformLinks[0]?.url || pl.link);
         const tracks = Array.isArray(pl.tracks) ? pl.tracks.filter(t => t && t.title) : [];
@@ -611,54 +612,101 @@
 
         const saveBtnHtml = `
             <div class="flex items-center gap-1 shrink-0">
-                <button type="button" data-save-playlist-id="${escapeHTML(pl.id)}" onclick="toggleSavePlaylist('${safeId}', '${safeSource}')" title="${saved ? 'Remove from Saved Playlists' : 'Save Playlist'}" class="${saved
+                <button type="button" data-save-playlist-id="${escapeHTML(pl.id)}" onclick="toggleSavePlaylist('${safeId}', '${safeSource}')" title="${saved ? (isSermon ? 'Remove from Saved Sermons' : 'Remove from Saved Playlists') : (isSermon ? 'Save Sermon' : 'Save Playlist')}" class="${saved
                     ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accord-lightBlue text-accord-blue border border-blue-200 text-[10px] font-bold transition-all shrink-0'
                     : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-accord-lightBlue text-slate-600 hover:text-accord-blue border border-slate-200/80 text-[10px] font-bold transition-all shrink-0'}">
                     <i class="${saved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-[10px]"></i>
                     <span data-save-label>${saved ? 'Saved' : 'Save'}</span>
                 </button>
-                <button type="button" onclick="openSharePlaylistModal('${safeId}', '${safeSource}')" title="Share Playlist" class="w-6 h-6 rounded-full bg-slate-100 hover:bg-accord-lightBlue text-slate-600 hover:text-accord-blue border border-slate-200/80 flex items-center justify-center transition-all shrink-0">
+                <button type="button" onclick="openSharePlaylistModal('${safeId}', '${safeSource}')" title="${isSermon ? 'Share Sermon' : 'Share Playlist'}" class="w-6 h-6 rounded-full bg-slate-100 hover:bg-accord-lightBlue text-slate-600 hover:text-accord-blue border border-slate-200/80 flex items-center justify-center transition-all shrink-0">
                     <i class="fa-solid fa-share-nodes text-[10px]"></i>
                 </button>
             </div>
         `;
 
         const card = document.createElement('div');
-        card.className = `bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row min-h-[268px] ${extraClass}`.trim();
-        card.innerHTML = `
-            <div class="w-full sm:w-[46%] p-3.5 flex flex-col justify-between bg-white">
+        if (isSermon) {
+            const sermonPlatformLinksHtml = platformLinks.length > 0
+                ? `<div class="flex flex-wrap items-center justify-end gap-1.5">${platformLinks.map(p => `
+                    <a href="${escapeHTML(p.url)}" target="_blank" rel="noopener noreferrer" onclick="window.AccordPlaylists.trackPlaylistEvent('${safeId}', '${safeTitle}', 'platform_click', '${escapeHTML(p.key)}', '${safeSource}')" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-50 hover:bg-slate-900 hover:text-white border border-slate-200/90 text-[11px] font-semibold text-slate-800 shadow-xs transition-all">
+                        ${p.iconHtml}
+                        <span>${escapeHTML(p.label)}</span>
+                    </a>
+                `).join('')}</div>`
+                : `<span class="text-[11px] text-slate-400">Links coming soon</span>`;
+
+            const sermonDesc = String(pl.description || '').trim();
+            card.className = `bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between p-4 ${extraClass}`.trim();
+            card.innerHTML = `
                 <div>
-                    <div class="mb-2 flex items-center justify-between gap-2">
+                    <div class="mb-3 flex items-center justify-between gap-2">
                         <div class="min-w-0 truncate">${brandBadgeHtml}</div>
                         ${saveBtnHtml}
                     </div>
-                    <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 shadow-sm">
-                        <img data-playlist-cover src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
-                    </div>
-                    <div class="mt-2.5 flex items-start justify-between gap-2">
-                        <div class="min-w-0">
-                            <h3 data-playlist-title class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
-                            <p class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHTML(subtitle)}</p>
+                    <div class="flex items-start gap-3.5">
+                        <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 shadow-sm shrink-0">
+                            <img data-playlist-cover src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
                         </div>
-                        <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" title="Choose Platform / Play" class="w-5 h-5 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center shrink-0 text-[9px] mt-0.5 transition-colors">
+                        <div class="min-w-0 flex-1">
+                            <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1.5 max-w-full truncate">
+                                ${escapeHTML(pl.genre || 'Sermon Audio')}
+                            </span>
+                            <h3 data-playlist-title class="text-sm sm:text-[15px] font-bold text-slate-900 leading-snug line-clamp-2">${escapeHTML(pl.title)}</h3>
+                            <p class="text-xs font-medium text-slate-500 mt-1 line-clamp-2">${escapeHTML(subtitle)}</p>
+                        </div>
+                    </div>
+                    ${sermonDesc ? `<p class="mt-3 text-[11px] text-slate-600 leading-relaxed line-clamp-2">${escapeHTML(sermonDesc)}</p>` : ''}
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" class="bg-[#1C1C1E] hover:bg-black text-white text-[11px] font-semibold px-4 py-2 rounded-full transition-colors flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-play text-[9px]"></i>
+                            <span>Play</span>
+                        </button>
+                        <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" title="Choose Platform / Play" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 text-[10px] transition-colors">
                             <i class="fa-solid fa-ellipsis"></i>
                         </button>
                     </div>
+                    ${sermonPlatformLinksHtml}
                 </div>
-                <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" class="mt-3 w-full bg-[#1C1C1E] hover:bg-black text-white text-[11px] font-semibold py-2 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm">
-                    <i class="fa-solid fa-play text-[9px]"></i>
-                    <span>Play</span>
-                </button>
-            </div>
-            <div class="w-full sm:w-[54%] bg-[#F5F5F7] p-3.5 flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-slate-200/70">
-                <div data-tracks-slot>
-                    ${rightContentHtml}
+            `;
+        } else {
+            card.className = `bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row min-h-[268px] ${extraClass}`.trim();
+            card.innerHTML = `
+                <div class="w-full sm:w-[46%] p-3.5 flex flex-col justify-between bg-white">
+                    <div>
+                        <div class="mb-2 flex items-center justify-between gap-2">
+                            <div class="min-w-0 truncate">${brandBadgeHtml}</div>
+                            ${saveBtnHtml}
+                        </div>
+                        <div class="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 shadow-sm">
+                            <img data-playlist-cover src="${escapeHTML(coverSrc)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500">
+                        </div>
+                        <div class="mt-2.5 flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <h3 data-playlist-title class="text-[13px] font-bold text-slate-900 leading-tight truncate">${escapeHTML(pl.title)}</h3>
+                                <p class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHTML(subtitle)}</p>
+                            </div>
+                            <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" title="Choose Platform / Play" class="w-5 h-5 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center shrink-0 text-[9px] mt-0.5 transition-colors">
+                                <i class="fa-solid fa-ellipsis"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" onclick="openPlaylistPlayerModal('${safeId}', '${safeSource}')" class="mt-3 w-full bg-[#1C1C1E] hover:bg-black text-white text-[11px] font-semibold py-2 rounded-full transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-play text-[9px]"></i>
+                        <span>Play</span>
+                    </button>
                 </div>
-                <div class="pt-3 mt-2 border-t border-slate-200/60 flex items-center justify-between">
-                    ${platformButtonsHtml}
+                <div class="w-full sm:w-[54%] bg-[#F5F5F7] p-3.5 flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-slate-200/70">
+                    <div data-tracks-slot>
+                        ${rightContentHtml}
+                    </div>
+                    <div class="pt-3 mt-2 border-t border-slate-200/60 flex items-center justify-between">
+                        ${platformButtonsHtml}
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
 
         if (tracks.length === 0 && platformLinks.length > 0) {
             hydratePlaylistTracks(pl, card, coverSrc, subtitle);
@@ -762,7 +810,7 @@
         _activeShareContext = { playlist: pl, pageSource, shareUrl };
 
         const subEl = document.getElementById('share-playlist-subtitle');
-        if (subEl) subEl.innerText = pl.title || (pageSource === 'sermons' ? 'Sermon Playlist' : 'Curated Gospel Playlist');
+        if (subEl) subEl.innerText = pl.title || (pageSource === 'sermons' ? 'Sermon Audio' : 'Curated Gospel Playlist');
 
         const noteEl = document.getElementById('share-chat-note');
         if (noteEl) noteEl.value = '';
@@ -925,7 +973,7 @@
                 body: note,
                 attachment_meta: {
                     id: pl.id,
-                    title: pl.title || 'Curated Playlist',
+                    title: pl.title || (_activeShareContext.pageSource === 'sermons' ? 'Sermon Audio' : 'Curated Playlist'),
                     author_name: pl.curator || pl.genre || 'SoundSpace PR',
                     subtitle: pl.description || 'Listen on Accord Music Hub',
                     image_url: pl.image || fallbackImg,
@@ -982,7 +1030,7 @@
         if (!pl || typeof navigator.share !== 'function') return;
         try {
             await navigator.share({
-                title: pl.title || 'Curated Gospel Playlist',
+                title: pl.title || (_activeShareContext.pageSource === 'sermons' ? 'Sermon Audio' : 'Curated Gospel Playlist'),
                 text: `Listen to "${pl.title}" on Accord Music Hub`,
                 url
             });

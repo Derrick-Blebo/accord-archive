@@ -272,7 +272,7 @@ function renderSavedPages() {
                     <img src="${escapeHTML(pl.image || fallbackImg)}" alt="${escapeHTML(pl.title)}" class="w-full h-full object-cover">
                 </div>
                 <div class="flex-1 min-w-0 space-y-1.5">
-                    <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full">${escapeHTML(pl.genre || 'Curated Playlist')}</span>
+                    <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full">${escapeHTML(pl.genre || (hubPage === 'sermons.html' ? 'Sermon Audio' : 'Curated Playlist'))}</span>
                     <h3 class="font-bold text-accord-slate text-sm leading-snug truncate">${escapeHTML(pl.title)}</h3>
                     <p class="text-[11px] text-accord-muted truncate">${escapeHTML(pl.curator || 'SoundSpace PR')}</p>
                     <div class="flex items-center gap-2 pt-1">

@@ -256,13 +256,13 @@ async function loadAndRenderSermonPlaylistInsights() {
 
     savedEl.innerHTML = renderRows(
         mostSaved,
-        'No sermon playlist saves recorded yet.',
+        'No sermon audio saves recorded yet.',
         row => `<span class="px-2.5 py-0.5 rounded-full bg-accord-lightBlue text-accord-blue font-bold">${row.save_count} saves</span>`
     );
 
     engagedEl.innerHTML = renderRows(
         mostEngaged,
-        'No sermon playlist engagement recorded yet.',
+        'No sermon audio engagement recorded yet.',
         row => `
             <span class="text-accord-muted">${row.play_count} plays</span>
             <span class="text-accord-muted">• ${row.platform_click_count} clicks</span>
@@ -288,13 +288,13 @@ function renderSermonsTable() {
     if (!tbody) return;
 
     const rows = [
-        ...sermonsConfig.playlists.map(p => ({ ...p, _kind: 'playlist', _label: 'Sermon Playlist', _badge: 'bg-blue-50 text-accord-blue' })),
+        ...sermonsConfig.playlists.map(p => ({ ...p, _kind: 'playlist', _label: 'Sermon Audio', _badge: 'bg-blue-50 text-accord-blue' })),
         ...sermonsConfig.pastors.map(p => ({ ...p, _kind: 'pastor', _label: 'Pastor Spotlight', _badge: 'bg-amber-50 text-amber-800' })),
         ...sermonsConfig.ministries.map(p => ({ ...p, _kind: 'ministry', _label: 'Ministry Spotlight', _badge: 'bg-indigo-50 text-indigo-700' }))
     ].filter(item => currentTableFilter === 'all' || item._kind === currentTableFilter);
 
     if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No entries yet. Use the buttons above to add a Sermon Playlist, Pastor, or Ministry Spotlight.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-accord-muted">No entries yet. Use the buttons above to add a Sermon Audio, Pastor, or Ministry Spotlight.</td></tr>`;
         return;
     }
 
@@ -658,7 +658,7 @@ function openSermonItemModal(mode = 'add', id = null, defaultType = 'playlist') 
         }
     } else {
         document.getElementById('sermon-modal-heading').textContent =
-            defaultType === 'pastor' ? 'Add Pastor Spotlight' : (defaultType === 'ministry' ? 'Add Ministry Spotlight' : 'Add Sermon Playlist');
+            defaultType === 'pastor' ? 'Add Pastor Spotlight' : (defaultType === 'ministry' ? 'Add Ministry Spotlight' : 'Add Sermon Audio');
         addSpotlightSermonRow();
     }
 
@@ -786,7 +786,7 @@ async function toggleSermonItemFeatured(id, kind) {
     if (!item) return;
     item.featured = item.featured === false;
     await persistSermonsConfig();
-    const offLabel = kind === 'playlist' ? 'All Sermon Playlists Only' : 'Blog Only';
+    const offLabel = kind === 'playlist' ? 'All Sermon Audios Only' : 'Blog Only';
     showToast(`${item.title} is now ${item.featured ? 'Featured on Sermons Hub' : offLabel}.`);
 }
 
@@ -923,7 +923,7 @@ async function deleteSermonSpotlight(id) {
 let excelSermonDrafts = [];
 
 const SERMON_EXCEL_TYPE_META = {
-    playlist: { label: 'Sermon Playlist', badge: 'bg-blue-50 text-accord-blue', icon: 'fa-solid fa-list-ul' },
+    playlist: { label: 'Sermon Audio', badge: 'bg-blue-50 text-accord-blue', icon: 'fa-solid fa-headphones' },
     pastor: { label: 'Pastor Spotlight', badge: 'bg-amber-50 text-amber-800', icon: 'fa-solid fa-user-tie' },
     ministry: { label: 'Ministry Spotlight', badge: 'bg-indigo-50 text-indigo-700', icon: 'fa-solid fa-church' },
     sermon: { label: 'Featured Sermon', badge: 'bg-emerald-50 text-emerald-700', icon: 'fa-solid fa-microphone-lines' }
@@ -1021,7 +1021,7 @@ function downloadSermonsExcelTemplate() {
         }
     ];
 
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(playlistRows), 'Sermon Playlists');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(playlistRows), 'Sermon Audios');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pastorRows), 'Pastors');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ministryRows), 'Ministries');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sermonRows), 'Sermons');
@@ -1102,7 +1102,7 @@ function normalizeSermonEntryType(rawType) {
     if (t.includes('pastor') || t.includes('preacher') || t.includes('speaker')) return 'pastor';
     if (t.includes('ministr') || t.includes('church')) return 'ministry';
     if (t === 'sermon' || t === 'sermons' || t.includes('spotlight') || t.includes('individual') || t.includes('episode')) return 'sermon';
-    if (t.includes('playlist') || t.includes('series')) return 'playlist';
+    if (t.includes('playlist') || t.includes('series') || t.includes('audio')) return 'playlist';
     return '';
 }
 
@@ -1508,7 +1508,7 @@ async function confirmSermonsExcelImport() {
     closeSermonsExcelImportModal();
     if (await persistSermonsConfig()) {
         const parts = [];
-        if (counts.playlist) parts.push(`${counts.playlist} playlist${counts.playlist === 1 ? '' : 's'}`);
+        if (counts.playlist) parts.push(`${counts.playlist} sermon audio${counts.playlist === 1 ? '' : 's'}`);
         if (counts.pastor) parts.push(`${counts.pastor} pastor${counts.pastor === 1 ? '' : 's'}`);
         if (counts.ministry) parts.push(`${counts.ministry} ministr${counts.ministry === 1 ? 'y' : 'ies'}`);
         if (counts.sermon) parts.push(`${counts.sermon} sermon${counts.sermon === 1 ? '' : 's'}`);
