@@ -381,8 +381,8 @@ function renderAllSermonPlaylists() {
 function openSermonSpotlightPlayer(id) {
     const sermon = (sermonsData.sermonSpotlights || []).find(s => s.id === id);
     if (!sermon) return;
-    if (window.AccordPlaylists?.openMediaUrlModal) {
-        window.AccordPlaylists.openMediaUrlModal(sermon.title, sermon.artist || 'Sermon Spotlight', sermon.link);
+    if (window.AccordPlaylists?.openMediaPlayerModal) {
+        window.AccordPlaylists.openMediaPlayerModal(sermon.title, sermon.artist || 'Sermon Spotlight', sermon.link);
     } else if (sermon.link) {
         window.open(sermon.link, '_blank', 'noopener,noreferrer');
     }

@@ -80,6 +80,9 @@
     }
 
     function getEmbedUrl(url) {
+        if (window.AccordAudioEmbed?.resolveInAppAudioTarget) {
+            return window.AccordAudioEmbed.resolveInAppAudioTarget(url).embedUrl;
+        }
         const raw = String(url || '').trim();
         if (!raw) return '';
 
@@ -88,13 +91,6 @@
             return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
         }
         if (raw.includes('embed.music.apple.com')) return raw;
-        if (raw.includes('podcasts.apple.com')) {
-            return {
-                brandHtml: '<i class="fa-solid fa-podcast text-purple-600 text-[13px] mr-1"></i><span class="font-semibold tracking-tight">Podcasts</span>',
-                ctaLabel: 'View in Apple Podcasts',
-                platform: 'apple'
-            };
-        }
         if (raw.includes('music.apple.com')) {
             return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
         }
@@ -361,6 +357,65 @@
         }
     }
 
+    function resolveAudioTarget(url) {
+        if (window.AccordAudioEmbed?.resolveInAppAudioTarget) {
+            return window.AccordAudioEmbed.resolveInAppAudioTarget(url);
+        }
+        const embedUrl = getEmbedUrl(url);
+        return {
+            kind: embedUrl ? 'iframe' : 'external',
+            embedUrl,
+            rawUrl: String(url || '').trim(),
+            height: embedUrl.includes('embed.music.apple.com') ? 420 : 380
+        };
+    }
+
+    function syncPlayerPreferenceToggle(modal) {
+        if (!modal) return;
+        const checkbox = modal.querySelector('#player-modal-pref-checkbox');
+        const labelEl = modal.querySelector('#player-modal-pref-label');
+        const pref = window.AccordAudioEmbed?.getPlaybackPreference?.() || 'in_app';
+        const isExternal = pref === 'external';
+        if (checkbox) checkbox.checked = isExternal;
+        if (labelEl) {
+            labelEl.textContent = isExternal
+                ? 'Remember: Open External'
+                : 'Remember: Play in App';
+        }
+    }
+
+    function ensurePlayerPreferenceToggle(modal) {
+        if (!modal) return;
+        const card = modal.firstElementChild;
+        if (!card) return;
+        let footer = modal.querySelector('#player-modal-pref-footer');
+        if (!footer) {
+            footer = document.createElement('div');
+            footer.id = 'player-modal-pref-footer';
+            footer.className = 'px-6 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 text-[11px]';
+            footer.innerHTML = `
+                <span class="text-accord-muted font-medium">Default playback</span>
+                <label class="inline-flex items-center gap-2 cursor-pointer select-none font-bold text-accord-slate">
+                    <input id="player-modal-pref-checkbox" type="checkbox" class="rounded border-slate-300 text-accord-blue focus:ring-accord-blue cursor-pointer">
+                    <span id="player-modal-pref-label">Remember: Play in App</span>
+                </label>
+            `;
+            card.appendChild(footer);
+            const checkbox = footer.querySelector('#player-modal-pref-checkbox');
+            checkbox?.addEventListener('change', () => {
+                const nextPref = checkbox.checked ? 'external' : 'in_app';
+                window.AccordAudioEmbed?.setPlaybackPreference?.(nextPref);
+                syncPlayerPreferenceToggle(modal);
+                if (typeof window.showToast === 'function') {
+                    window.showToast(nextPref === 'external'
+                        ? 'Saved preference: Open audio links externally.'
+                        : 'Saved preference: Play audio in app.');
+                }
+            });
+        }
+        syncPlayerPreferenceToggle(modal);
+    }
+
     function renderPlayerModalBody(url, platformLabel = 'Platform', analyticsCtx = null) {
         const bodyEl = document.getElementById('player-modal-body');
         const extEl = document.getElementById('player-modal-external');
@@ -373,8 +428,8 @@
         }
         if (!bodyEl) return;
 
-        const embedUrl = getEmbedUrl(url);
-        if (!embedUrl) {
+        const target = resolveAudioTarget(url);
+        if (!target || target.kind === 'external' || !target.embedUrl) {
             bodyEl.innerHTML = `
                 <div class="py-10 px-4 text-center space-y-3 bg-white rounded-2xl border border-slate-200">
                     <p class="text-xs font-semibold text-accord-slate">Embedded player is unavailable for this link.</p>
@@ -387,17 +442,36 @@
             return;
         }
 
-        const height = embedUrl.includes('embed.music.apple.com') ? '420' : '380';
-        bodyEl.innerHTML = `<iframe src="${escapeHTML(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
+        if (window.AccordAudioEmbed?.renderEmbeddedPlayerHtml) {
+            bodyEl.innerHTML = window.AccordAudioEmbed.renderEmbeddedPlayerHtml(target);
+            return;
+        }
+
+        if (target.kind === 'audio') {
+            bodyEl.innerHTML = `
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <audio controls preload="none" src="${escapeHTML(target.embedUrl)}" class="w-full"></audio>
+                </div>
+            `;
+            return;
+        }
+
+        const height = target.height || (target.embedUrl.includes('embed.music.apple.com') ? 420 : 380);
+        bodyEl.innerHTML = `<iframe src="${escapeHTML(target.embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
     }
 
-    function openMediaPlayerModal(title, subtitle, link, platformLinks = null, analyticsCtx = null) {
+    function openMediaPlayerModal(title, subtitle, link, platformLinks = null, analyticsCtx = null, opts = null) {
         const hasPlatforms = Array.isArray(platformLinks) && platformLinks.length > 0;
         const activeUrl = hasPlatforms ? platformLinks[0].url : link;
         const activeLabel = hasPlatforms ? platformLinks[0].label : 'App';
-        const embedUrl = getEmbedUrl(activeUrl);
 
-        if (!hasPlatforms && !embedUrl) {
+        if (window.AccordAudioEmbed?.getPlaybackPreference?.() === 'external' && activeUrl && !opts?.forceInApp) {
+            window.open(activeUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        const target = resolveAudioTarget(activeUrl);
+        if (!hasPlatforms && (!target || target.kind === 'external' || !target.embedUrl)) {
             if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
             return;
         }
@@ -412,6 +486,8 @@
             if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
             return;
         }
+
+        ensurePlayerPreferenceToggle(modal);
 
         if (titleEl) titleEl.innerText = title || 'Music Player';
         if (subEl) subEl.innerText = subtitle || 'Accord Music Hub';
