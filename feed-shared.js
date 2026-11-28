@@ -2449,12 +2449,30 @@ if (typeof window !== 'undefined') {
             }
         }
 
-        if (data.event === 'onStateChange' && data.info === 1) {
-            const iframes = document.querySelectorAll('iframe');
-            for (const iframe of iframes) {
-                if (iframe.contentWindow === event.source) {
-                    pauseAllOtherAccordMedia(iframe);
-                    break;
+        if (data.event === 'onStateChange') {
+            if (data.info === 1) {
+                const iframes = document.querySelectorAll('iframe');
+                for (const iframe of iframes) {
+                    if (iframe.contentWindow === event.source) {
+                        pauseAllOtherAccordMedia(iframe);
+                        break;
+                    }
+                }
+            } else if (data.info === 2 || data.info === -1 || data.info === 5) {
+                const modalIframe = document.getElementById('mobile-video-player');
+                if (
+                    modalIframe &&
+                    modalIframe.tagName === 'IFRAME' &&
+                    modalIframe.contentWindow === event.source &&
+                    modalIframe.dataset.ytUnmuteAttempted === '1' &&
+                    modalIframe.dataset.ytFallbackMuted !== '1'
+                ) {
+                    const initialSyncAt = Number(modalIframe.dataset.ytInitialSyncAt || 0);
+                    if (initialSyncAt > 0 && (Date.now() - initialSyncAt) < 2000) {
+                        modalIframe.dataset.ytFallbackMuted = '1';
+                        sendYouTubePlayerCommand(modalIframe, 'mute');
+                        sendYouTubePlayerCommand(modalIframe, 'playVideo');
+                    }
                 }
             }
         }
@@ -2465,7 +2483,12 @@ if (typeof window !== 'undefined') {
                 modalIframe.dataset.ytReady = '1';
                 modalIframe.dataset.ytInitialSyncAt = String(Date.now());
                 sendYouTubePlayerCommand(modalIframe, 'playVideo');
-                sendYouTubePlayerCommand(modalIframe, _activeMobileVideoModalOptions.unmuted ? 'unMute' : 'mute');
+                if (_activeMobileVideoModalOptions.unmuted && modalIframe.dataset.ytFallbackMuted !== '1') {
+                    modalIframe.dataset.ytUnmuteAttempted = '1';
+                    sendYouTubePlayerCommand(modalIframe, 'unMute');
+                } else {
+                    sendYouTubePlayerCommand(modalIframe, 'mute');
+                }
             }
             if (_activeMobileFeedVideoId) {
                 const feedIframe = document.getElementById(`mobile-feed-video-player-${_activeMobileFeedVideoId}`);
@@ -2537,7 +2560,9 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
 
     const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url || '');
     const thumbUrl = getSharedVideoThumbnailUrl(post.media_url || '');
-    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '', { startTime, mute: !unmuted });
+    // Always start YouTube embeds muted in the URL so browser autoplay policy allows immediate playback on swipe;
+    // unMute is applied via YouTube IFrame API in onReady/load when unmuted=true, with muted fallback if blocked.
+    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '', { startTime, mute: true });
 
     const videoList = getMobileVideoList();
     const currentIdx = videoList.indexOf(String(postId));
@@ -2786,7 +2811,12 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
                 registerYouTubeIframeListener(modalPlayer, `modal-${postId}`);
                 modalPlayer.dataset.ytInitialSyncAt = String(Date.now());
                 sendYouTubePlayerCommand(modalPlayer, 'playVideo');
-                sendYouTubePlayerCommand(modalPlayer, _activeMobileVideoModalOptions.unmuted ? 'unMute' : 'mute');
+                if (_activeMobileVideoModalOptions.unmuted && modalPlayer.dataset.ytFallbackMuted !== '1') {
+                    modalPlayer.dataset.ytUnmuteAttempted = '1';
+                    sendYouTubePlayerCommand(modalPlayer, 'unMute');
+                } else {
+                    sendYouTubePlayerCommand(modalPlayer, 'mute');
+                }
             };
             modalPlayer.addEventListener('load', () => {
                 syncModalYouTubePlayback();
