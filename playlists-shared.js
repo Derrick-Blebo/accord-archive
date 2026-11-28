@@ -370,52 +370,6 @@
         };
     }
 
-    function syncPlayerPreferenceToggle(modal) {
-        if (!modal) return;
-        const checkbox = modal.querySelector('#player-modal-pref-checkbox');
-        const labelEl = modal.querySelector('#player-modal-pref-label');
-        const pref = window.AccordAudioEmbed?.getPlaybackPreference?.() || 'in_app';
-        const isExternal = pref === 'external';
-        if (checkbox) checkbox.checked = isExternal;
-        if (labelEl) {
-            labelEl.textContent = isExternal
-                ? 'Remember: Open External'
-                : 'Remember: Play in App';
-        }
-    }
-
-    function ensurePlayerPreferenceToggle(modal) {
-        if (!modal) return;
-        const card = modal.firstElementChild;
-        if (!card) return;
-        let footer = modal.querySelector('#player-modal-pref-footer');
-        if (!footer) {
-            footer = document.createElement('div');
-            footer.id = 'player-modal-pref-footer';
-            footer.className = 'px-6 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 text-[11px]';
-            footer.innerHTML = `
-                <span class="text-accord-muted font-medium">Default playback</span>
-                <label class="inline-flex items-center gap-2 cursor-pointer select-none font-bold text-accord-slate">
-                    <input id="player-modal-pref-checkbox" type="checkbox" class="rounded border-slate-300 text-accord-blue focus:ring-accord-blue cursor-pointer">
-                    <span id="player-modal-pref-label">Remember: Play in App</span>
-                </label>
-            `;
-            card.appendChild(footer);
-            const checkbox = footer.querySelector('#player-modal-pref-checkbox');
-            checkbox?.addEventListener('change', () => {
-                const nextPref = checkbox.checked ? 'external' : 'in_app';
-                window.AccordAudioEmbed?.setPlaybackPreference?.(nextPref);
-                syncPlayerPreferenceToggle(modal);
-                if (typeof window.showToast === 'function') {
-                    window.showToast(nextPref === 'external'
-                        ? 'Saved preference: Open audio links externally.'
-                        : 'Saved preference: Play audio in app.');
-                }
-            });
-        }
-        syncPlayerPreferenceToggle(modal);
-    }
-
     function renderPlayerModalBody(url, platformLabel = 'Platform', analyticsCtx = null) {
         const bodyEl = document.getElementById('player-modal-body');
         const extEl = document.getElementById('player-modal-external');
@@ -469,11 +423,6 @@
         const activeUrl = hasPlatforms ? platformLinks[0].url : link;
         const activeLabel = hasPlatforms ? platformLinks[0].label : 'App';
 
-        if (window.AccordAudioEmbed?.getPlaybackPreference?.() === 'external' && activeUrl && !opts?.forceInApp) {
-            window.open(activeUrl, '_blank', 'noopener,noreferrer');
-            return;
-        }
-
         const target = resolveAudioTarget(activeUrl);
         if (!hasPlatforms && (!target || target.kind === 'external' || !target.embedUrl)) {
             if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
@@ -490,8 +439,6 @@
             if (activeUrl) window.open(activeUrl, '_blank', 'noopener,noreferrer');
             return;
         }
-
-        ensurePlayerPreferenceToggle(modal);
 
         if (titleEl) titleEl.innerText = title || 'Music Player';
         if (subEl) subEl.innerText = subtitle || 'Accord Music Hub';
