@@ -15,6 +15,7 @@ let isFollowingTarget = false;
 
 let userOriginalPosts = [];
 let userReposts = [];
+let userApprovedBlogArticles = [];
 let allVisibleProfilePosts = [];
 let likedPostIds = new Set();
 let viewerRepostedPostIds = new Set();
@@ -226,6 +227,18 @@ async function loadUnifiedProfile() {
         viewerUser && followersList.some(f => f.id === viewerUser.id)
     );
 
+    try {
+        const { data: blogRows } = await supabaseClient
+            .from('blog_articles')
+            .select('*')
+            .eq('author_id', targetUserId)
+            .eq('status', 'approved')
+            .order('created_at', { ascending: false });
+        userApprovedBlogArticles = Array.isArray(blogRows) ? blogRows : [];
+    } catch {
+        userApprovedBlogArticles = [];
+    }
+
     renderProfileHeader();
     renderProfileStream();
 
@@ -310,9 +323,11 @@ function renderProfileHeader() {
     document.getElementById('stat-posts').textContent = userOriginalPosts.length + userReposts.length;
 
     const isSelf = viewerUser && viewerUser.id === targetUserId;
+    document.getElementById('user-write-blog-btn')?.classList.toggle('hidden', !(isVerified && canEditTargetProfile));
     document.getElementById('user-edit-btn')?.classList.toggle('hidden', !canEditTargetProfile);
     document.getElementById('banner-edit-trigger')?.classList.toggle('hidden', !canEditTargetProfile);
     document.getElementById('user-message-btn')?.classList.toggle('hidden', Boolean(isSelf));
+    document.getElementById('ptab-blog')?.classList.toggle('hidden', !(isVerified || userApprovedBlogArticles.length > 0));
     renderFollowButton();
 }
 
@@ -558,6 +573,58 @@ function buildPinnedAudioStreamCard(profile) {
 function renderProfileStream() {
     const stream = document.getElementById('profile-stream');
     if (!stream) return;
+
+    if (currentProfileTab === 'blog') {
+        window.teardownActiveMobileFeedVideo?.();
+        if (userApprovedBlogArticles.length === 0) {
+            stream.innerHTML = emptyCard('fa-solid fa-feather-pointed', 'No approved blog articles yet', 'Verified blog articles published by this account will appear here.');
+            return;
+        }
+        const categoryLabels = {
+            artiste: 'Artistes',
+            ministry: 'Ministries',
+            pastor: 'Pastors',
+            event: 'Events'
+        };
+        stream.innerHTML = userApprovedBlogArticles.map(art => {
+            const catLabel = categoryLabels[art.category] || 'Blog';
+            const dateStr = art.created_at
+                ? new Date(art.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : '';
+            const spotlightBadge = art.spotlight_target === 'artist'
+                ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accord-goldLight text-amber-800">Artist Spotlight</span>`
+                : (art.spotlight_target === 'ministry'
+                    ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700">Ministry Spotlight</span>`
+                    : '');
+            return `
+                <a href="artist.html?blog_id=${encodeURIComponent(art.id)}" class="block bg-white border border-slate-200/90 hover:border-accord-blue/50 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        ${art.image_url ? `
+                            <div class="w-full sm:w-32 h-40 sm:h-28 rounded-xl overflow-hidden bg-slate-100 shrink-0">
+                                <img src="${escapeProfileHtml(art.image_url)}" alt="${escapeProfileHtml(art.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            </div>
+                        ` : ''}
+                        <div class="flex-1 min-w-0 flex flex-col justify-between space-y-2">
+                            <div class="space-y-1.5">
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-accord-slate">${escapeProfileHtml(catLabel)}</span>
+                                    ${art.genre ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue">${escapeProfileHtml(art.genre)}</span>` : ''}
+                                    ${spotlightBadge}
+                                </div>
+                                <h3 class="serif-heading text-base sm:text-lg font-bold text-accord-slate group-hover:text-accord-blue transition-colors">${escapeProfileHtml(art.title)}</h3>
+                                <p class="text-xs text-accord-muted leading-relaxed line-clamp-3">${escapeProfileHtml(art.article || '')}</p>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] pt-1">
+                                <span class="text-accord-muted">${escapeProfileHtml(dateStr)}</span>
+                                <span class="font-bold text-accord-blue inline-flex items-center gap-1">Read Article <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            `;
+        }).join('');
+        return;
+    }
 
     let items = [];
     if (currentProfileTab === 'all') {
@@ -1199,4 +1266,182 @@ async function submitEditProfileModal(e) {
     renderProfileStream();
     if (typeof renderGlobalHeader === 'function') renderGlobalHeader();
     showToast('Profile updated.');
+}
+
+// =========================================================
+// VERIFIED ACCOUNT BLOG WRITING & SINGLE IMAGE UPLOAD
+// =========================================================
+
+function openWriteBlogModal() {
+    if (!viewerUser || !isVerifiedMinistryProfile(targetProfile) || !canEditTargetProfile) {
+        showToast('Only verified accounts can write to the blog.', true);
+        return;
+    }
+    const modal = document.getElementById('write-blog-modal');
+    const form = document.getElementById('write-blog-form');
+    if (form) form.reset();
+    clearBlogImageUpload();
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+}
+
+function closeWriteBlogModal() {
+    const modal = document.getElementById('write-blog-modal');
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+function clearBlogImageUpload() {
+    const urlInput = document.getElementById('blog-article-image-url');
+    const fileInput = document.getElementById('blog-article-image-file');
+    const preview = document.getElementById('blog-article-image-preview');
+    const placeholder = document.getElementById('blog-article-image-placeholder');
+    const removeBtn = document.getElementById('blog-article-image-remove');
+    const statusEl = document.getElementById('blog-article-upload-status');
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+    if (preview) {
+        preview.src = '';
+        preview.classList.add('hidden');
+    }
+    placeholder?.classList.remove('hidden');
+    removeBtn?.classList.add('hidden');
+    if (statusEl) statusEl.textContent = 'Optional cover image (max 1 image, JPG/PNG/WebP).';
+}
+
+function compressBlogImageFile(file, maxDim = 1200, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.onload = () => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('Invalid image file.'));
+            img.onload = () => {
+                let { width, height } = img;
+                if (width > maxDim || height > maxDim) {
+                    const ratio = Math.min(maxDim / width, maxDim / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                canvas.toBlob(
+                    blob => blob ? resolve({ blob, ext: 'webp', contentType: 'image/webp' }) : reject(new Error('Image compression failed.')),
+                    'image/webp',
+                    quality
+                );
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleBlogImageUpload(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('blog-article-upload-status');
+    const labelEl = document.getElementById('blog-article-upload-label');
+    if (statusEl) statusEl.textContent = 'Uploading image...';
+    labelEl?.classList.add('opacity-60', 'pointer-events-none');
+
+    try {
+        const { blob, ext, contentType } = await compressBlogImageFile(file);
+        const fileName = `blog_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        let uploadRes = await supabaseClient.storage
+            .from('archive-files')
+            .upload(`music-covers/${fileName}`, blob, { cacheControl: '3600', contentType, upsert: false });
+
+        if (uploadRes.error) {
+            uploadRes = await supabaseClient.storage
+                .from('archive-files')
+                .upload(`avatars/${fileName}`, blob, { cacheControl: '3600', contentType, upsert: false });
+        }
+
+        if (uploadRes.error) throw new Error(uploadRes.error.message || 'Upload failed.');
+
+        const { data: pub } = supabaseClient.storage.from('archive-files').getPublicUrl(uploadRes.data.path);
+        const publicUrl = pub?.publicUrl || '';
+        const urlInput = document.getElementById('blog-article-image-url');
+        const preview = document.getElementById('blog-article-image-preview');
+        const placeholder = document.getElementById('blog-article-image-placeholder');
+        const removeBtn = document.getElementById('blog-article-image-remove');
+
+        if (urlInput) urlInput.value = publicUrl;
+        if (preview) {
+            preview.src = publicUrl;
+            preview.classList.remove('hidden');
+        }
+        placeholder?.classList.add('hidden');
+        removeBtn?.classList.remove('hidden');
+        if (statusEl) statusEl.textContent = 'Image uploaded (1/1).';
+        showToast('Blog image uploaded!');
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Upload failed. Please try again.';
+        showToast(`Upload failed: ${err.message}`, true);
+    } finally {
+        labelEl?.classList.remove('opacity-60', 'pointer-events-none');
+        if (event?.target) event.target.value = '';
+    }
+}
+
+async function handleWriteBlogSubmit(event) {
+    event.preventDefault();
+    if (!viewerUser || !isVerifiedMinistryProfile(targetProfile) || !canEditTargetProfile) {
+        showToast('Only verified accounts can submit blog articles.', true);
+        return;
+    }
+
+    const category = document.getElementById('blog-article-category')?.value || '';
+    const title = (document.getElementById('blog-article-title')?.value || '').trim();
+    const genre = (document.getElementById('blog-article-genre')?.value || '').trim() || 'Gospel';
+    const imageUrl = (document.getElementById('blog-article-image-url')?.value || '').trim();
+    const link = (document.getElementById('blog-article-link')?.value || '').trim();
+    const article = (document.getElementById('blog-article-body')?.value || '').trim();
+    const submitBtn = document.getElementById('blog-article-submit-btn');
+
+    if (!['artiste', 'ministry', 'pastor', 'event'].includes(category)) {
+        showToast('Please select a valid category.', true);
+        return;
+    }
+    if (!title || !article) {
+        showToast('Please enter both a title and article content.', true);
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+    }
+
+    const { error } = await supabaseClient
+        .from('blog_articles')
+        .insert([{
+            author_id: targetUserId,
+            author_name: targetProfile.full_name || 'Verified Account',
+            author_handle: targetProfile.handle || null,
+            category,
+            title,
+            genre,
+            article,
+            image_url: imageUrl || null,
+            link: link || null,
+            status: 'pending'
+        }]);
+
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit for Verification';
+    }
+
+    if (error) {
+        showToast(`Could not submit article: ${error.message}`, true);
+        return;
+    }
+
+    closeWriteBlogModal();
+    showToast('Article submitted for admin verification. It will appear on the blog and your profile once approved.');
 }

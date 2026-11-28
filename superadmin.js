@@ -110,17 +110,18 @@ function unlockSuperadminDashboard(user) {
     if (emailEl && user?.email) emailEl.innerText = user.email;
 
     const hashTab = (window.location.hash || '').replace('#', '').trim();
-    const validTabs = ['overview', 'roles', 'upgrades', 'promotions', 'withdrawals'];
+    const validTabs = ['overview', 'roles', 'upgrades', 'blog', 'promotions', 'withdrawals'];
     switchSuperadminTab(validTabs.includes(hashTab) ? hashTab : 'overview');
 
     fetchEcosystemMetrics();
     loadMinistryUpgradeRequests();
+    loadBlogArticlesQueue();
     loadSuperadminPromotions();
     loadSuperadminWithdrawals();
 }
 
 function switchSuperadminTab(tabKey) {
-    const validTabs = ['overview', 'roles', 'upgrades', 'promotions', 'withdrawals'];
+    const validTabs = ['overview', 'roles', 'upgrades', 'blog', 'promotions', 'withdrawals'];
     const activeTab = validTabs.includes(tabKey) ? tabKey : 'overview';
 
     validTabs.forEach(key => {
@@ -1780,4 +1781,282 @@ async function updateWithdrawalStatus(withdrawalId, newStatus) {
     }
     showToast(`Withdrawal marked ${newStatus}.`);
     loadSuperadminWithdrawals();
+}
+
+// ==========================================
+// BLOG ARTICLES VERIFICATION & SPOTLIGHTS
+// ==========================================
+
+let superadminBlogArticles = [];
+let blogQueueStatusFilter = 'pending';
+let blogQueueCategoryFilter = 'all';
+
+function setBlogQueueStatusFilter(status) {
+    blogQueueStatusFilter = status;
+    ['pending', 'approved', 'rejected', 'all'].forEach(s => {
+        const btn = document.getElementById(`blog-status-filter-${s}`);
+        if (!btn) return;
+        btn.className = s === status
+            ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-accord-slate text-white'
+            : 'px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200';
+    });
+    renderBlogArticlesQueue();
+}
+
+function setBlogQueueCategoryFilter(category) {
+    blogQueueCategoryFilter = category;
+    ['all', 'artiste', 'ministry', 'pastor', 'event'].forEach(c => {
+        const btn = document.getElementById(`blog-cat-filter-${c}`);
+        if (!btn) return;
+        btn.className = c === category
+            ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-accord-blue text-white'
+            : 'px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200';
+    });
+    renderBlogArticlesQueue();
+}
+
+async function loadBlogArticlesQueue() {
+    const listEl = document.getElementById('superadmin-blog-list');
+    try {
+        const { data, error } = await supabaseClient
+            .from('blog_articles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        superadminBlogArticles = Array.isArray(data) ? data : [];
+        updateBlogPendingBadge();
+        renderBlogArticlesQueue();
+    } catch (err) {
+        if (listEl) {
+            listEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-6 text-center text-xs text-accord-muted">Could not load blog articles (${escapeSuperHtml(err?.message || 'Run supabase-blog-articles-migration.sql first')}).</div>`;
+        }
+    }
+}
+
+function updateBlogPendingBadge() {
+    const pendingCount = superadminBlogArticles.filter(a => a.status === 'pending').length;
+    const badge = document.getElementById('pending-blog-badge');
+    const tabBadge = document.getElementById('tab-badge-blog');
+    if (badge) badge.textContent = `${pendingCount} Pending`;
+    if (tabBadge) {
+        tabBadge.textContent = String(pendingCount);
+        tabBadge.classList.toggle('hidden', pendingCount === 0);
+    }
+}
+
+function renderBlogArticlesQueue() {
+    const listEl = document.getElementById('superadmin-blog-list');
+    if (!listEl) return;
+
+    const filtered = superadminBlogArticles.filter(a => {
+        if (blogQueueStatusFilter !== 'all' && a.status !== blogQueueStatusFilter) return false;
+        if (blogQueueCategoryFilter !== 'all' && a.category !== blogQueueCategoryFilter) return false;
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-8 text-center text-xs text-accord-muted">No blog articles match the selected filters.</div>`;
+        return;
+    }
+
+    const categoryLabels = {
+        artiste: 'Artistes',
+        ministry: 'Ministries',
+        pastor: 'Pastors',
+        event: 'Events'
+    };
+
+    listEl.innerHTML = filtered.map(art => {
+        const catLabel = categoryLabels[art.category] || art.category;
+        const dateStr = art.created_at
+            ? new Date(art.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : '';
+        const statusPill = art.status === 'approved'
+            ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Approved</span>`
+            : art.status === 'rejected'
+                ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`
+                : `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending</span>`;
+
+        const spotlightPill = art.spotlight_target === 'artist'
+            ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-goldLight text-amber-800">In Artist Spotlight</span>`
+            : art.spotlight_target === 'ministry'
+                ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700">In Ministry Spotlight</span>`
+                : '';
+
+        let actionButtons = '';
+        if (art.status === 'pending') {
+            actionButtons = `
+                <button type="button" onclick="approveBlogArticle('${art.id}', 'none')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition-all">Approve (Blog Only)</button>
+                <button type="button" onclick="approveBlogArticle('${art.id}', 'artist')" class="px-3 py-1.5 rounded-xl bg-accord-gold hover:bg-amber-500 text-white text-[11px] font-bold transition-all">Approve &amp; Artist Spotlight</button>
+                <button type="button" onclick="approveBlogArticle('${art.id}', 'ministry')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-all">Approve &amp; Ministry Spotlight</button>
+                <button type="button" onclick="rejectBlogArticle('${art.id}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold transition-all">Reject</button>
+            `;
+        } else if (art.status === 'approved') {
+            actionButtons = `
+                ${art.spotlight_target !== 'artist' ? `<button type="button" onclick="approveBlogArticle('${art.id}', 'artist')" class="px-3 py-1.5 rounded-xl bg-accord-goldLight hover:bg-accord-gold text-amber-800 hover:text-white text-[11px] font-bold transition-all">Add to Artist Spotlight</button>` : ''}
+                ${art.spotlight_target !== 'ministry' ? `<button type="button" onclick="approveBlogArticle('${art.id}', 'ministry')" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-[11px] font-bold transition-all">Add to Ministry Spotlight</button>` : ''}
+            `;
+        }
+
+        return `
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div class="flex items-start gap-4 min-w-0">
+                        ${art.image_url ? `<img src="${escapeSuperHtml(art.image_url)}" alt="${escapeSuperHtml(art.title)}" class="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0">` : `<div class="w-16 h-16 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center shrink-0"><i class="fa-regular fa-image text-lg"></i></div>`}
+                        <div class="min-w-0 space-y-1">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                ${statusPill}
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-accord-slate">${escapeSuperHtml(catLabel)}</span>
+                                ${art.genre ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-accord-lightBlue text-accord-blue">${escapeSuperHtml(art.genre)}</span>` : ''}
+                                ${spotlightPill}
+                            </div>
+                            <h3 class="serif-heading text-base font-bold text-accord-slate">${escapeSuperHtml(art.title)}</h3>
+                            <p class="text-[11px] text-accord-muted">
+                                By <a href="user.html?id=${encodeURIComponent(art.author_id)}" target="_blank" class="font-bold text-accord-blue hover:underline">${escapeSuperHtml(art.author_name || 'Verified Account')}</a>
+                                ${art.author_handle ? `(${escapeSuperHtml(art.author_handle)})` : ''} • ${escapeSuperHtml(dateStr)}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                        ${actionButtons}
+                        <button type="button" onclick="deleteBlogArticle('${art.id}')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 flex items-center justify-center text-xs" title="Delete Article">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-xl p-3.5 max-h-40 overflow-y-auto">${escapeSuperHtml(art.article || '')}</p>
+                ${art.link ? `<p class="text-[11px] text-accord-muted truncate">Link: <a href="${escapeSuperHtml(art.link)}" target="_blank" rel="noopener noreferrer" class="text-accord-blue hover:underline">${escapeSuperHtml(art.link)}</a></p>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+async function syncBlogArticleToSpotlight(article, spotlightTarget) {
+    if (spotlightTarget !== 'artist' && spotlightTarget !== 'ministry') return;
+
+    const recordName = spotlightTarget === 'artist' ? '__ACCORD_MUSIC_CONFIG__' : '__ACCORD_SERMONS_CONFIG__';
+    const localKey = spotlightTarget === 'artist' ? 'accord_music_config' : 'accord_sermons_config';
+    const arrayKey = spotlightTarget === 'artist' ? 'artistes' : 'ministries';
+
+    const { data: existingRow } = await supabaseClient
+        .from('books')
+        .select('id, description')
+        .eq('title', recordName)
+        .maybeSingle();
+
+    let config = {};
+    try {
+        config = existingRow?.description ? JSON.parse(existingRow.description) : JSON.parse(localStorage.getItem(localKey) || '{}');
+    } catch {
+        config = {};
+    }
+    if (!Array.isArray(config[arrayKey])) config[arrayKey] = [];
+
+    const alreadyExists = config[arrayKey].some(item => String(item.blogArticleId || '') === String(article.id));
+    if (!alreadyExists) {
+        const entry = {
+            id: (spotlightTarget === 'artist' ? 'art-' : 'min-') + Date.now(),
+            blogArticleId: article.id,
+            title: article.title,
+            genre: article.genre || 'Gospel',
+            curator: article.author_name || 'Verified Account',
+            image: article.image_url || '',
+            link: article.link || '',
+            description: article.article || '',
+            article: article.article || '',
+            songs: article.link ? [{ title: article.title, link: article.link }] : [],
+            approved: true,
+            featured: true,
+            hidden: false,
+            approvedAt: new Date().toISOString()
+        };
+        config[arrayKey].unshift(entry);
+        localStorage.setItem(localKey, JSON.stringify(config));
+
+        const payload = {
+            title: recordName,
+            author: spotlightTarget === 'artist' ? 'System Music Config' : 'System Sermons Config',
+            category: 'System',
+            year: '2026',
+            pages: '0',
+            description: JSON.stringify(config),
+            is_visible: false,
+            status: 'system_config',
+            is_for_sale: false,
+            price: 0
+        };
+        if (existingRow?.id) {
+            await supabaseClient.from('books').update(payload).eq('id', existingRow.id);
+        } else {
+            await supabaseClient.from('books').insert([payload]);
+        }
+    }
+}
+
+async function approveBlogArticle(articleId, spotlightTarget = 'none') {
+    const article = superadminBlogArticles.find(a => String(a.id) === String(articleId));
+    if (!article) return;
+
+    const updates = {
+        status: 'approved',
+        spotlight_target: spotlightTarget,
+        featured: spotlightTarget !== 'none',
+        reviewed_by: currentSuperadminUser?.email || 'superadmin',
+        reviewed_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+        .from('blog_articles')
+        .update(updates)
+        .eq('id', articleId);
+
+    if (error) {
+        showToast(`Could not approve article: ${error.message}`, true);
+        return;
+    }
+
+    if (spotlightTarget === 'artist' || spotlightTarget === 'ministry') {
+        await syncBlogArticleToSpotlight(article, spotlightTarget);
+    }
+
+    const msg = spotlightTarget === 'artist'
+        ? 'Article approved and added to Artist Spotlight!'
+        : spotlightTarget === 'ministry'
+            ? 'Article approved and added to Ministry Spotlight!'
+            : 'Article approved for Blog and public profile!';
+    showToast(msg);
+    loadBlogArticlesQueue();
+}
+
+async function rejectBlogArticle(articleId) {
+    const { error } = await supabaseClient
+        .from('blog_articles')
+        .update({
+            status: 'rejected',
+            reviewed_by: currentSuperadminUser?.email || 'superadmin',
+            reviewed_at: new Date().toISOString()
+        })
+        .eq('id', articleId);
+
+    if (error) {
+        showToast(`Could not reject article: ${error.message}`, true);
+        return;
+    }
+    showToast('Blog article rejected.');
+    loadBlogArticlesQueue();
+}
+
+async function deleteBlogArticle(articleId) {
+    const { error } = await supabaseClient
+        .from('blog_articles')
+        .delete()
+        .eq('id', articleId);
+
+    if (error) {
+        showToast(`Could not delete article: ${error.message}`, true);
+        return;
+    }
+    showToast('Blog article deleted.');
+    loadBlogArticlesQueue();
 }

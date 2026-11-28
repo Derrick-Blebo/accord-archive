@@ -106,6 +106,7 @@ function renderSongs(artist) {
 
 window.onload = async function () {
     const params = new URLSearchParams(window.location.search);
+    const blogId = params.get('blog_id');
     const artistId = params.get('id');
     const hub = params.get('hub');
     const loadingEl = document.getElementById('artist-loading');
@@ -113,7 +114,38 @@ window.onload = async function () {
     const contentEl = document.getElementById('artist-content');
 
     let artist = null;
-    if (hub === 'sermons') {
+    let isBlogArticle = false;
+    if (blogId) {
+        try {
+            const { data } = await supabaseClient
+                .from('blog_articles')
+                .select('*')
+                .eq('id', blogId)
+                .eq('status', 'approved')
+                .maybeSingle();
+            if (data) {
+                isBlogArticle = true;
+                artist = {
+                    id: data.id,
+                    title: data.title,
+                    genre: data.genre || 'Gospel',
+                    category: data.category,
+                    curator: data.author_name || 'Verified Account',
+                    authorId: data.author_id,
+                    image: data.image_url || '',
+                    link: data.link || '',
+                    article: data.article || '',
+                    description: data.article || '',
+                    featured: Boolean(data.featured),
+                    approvedAt: data.reviewed_at || data.created_at,
+                    createdAt: data.created_at,
+                    songs: data.link ? [{ title: data.title, link: data.link }] : []
+                };
+            }
+        } catch {}
+    }
+
+    if (!artist && hub === 'sermons') {
         try {
             const { data } = await supabaseClient
                 .from('books')
@@ -174,7 +206,12 @@ window.onload = async function () {
     const articleText = artist.article || artist.description || 'No biography available yet.';
     articleEl.textContent = articleText;
 
-    renderSongs(artist);
+    if (isBlogArticle && (!Array.isArray(artist.songs) || artist.songs.length === 0)) {
+        const songsSection = document.getElementById('artist-songs-list')?.closest('section');
+        if (songsSection) songsSection.classList.add('hidden');
+    } else {
+        renderSongs(artist);
+    }
 
     if (contentEl) contentEl.classList.remove('hidden');
 };

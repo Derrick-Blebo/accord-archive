@@ -88,6 +88,7 @@
             <button type="button" onclick="setBlogFilter('artiste')" id="blog-filter-artiste" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-accord-lightBlue">Artistes</button>
             <button type="button" onclick="setBlogFilter('ministry')" id="blog-filter-ministry" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-accord-lightBlue">Ministries</button>
             <button type="button" onclick="setBlogFilter('pastor')" id="blog-filter-pastor" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-accord-lightBlue">Pastors</button>
+            <button type="button" onclick="setBlogFilter('event')" id="blog-filter-event" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-accord-lightBlue">Events</button>
         </div>
 
         <div id="blog-articles-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -117,7 +118,7 @@
 
         function setBlogFilter(filter) {
             activeBlogFilter = filter;
-            ['all', 'artiste', 'ministry', 'pastor'].forEach(f => {
+            ['all', 'artiste', 'ministry', 'pastor', 'event'].forEach(f => {
                 const btn = document.getElementById(`blog-filter-${f}`);
                 if (!btn) return;
                 btn.className = f === filter
@@ -137,6 +138,7 @@
                 if (!query) return true;
                 return (a.title || '').toLowerCase().includes(query)
                     || (a.genre || '').toLowerCase().includes(query)
+                    || (a.curator || '').toLowerCase().includes(query)
                     || (a.article || a.description || '').toLowerCase().includes(query);
             });
 
@@ -146,14 +148,20 @@
             }
 
             const fallbackImg = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=800';
+            const kindLabels = { artiste: 'Artiste', ministry: 'Ministry', pastor: 'Pastor', event: 'Event' };
             grid.innerHTML = filtered.map(a => {
                 const body = a.article || a.description || '';
                 const songCount = Array.isArray(a.songs) ? a.songs.filter(s => s && (s.link || s.title)).length : (a.link ? 1 : 0);
-                const href = a._hub === 'sermons'
-                    ? `artist.html?id=${encodeURIComponent(a.id)}&hub=sermons&kind=${encodeURIComponent(a._kind)}`
-                    : `artist.html?id=${encodeURIComponent(a.id)}`;
-                const kindLabel = a._kind === 'ministry' ? 'Ministry' : (a._kind === 'pastor' ? 'Pastor' : 'Artiste');
+                const href = a._hub === 'blog_articles'
+                    ? `artist.html?blog_id=${encodeURIComponent(a.id)}`
+                    : (a._hub === 'sermons'
+                        ? `artist.html?id=${encodeURIComponent(a.id)}&hub=sermons&kind=${encodeURIComponent(a._kind)}`
+                        : `artist.html?id=${encodeURIComponent(a.id)}`);
+                const kindLabel = kindLabels[a._kind] || 'Article';
                 const unitLabel = a._hub === 'sermons' ? (songCount === 1 ? 'sermon' : 'sermons') : (songCount === 1 ? 'track' : 'tracks');
+                const footerLeft = a._hub === 'blog_articles'
+                    ? escapeHTML(a.curator ? `By ${a.curator}` : 'Verified Article')
+                    : `${songCount} playable ${unitLabel}`;
                 return `
                     <a href="${href}" class="group bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-lg hover:border-accord-blue/40 transition-all flex flex-col justify-between">
                         <div class="space-y-4">
@@ -173,7 +181,7 @@
                             <p class="text-xs text-accord-muted leading-relaxed line-clamp-4">${escapeHTML(body)}</p>
                         </div>
                         <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-accord-blue">
-                            <span>${songCount} playable ${unitLabel}</span>
+                            <span class="truncate max-w-[60%]">${footerLeft}</span>
                             <span class="inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">Read Article <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
                         </div>
                     </a>
@@ -183,6 +191,7 @@
 
         window.onload = async function () {
             const items = [];
+            const syncedBlogIds = new Set();
             try {
                 const { data: rows } = await supabaseClient
                     .from('books')
@@ -195,16 +204,51 @@
                         if (row.title === MUSIC_CONFIG_RECORD_NAME) {
                             (Array.isArray(parsed.artistes) ? parsed.artistes : [])
                                 .filter(a => a.approved !== false && !a.hidden)
-                                .forEach(a => items.push({ ...a, _kind: 'artiste', _hub: 'music' }));
+                                .forEach(a => {
+                                    if (a.blogArticleId) syncedBlogIds.add(String(a.blogArticleId));
+                                    items.push({ ...a, _kind: 'artiste', _hub: 'music' });
+                                });
                         } else if (row.title === SERMONS_CONFIG_RECORD_NAME) {
                             (Array.isArray(parsed.pastors) ? parsed.pastors : [])
                                 .filter(p => p.approved !== false && !p.hidden)
-                                .forEach(p => items.push({ ...p, _kind: 'pastor', _hub: 'sermons' }));
+                                .forEach(p => {
+                                    if (p.blogArticleId) syncedBlogIds.add(String(p.blogArticleId));
+                                    items.push({ ...p, _kind: 'pastor', _hub: 'sermons' });
+                                });
                             (Array.isArray(parsed.ministries) ? parsed.ministries : [])
                                 .filter(m => m.approved !== false && !m.hidden)
-                                .forEach(m => items.push({ ...m, _kind: 'ministry', _hub: 'sermons' }));
+                                .forEach(m => {
+                                    if (m.blogArticleId) syncedBlogIds.add(String(m.blogArticleId));
+                                    items.push({ ...m, _kind: 'ministry', _hub: 'sermons' });
+                                });
                         }
                     } catch {}
+                });
+            } catch {}
+
+            try {
+                const { data: blogRows } = await supabaseClient
+                    .from('blog_articles')
+                    .select('*')
+                    .eq('status', 'approved')
+                    .order('created_at', { ascending: false });
+
+                (blogRows || []).forEach(b => {
+                    if (syncedBlogIds.has(String(b.id))) return;
+                    items.unshift({
+                        id: b.id,
+                        title: b.title,
+                        genre: b.genre || 'Gospel',
+                        curator: b.author_name || '',
+                        image: b.image_url || '',
+                        link: b.link || '',
+                        article: b.article || '',
+                        description: b.article || '',
+                        featured: Boolean(b.featured),
+                        createdAt: b.created_at,
+                        _kind: b.category || 'artiste',
+                        _hub: 'blog_articles'
+                    });
                 });
             } catch {}
 
@@ -228,7 +272,7 @@
 
             allArticles = items;
             const initialFilter = new URLSearchParams(window.location.search).get('filter');
-            if (initialFilter && ['artiste', 'ministry', 'pastor'].includes(initialFilter)) {
+            if (initialFilter && ['artiste', 'ministry', 'pastor', 'event'].includes(initialFilter)) {
                 setBlogFilter(initialFilter);
             } else {
                 renderBlogArticles();

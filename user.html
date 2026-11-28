@@ -260,6 +260,77 @@
         </div>
     </div>
 
+    <!-- Write Blog Article Modal (Verified Accounts) -->
+    <div id="write-blog-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="serif-heading text-lg font-bold text-accord-slate">Write to Blog</h3>
+                    <p class="text-[11px] text-accord-muted">Articles are reviewed by an admin before appearing on the blog and your profile.</p>
+                </div>
+                <button type="button" onclick="closeWriteBlogModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-accord-muted flex items-center justify-center text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="write-blog-form" onsubmit="handleWriteBlogSubmit(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Category *</label>
+                        <select id="blog-article-category" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                            <option value="artiste">Artistes</option>
+                            <option value="ministry">Ministries</option>
+                            <option value="pastor">Pastors</option>
+                            <option value="event">Events</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Topic / Genre Tag</label>
+                        <input type="text" id="blog-article-genre" maxlength="40" placeholder="e.g., Worship, Conference, Gospel" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Article Title *</label>
+                    <input type="text" id="blog-article-title" required maxlength="140" placeholder="Headline, artiste name, ministry, or event title" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Article Image (1 Image)</label>
+                    <input type="hidden" id="blog-article-image-url" value="">
+                    <div class="flex items-center gap-3">
+                        <div class="w-20 h-20 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                            <img id="blog-article-image-preview" src="" alt="Preview" class="hidden w-full h-full object-cover">
+                            <i id="blog-article-image-placeholder" class="fa-regular fa-image text-slate-400 text-xl"></i>
+                        </div>
+                        <div class="flex-1 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label id="blog-article-upload-label" class="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accord-lightBlue hover:bg-accord-blue text-accord-blue hover:text-white text-xs font-bold transition-colors">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    <span>Upload Image</span>
+                                    <input type="file" id="blog-article-image-file" accept="image/*" onchange="handleBlogImageUpload(event)" class="hidden">
+                                </label>
+                                <button type="button" id="blog-article-image-remove" onclick="clearBlogImageUpload()" class="hidden px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 text-accord-muted hover:text-red-600 text-xs font-bold transition-colors">
+                                    Remove
+                                </button>
+                            </div>
+                            <p id="blog-article-upload-status" class="text-[11px] text-accord-muted">Optional cover image (max 1 image, JPG/PNG/WebP).</p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">External / Streaming / Event Link (Optional)</label>
+                    <input type="url" id="blog-article-link" placeholder="https://..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Article Content *</label>
+                    <textarea id="blog-article-body" rows="6" required maxlength="8000" placeholder="Write your full story, ministry feature, pastor profile, or event announcement..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeWriteBlogModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
+                    <button type="submit" id="blog-article-submit-btn" class="px-5 py-2.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold shadow-sm">Submit for Verification</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Profile Header Card -->
         <section id="profile-header-card" class="hidden bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-sm">
             <div id="profile-banner-container" class="h-28 sm:h-40 bg-gradient-to-r from-accord-blue via-blue-600 to-accord-slate relative overflow-hidden">
@@ -302,6 +373,10 @@
                             <i class="fa-regular fa-paper-plane"></i>
                             <span>Message</span>
                         </button>
+                        <button type="button" id="user-write-blog-btn" onclick="openWriteBlogModal()" class="hidden px-4 py-2.5 rounded-xl bg-accord-gold hover:bg-amber-500 text-white text-xs font-bold shadow-sm transition-all inline-flex items-center space-x-2">
+                            <i class="fa-solid fa-feather-pointed"></i>
+                            <span>Write to Blog</span>
+                        </button>
                         <button type="button" id="user-edit-btn" onclick="openEditProfileModal()" class="hidden px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold transition-all inline-flex items-center space-x-2">
                             <i class="fa-regular fa-pen-to-square"></i>
                             <span>Edit Profile</span>
@@ -340,6 +415,7 @@
             <button type="button" id="ptab-video" onclick="setProfileTab('video')" class="ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all">Videos</button>
             <button type="button" id="ptab-audio" onclick="setProfileTab('audio')" class="ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all">Audio</button>
             <button type="button" id="ptab-text" onclick="setProfileTab('text')" class="ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all">Text Posts</button>
+            <button type="button" id="ptab-blog" onclick="setProfileTab('blog')" class="hidden ptab-btn whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold bg-white text-accord-slate border border-slate-200 hover:bg-slate-100 transition-all">Blog</button>
         </div>
 
         <!-- Tab Content Stream -->

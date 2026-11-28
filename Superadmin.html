@@ -283,6 +283,11 @@
                     <span>Ministry Upgrades</span>
                     <span id="tab-badge-upgrades" class="hidden px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">0</span>
                 </button>
+                <button type="button" id="tab-btn-blog" onclick="switchSuperadminTab('blog')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
+                    <i class="fa-solid fa-feather-pointed"></i>
+                    <span>Blog Articles</span>
+                    <span id="tab-badge-blog" class="hidden px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">0</span>
+                </button>
                 <button type="button" id="tab-btn-promotions" onclick="switchSuperadminTab('promotions')" class="px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 text-accord-muted hover:text-accord-slate hover:bg-slate-100">
                     <i class="fa-solid fa-bullhorn"></i>
                     <span>Promotions &amp; Ads</span>
@@ -660,6 +665,45 @@
                     </div>
                     <div id="superadmin-withdrawals-list" class="space-y-3">
                         <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading withdrawal requests...</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB 6: BLOG ARTICLES VERIFICATION & SPOTLIGHT PROMOTION -->
+            <div id="tab-panel-blog" class="hidden space-y-5">
+                <section id="blog-articles-admin-section" class="space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 class="serif-heading text-2xl font-bold text-accord-slate">Verified Account Blog Submissions</h2>
+                            <p class="text-xs text-accord-muted mt-0.5">Verify submitted articles before they publish to the Blog and the author's profile, and optionally feature them in Artist Spotlight or Ministry Spotlight.</p>
+                        </div>
+                        <div class="flex items-center gap-2 self-start sm:self-auto">
+                            <span id="pending-blog-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-accord-gold border border-amber-200">0 Pending</span>
+                            <button type="button" onclick="loadBlogArticlesQueue()" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white hover:bg-slate-50 text-accord-slate border border-slate-200">
+                                <i class="fa-solid fa-rotate-right text-[11px]"></i>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button type="button" onclick="setBlogQueueStatusFilter('pending')" id="blog-status-filter-pending" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-accord-slate text-white">Pending</button>
+                            <button type="button" onclick="setBlogQueueStatusFilter('approved')" id="blog-status-filter-approved" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Approved</button>
+                            <button type="button" onclick="setBlogQueueStatusFilter('rejected')" id="blog-status-filter-rejected" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Rejected</button>
+                            <button type="button" onclick="setBlogQueueStatusFilter('all')" id="blog-status-filter-all" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">All</button>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button type="button" onclick="setBlogQueueCategoryFilter('all')" id="blog-cat-filter-all" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-accord-blue text-white">All Categories</button>
+                            <button type="button" onclick="setBlogQueueCategoryFilter('artiste')" id="blog-cat-filter-artiste" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Artistes</button>
+                            <button type="button" onclick="setBlogQueueCategoryFilter('ministry')" id="blog-cat-filter-ministry" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Ministries</button>
+                            <button type="button" onclick="setBlogQueueCategoryFilter('pastor')" id="blog-cat-filter-pastor" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Pastors</button>
+                            <button type="button" onclick="setBlogQueueCategoryFilter('event')" id="blog-cat-filter-event" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-accord-slate hover:bg-slate-200">Events</button>
+                        </div>
+                    </div>
+
+                    <div id="superadmin-blog-list" class="space-y-3">
+                        <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading blog submissions...</p>
                     </div>
                 </section>
             </div>
