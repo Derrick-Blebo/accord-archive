@@ -792,8 +792,11 @@ function createSharedFeedCardElement(post, options = {}) {
         canManagePost = false,
         expandFullBody = false,
         openCommentsByDefault = false,
-        showOpenFullPostLink = true
+        showOpenFullPostLink = true,
+        domId = ''
     } = options;
+
+    const cardDomId = String(domId || post.id);
 
     const resolvedViewerId = currentUserId || window.currentFeedUserId || null;
     const isOwner = Boolean(resolvedViewerId && post.author_id && String(resolvedViewerId) === String(post.author_id));
@@ -837,6 +840,7 @@ function createSharedFeedCardElement(post, options = {}) {
     const card = document.createElement('article');
     card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
     card.setAttribute('data-post-id', String(post.id));
+    card.setAttribute('data-card-dom-id', cardDomId);
 
     const postUrl = getPostShareUrl(post.id);
     const resolvedIsSaved = typeof isSaved === 'boolean' ? isSaved : isPostSavedShared(post.id);
@@ -912,8 +916,8 @@ function createSharedFeedCardElement(post, options = {}) {
                         : `<div class="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-white/25"></i></div>`);
 
                 mediaHtml = `
-                    <div data-mobile-video-card="${post.id}" data-video-url="${escapeShareHtml(post.media_url)}" data-is-direct-video="${isDirectVideo ? '1' : '0'}" class="relative w-full aspect-video bg-black cursor-pointer overflow-hidden group select-none">
-                        <div id="mobile-feed-video-poster-${post.id}" class="absolute inset-0 w-full h-full">
+                    <div data-mobile-video-card="${escapeShareHtml(cardDomId)}" data-video-post-id="${escapeShareHtml(post.id)}" data-video-url="${escapeShareHtml(post.media_url)}" data-is-direct-video="${isDirectVideo ? '1' : '0'}" class="relative w-full aspect-video bg-black cursor-pointer overflow-hidden group select-none">
+                        <div id="mobile-feed-video-poster-${escapeShareHtml(cardDomId)}" class="absolute inset-0 w-full h-full">
                             ${mobilePreviewVisual}
                             <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center pointer-events-none">
                                 <span class="w-12 h-12 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
@@ -921,16 +925,16 @@ function createSharedFeedCardElement(post, options = {}) {
                                 </span>
                             </div>
                         </div>
-                        <div id="mobile-feed-video-slot-${post.id}" class="absolute inset-0 w-full h-full hidden"></div>
-                        <div id="mobile-feed-video-overlay-${post.id}" onclick="handleMobileFeedVideoTap(event, '${post.id}')" role="button" tabindex="0" aria-label="Unmute or open video in full view" class="absolute inset-0 z-10 flex flex-col justify-between p-2.5">
+                        <div id="mobile-feed-video-slot-${escapeShareHtml(cardDomId)}" class="absolute inset-0 w-full h-full hidden"></div>
+                        <div id="mobile-feed-video-overlay-${escapeShareHtml(cardDomId)}" onclick="handleMobileFeedVideoTap(event, '${escapeShareHtml(cardDomId)}')" role="button" tabindex="0" aria-label="Unmute or open video in full view" class="absolute inset-0 z-10 flex flex-col justify-between p-2.5">
                             <div class="flex justify-end">
-                                <span id="mobile-feed-video-status-${post.id}" class="hidden bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full items-center gap-1.5 shadow">
+                                <span id="mobile-feed-video-status-${escapeShareHtml(cardDomId)}" class="hidden bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full items-center gap-1.5 shadow">
                                     <i class="fa-solid fa-volume-xmark text-[10px]"></i>
                                     <span>Tap for sound</span>
                                 </span>
                             </div>
                             <div class="flex justify-end">
-                                <button type="button" onclick="openMobileVideoFromFeed(event, '${post.id}')" class="bg-black/65 hover:bg-black/80 active:scale-95 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all shadow">
+                                <button type="button" onclick="openMobileVideoFromFeed(event, '${escapeShareHtml(post.id)}', '${escapeShareHtml(cardDomId)}')" class="bg-black/65 hover:bg-black/80 active:scale-95 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all shadow">
                                     <i class="fa-solid fa-expand text-[9px]"></i>
                                     <span>Full view</span>
                                 </button>
@@ -1085,10 +1089,10 @@ function createSharedFeedCardElement(post, options = {}) {
                     <i class="${resolvedIsSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm"></i>
                 </button>
                 <div class="relative shrink-0">
-                <button type="button" onclick="toggleFeedPostMenu(event, '${post.id}')" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors" aria-label="Post options">
+                <button type="button" onclick="toggleFeedPostMenu(event, '${escapeShareHtml(cardDomId)}')" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors" aria-label="Post options">
                     <i class="fa-solid fa-ellipsis text-sm"></i>
                 </button>
-                <div id="feed-post-menu-${post.id}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 top-9 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                <div id="feed-post-menu-${escapeShareHtml(cardDomId)}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 top-9 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
                     ${showOpenFullPostLink ? `
                     <a href="${escapeShareHtml(postUrl)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                         <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
@@ -1132,8 +1136,8 @@ function createSharedFeedCardElement(post, options = {}) {
         <!-- Post Content -->
         ${shownBody ? `
         <div ${enableMobileFullscreen ? `onclick="handleSharedTextPostBodyClick(event, '${post.id}')" class="px-4 pb-3 space-y-1.5 cursor-pointer md:cursor-auto active:bg-slate-50/70 md:active:bg-transparent transition-colors"` : `class="px-4 pb-3 space-y-1.5"`}>
-            <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeShareHtml(shownBody)}</p>
-            ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
+            <p id="post-body-${escapeShareHtml(cardDomId)}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeShareHtml(shownBody)}</p>
+            ${isLongBody ? `<button type="button" id="post-see-more-${escapeShareHtml(cardDomId)}" onclick="toggleExpandPostBody('${post.id}', '${escapeShareHtml(cardDomId)}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
         </div>` : ''}
 
         ${mediaHtml}
@@ -1145,39 +1149,39 @@ function createSharedFeedCardElement(post, options = {}) {
                 <span class="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px]">
                     <i class="fa-solid fa-heart"></i>
                 </span>
-                <span id="like-count-${post.id}">${likesCount}</span>
+                <span id="like-count-${escapeShareHtml(cardDomId)}" data-like-count-for="${escapeShareHtml(post.id)}">${likesCount}</span>
             </div>
             <div class="flex items-center gap-3">
-                <button type="button" onclick="handleSharedCommentTrigger('${post.id}')" class="hover:underline">
-                    <span id="comment-count-${post.id}">${commentsCount}</span> ${commentsCount === 1 ? 'comment' : 'comments'}
+                <button type="button" onclick="handleSharedCommentTrigger('${post.id}', '${escapeShareHtml(cardDomId)}')" class="hover:underline">
+                    <span id="comment-count-${escapeShareHtml(cardDomId)}" data-comment-count-for="${escapeShareHtml(post.id)}">${commentsCount}</span> ${commentsCount === 1 ? 'comment' : 'comments'}
                 </button>
-                <span id="repost-count-label-${post.id}">${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>
+                <span id="repost-count-label-${escapeShareHtml(cardDomId)}" data-repost-count-for="${escapeShareHtml(post.id)}">${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>
             </div>
         </div>
 
         <!-- Facebook-Style Action Bar -->
         <div class="mx-4 border-t border-slate-200/80 py-1 grid grid-cols-4 gap-1">
-            <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isLiked ? 'text-rose-600' : 'text-slate-600'}">
+            <button type="button" onclick="togglePostLike('${post.id}')" id="like-btn-${escapeShareHtml(cardDomId)}" data-like-btn-for="${escapeShareHtml(post.id)}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isLiked ? 'text-rose-600' : 'text-slate-600'}">
                 <i class="${isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm"></i>
                 <span>Like</span>
             </button>
 
-            <button type="button" onclick="handleSharedCommentTrigger('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+            <button type="button" onclick="handleSharedCommentTrigger('${post.id}', '${escapeShareHtml(cardDomId)}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
                 <i class="fa-regular fa-comment text-sm"></i>
                 <span>Comment</span>
             </button>
 
-            <button type="button" onclick="handleRepostClick('${post.id}')" id="repost-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isReposted ? 'text-emerald-600' : 'text-slate-600'}">
+            <button type="button" onclick="handleRepostClick('${post.id}')" id="repost-btn-${escapeShareHtml(cardDomId)}" data-repost-btn-for="${escapeShareHtml(post.id)}" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors ${isReposted ? 'text-emerald-600' : 'text-slate-600'}">
                 <i class="fa-solid fa-retweet text-sm"></i>
                 <span>Repost</span>
             </button>
 
             <div class="relative">
-                <button type="button" onclick="toggleSharedPostShareMenu(event, '${post.id}')" class="w-full py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+                <button type="button" onclick="toggleSharedPostShareMenu(event, '${escapeShareHtml(cardDomId)}')" class="w-full py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
                     <i class="fa-solid fa-share text-sm"></i>
                     <span>Share</span>
                 </button>
-                <div id="feed-share-menu-${post.id}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 bottom-11 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                <div id="feed-share-menu-${escapeShareHtml(cardDomId)}" onclick="event.stopPropagation()" class="feed-post-menu hidden absolute right-0 bottom-11 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
                     <button type="button" onclick="closeAllFeedPostMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-accord-lightBlue/60 flex items-center gap-2.5">
                         <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
                         <span>Send to Chat</span>
@@ -1191,19 +1195,19 @@ function createSharedFeedCardElement(post, options = {}) {
         </div>
 
         <!-- Facebook-Style Inline Comment Section -->
-        <div id="inline-comments-${post.id}" class="${openCommentsByDefault ? '' : 'hidden'} border-t border-slate-200/80 px-4 py-3 space-y-3 bg-white rounded-b-xl sm:rounded-b-2xl">
+        <div id="inline-comments-${escapeShareHtml(cardDomId)}" class="${openCommentsByDefault ? '' : 'hidden'} border-t border-slate-200/80 px-4 py-3 space-y-3 bg-white rounded-b-xl sm:rounded-b-2xl">
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
                     ${escapeShareHtml(myAvatarInitial)}
                 </div>
-                <form onsubmit="submitInlineComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                    <input type="text" id="inline-comment-input-${post.id}" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                <form onsubmit="submitInlineComment(event, '${post.id}', '${escapeShareHtml(cardDomId)}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="inline-comment-input-${escapeShareHtml(cardDomId)}" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
                     <button type="submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
                         <i class="fa-solid fa-paper-plane"></i>
                     </button>
                 </form>
             </div>
-            <div id="inline-comments-list-${post.id}" class="space-y-2.5">
+            <div id="inline-comments-list-${escapeShareHtml(cardDomId)}" class="space-y-2.5">
                 <p class="text-xs text-slate-400 text-center py-2">Loading comments...</p>
             </div>
             ${showOpenFullPostLink ? `
@@ -1224,9 +1228,9 @@ function createSharedFeedCardElement(post, options = {}) {
     return card;
 }
 
-function toggleSharedPostShareMenu(e, postId) {
+function toggleSharedPostShareMenu(e, domId) {
     e.stopPropagation();
-    const menu = document.getElementById(`feed-share-menu-${postId}`);
+    const menu = document.getElementById(`feed-share-menu-${domId}`);
     if (!menu) return;
     const isHidden = menu.classList.contains('hidden');
     if (typeof closeAllFeedPostMenus === 'function') closeAllFeedPostMenus();
@@ -1412,7 +1416,8 @@ function handleSharedTextPostBodyClick(e, postId) {
     openMobileTextPostModal(postId);
 }
 
-function handleSharedCommentTrigger(postId) {
+function handleSharedCommentTrigger(postId, domId = '') {
+    const resolvedDomId = String(domId || postId);
     const entry = _sharedMobilePostRegistry.get(String(postId));
     if (entry && window.innerWidth < 768) {
         if (entry.post.post_type === 'video' && entry.post.media_url) {
@@ -1423,7 +1428,7 @@ function handleSharedCommentTrigger(postId) {
         return;
     }
     if (typeof toggleInlineComments === 'function') {
-        toggleInlineComments(postId);
+        toggleInlineComments(postId, resolvedDomId);
     }
 }
 
@@ -2385,17 +2390,18 @@ function handleMobileFeedVideoTap(e, postId) {
     updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: nextUnmuted });
 }
 
-function openMobileVideoFromFeed(e, postId) {
+function openMobileVideoFromFeed(e, postId, domId = '') {
     if (e) e.stopPropagation();
     const idStr = String(postId);
+    const resolvedDomId = String(domId || postId);
 
-    const directPlayer = document.getElementById(`mobile-feed-video-player-${idStr}`);
+    const directPlayer = document.getElementById(`mobile-feed-video-player-${resolvedDomId}`);
     if (directPlayer && directPlayer.tagName === 'VIDEO' && !Number.isNaN(directPlayer.currentTime)) {
-        _mobileFeedVideoTimeMap.set(idStr, directPlayer.currentTime);
+        _mobileFeedVideoTimeMap.set(resolvedDomId, directPlayer.currentTime);
     }
 
-    const startTime = Math.floor(_mobileFeedVideoTimeMap.get(idStr) || 0);
-    const activeState = _mobileFeedVideoState.get(idStr);
+    const startTime = Math.floor(_mobileFeedVideoTimeMap.get(resolvedDomId) || 0);
+    const activeState = _mobileFeedVideoState.get(resolvedDomId);
     const unmuted = activeState ? Boolean(activeState.unmuted) : Boolean(_mobileFeedVideoUnmutedPref);
 
     teardownActiveMobileFeedVideo();

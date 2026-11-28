@@ -171,7 +171,7 @@ let copyrightReportsData = [];
 async function fetchAllData(isSilentRefresh = false) {
     const [booksRes, purchasesRes, catsRes, subsRes, testModRes, commModRes, userBooksRes, copyrightRes] = await Promise.all([
         supabaseClient.from('books').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('user_purchases').select('book_id, amount_paid'),
+        supabaseClient.from('user_purchases').select('book_id, amount_paid, platform_fee_amount, author_royalty_amount'),
         supabaseClient.from('categories').select('*').order('name', { ascending: true }),
         supabaseClient.from('submissions').select('*').order('created_at', { ascending: false }),
         supabaseClient.from('testimonies').select('*').order('created_at', { ascending: false }),
@@ -2202,10 +2202,17 @@ function updateStats() {
     }
 
     const totalRevenue = purchasesData.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+    const authorBookIds = new Set(catalogData.filter(b => Boolean(b.author_id)).map(b => Number(b.id)));
+    const accordAuthorRoyalty = purchasesData.reduce((sum, p) => {
+        if (!authorBookIds.has(Number(p.book_id))) return sum;
+        const gross = Math.max(0, Number(p.amount_paid) || 0);
+        const fee = p.platform_fee_amount != null ? (Number(p.platform_fee_amount) || 0) : Math.round(gross * 10) / 100;
+        return sum + fee;
+    }, 0);
     const salesSummaryEl = document.getElementById('stat-sales-summary');
     if (salesSummaryEl) {
         salesSummaryEl.innerHTML = `
-            <span>${purchasesData.length} sold • USD ${totalRevenue.toFixed(2)}</span>
+            <span>${purchasesData.length} sold • USD ${totalRevenue.toFixed(2)}${accordAuthorRoyalty > 0 ? ` (10% fee: USD ${accordAuthorRoyalty.toFixed(2)})` : ''}</span>
             <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
         `;
     }
@@ -2661,6 +2668,22 @@ function updateStats() {
     const totalDownloads = catalogData.reduce((sum, book) => sum + (Number(book.downloads) || 0), 0);
     const downloadsEl = document.getElementById('stat-downloads');
     if (downloadsEl) downloadsEl.innerText = totalDownloads.toLocaleString();
+
+    const totalRevenue = purchasesData.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+    const authorBookIds = new Set(catalogData.filter(b => Boolean(b.author_id)).map(b => Number(b.id)));
+    const accordAuthorRoyalty = purchasesData.reduce((sum, p) => {
+        if (!authorBookIds.has(Number(p.book_id))) return sum;
+        const gross = Math.max(0, Number(p.amount_paid) || 0);
+        const fee = p.platform_fee_amount != null ? (Number(p.platform_fee_amount) || 0) : Math.round(gross * 10) / 100;
+        return sum + fee;
+    }, 0);
+    const salesSummaryEl = document.getElementById('stat-sales-summary');
+    if (salesSummaryEl) {
+        salesSummaryEl.innerHTML = `
+            <span>${purchasesData.length} sold • USD ${totalRevenue.toFixed(2)}${accordAuthorRoyalty > 0 ? ` (10% fee: USD ${accordAuthorRoyalty.toFixed(2)})` : ''}</span>
+            <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+        `;
+    }
 
     const pendingAuthorBooks = getPendingAuthorBooks().length;
     const pendingTakedowns = catalogData.filter(b => b.takedown_status === 'pending').length;

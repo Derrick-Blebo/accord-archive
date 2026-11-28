@@ -644,6 +644,20 @@
                             </button>
                         </div>
                     </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Author Book Gross Sales</p>
+                            <p id="superadmin-royalty-gross" class="text-xl font-extrabold text-accord-slate mt-1">USD 0.00</p>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Accord Royalty Share (10%)</p>
+                            <p id="superadmin-royalty-accord" class="text-xl font-extrabold text-accord-blue mt-1">USD 0.00</p>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Author Net Royalties (90%)</p>
+                            <p id="superadmin-royalty-net" class="text-xl font-extrabold text-emerald-700 mt-1">USD 0.00</p>
+                        </div>
+                    </div>
                     <div id="superadmin-withdrawals-list" class="space-y-3">
                         <p class="text-xs text-accord-muted py-6 text-center bg-white border border-slate-200 rounded-2xl">Loading withdrawal requests...</p>
                     </div>
@@ -791,6 +805,16 @@
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="polls" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Polls</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="saved" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> Saved</label>
                         <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-placement" value="user" onchange="syncSuperadminSpecificPlacement()" class="rounded text-accord-blue"> User Profile</label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1.5">Target Calling Categories (Leave unchecked for All)</label>
+                    <div id="superadmin-ad-categories-grid" class="flex flex-wrap gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-category" value="Church / Ministry" class="rounded text-accord-blue"> Church / Ministry</label>
+                        <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-category" value="Preacher" class="rounded text-accord-blue"> Preacher</label>
+                        <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-category" value="Musician" class="rounded text-accord-blue"> Musician</label>
+                        <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-accord-slate"><input type="checkbox" name="superadmin-ad-category" value="Christian Creative" class="rounded text-accord-blue"> Christian Creative</label>
                     </div>
                 </div>
 

@@ -390,29 +390,42 @@ async function handleRevokeVerificationSubmit(e) {
 
 async function approveMinistryUpgrade(userId) {
     const rlsHint = document.getElementById('ministry-upgrades-rls-hint');
-    const { data, error } = await supabaseClient
-        .from('profiles')
-        .update({
-            account_type: 'ministry_minister',
-            upgrade_status: 'approved'
-        })
-        .eq('id', userId)
-        .select('id, account_type, upgrade_status');
 
-    if (error) {
-        showToast(`Could not approve upgrade: ${error.message}`);
-        return;
-    }
+    const { error: rpcError } = await supabaseClient.rpc('approve_ministry_verification', {
+        target_user_id: userId
+    });
 
-    if (!data || data.length === 0) {
-        if (rlsHint) rlsHint.classList.remove('hidden');
-        showToast('Update blocked by Supabase RLS on profiles. Run supabase-superadmin-profiles-rls.sql in Supabase SQL Editor.');
-        return;
+    if (rpcError) {
+        const isMissingRpc = /approve_ministry_verification|does not exist|could not find the function/i.test(rpcError.message || '');
+        if (!isMissingRpc) {
+            showToast(`Could not approve upgrade: ${rpcError.message}`);
+            return;
+        }
+
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .update({
+                account_type: 'ministry_minister',
+                upgrade_status: 'approved'
+            })
+            .eq('id', userId)
+            .select('id, account_type, upgrade_status');
+
+        if (error) {
+            showToast(`Could not approve upgrade: ${error.message}`);
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            if (rlsHint) rlsHint.classList.remove('hidden');
+            showToast('Update blocked by Supabase RLS on profiles. Run supabase-superadmin-profiles-rls.sql in Supabase SQL Editor.');
+            return;
+        }
     }
 
     if (rlsHint) rlsHint.classList.add('hidden');
     await loadMinistryUpgradeRequests();
-    showToast('Account upgraded to Ministry / Minister.');
+    showToast('Account upgraded to Ministry / Minister and sample posts published to feed.');
 }
 
 async function rejectMinistryUpgrade(userId) {
@@ -1444,6 +1457,11 @@ function openSuperadminAdModal(promoId = null) {
         cb.checked = !placements.includes('all') && placements.includes(cb.value);
     });
 
+    const targetCategories = Array.isArray(promo?.target_categories) ? promo.target_categories : [];
+    document.querySelectorAll('#superadmin-ad-categories-grid input[name="superadmin-ad-category"]').forEach(cb => {
+        cb.checked = targetCategories.includes(cb.value);
+    });
+
     updateSuperadminAdImagePreview('desktop');
     updateSuperadminAdImagePreview('mobile');
     handleSuperadminAdTypeChange();
@@ -1480,6 +1498,9 @@ async function handleSuperadminAdSubmit(e) {
     const specificPlacements = Array.from(document.querySelectorAll('#superadmin-ad-placements-grid input[name="superadmin-ad-placement"]:checked')).map(cb => cb.value);
     const allChecked = document.getElementById('superadmin-ad-place-all')?.checked;
     const placements = (allChecked || specificPlacements.length === 0) ? ['all'] : specificPlacements;
+    const targetCategories = Array.from(document.querySelectorAll('#superadmin-ad-categories-grid input[name="superadmin-ad-category"]:checked'))
+        .map(cb => cb.value.trim())
+        .filter(Boolean);
 
     if (!isBanner && !title) {
         showToast('Please enter an ad title.', true);
@@ -1509,6 +1530,7 @@ async function handleSuperadminAdSubmit(e) {
         placements,
         slot_position: slotPosition,
         target_countries: targetCountries.length > 0 ? targetCountries : ['GLOBAL'],
+        target_categories: targetCategories,
         duration_days: durationDays,
         status,
         admin_notes: `[slot:${slotPosition}] Created via Superadmin`,
@@ -1520,8 +1542,8 @@ async function handleSuperadminAdSubmit(e) {
         let res;
         if (editId) {
             res = await supabaseClient.from('promotions').update(payload).eq('id', editId);
-            if (res.error && /slot_position/i.test(res.error.message || '')) {
-                const { slot_position: _omit, ...fallbackPayload } = payload;
+            if (res.error && /(slot_position|target_categories)/i.test(res.error.message || '')) {
+                const { slot_position: _omit, target_categories: _tc, ...fallbackPayload } = payload;
                 res = await supabaseClient.from('promotions').update(fallbackPayload).eq('id', editId);
             }
         } else {
@@ -1536,8 +1558,8 @@ async function handleSuperadminAdSubmit(e) {
                 payment_status: 'waived'
             };
             res = await supabaseClient.from('promotions').insert(insertPayload);
-            if (res.error && /slot_position/i.test(res.error.message || '')) {
-                const { slot_position: _omit, ...fallbackInsert } = insertPayload;
+            if (res.error && /(slot_position|target_categories)/i.test(res.error.message || '')) {
+                const { slot_position: _omit, target_categories: _tc, ...fallbackInsert } = insertPayload;
                 res = await supabaseClient.from('promotions').insert(fallbackInsert);
             }
         }
@@ -1597,11 +1619,40 @@ async function loadSuperadminWithdrawals() {
     const overviewCount = document.getElementById('overview-pending-withdrawals');
     if (!listEl) return;
 
-    const { data, error } = await supabaseClient
-        .from('author_withdrawals')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+    const [{ data, error }, { data: authorBooks }, { data: purchases }] = await Promise.all([
+        supabaseClient
+            .from('author_withdrawals')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100),
+        supabaseClient
+            .from('books')
+            .select('id')
+            .not('author_id', 'is', null),
+        supabaseClient
+            .from('user_purchases')
+            .select('book_id, amount_paid, platform_fee_amount, author_royalty_amount')
+    ]);
+
+    const authorBookIdSet = new Set((authorBooks || []).map(b => Number(b.id)));
+    let authorGross = 0;
+    let accordShare = 0;
+    let authorNet = 0;
+    (purchases || []).forEach(p => {
+        if (!authorBookIdSet.has(Number(p.book_id))) return;
+        const gross = Math.max(0, Number(p.amount_paid) || 0);
+        const fee = p.platform_fee_amount != null ? (Number(p.platform_fee_amount) || 0) : Math.round(gross * 10) / 100;
+        const net = p.author_royalty_amount != null ? (Number(p.author_royalty_amount) || 0) : Math.max(0, gross - fee);
+        authorGross += gross;
+        accordShare += fee;
+        authorNet += net;
+    });
+    const grossEl = document.getElementById('superadmin-royalty-gross');
+    const accordEl = document.getElementById('superadmin-royalty-accord');
+    const netEl = document.getElementById('superadmin-royalty-net');
+    if (grossEl) grossEl.textContent = `USD ${authorGross.toFixed(2)}`;
+    if (accordEl) accordEl.textContent = `USD ${accordShare.toFixed(2)}`;
+    if (netEl) netEl.textContent = `USD ${authorNet.toFixed(2)}`;
 
     if (error) {
         console.error('Failed to load author withdrawals:', error);

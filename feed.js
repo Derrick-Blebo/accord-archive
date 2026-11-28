@@ -13,6 +13,7 @@ let initialViewedPostIds = new Set(); // Snapshot at load/tab switch so feed doe
 let authorHandlesById = {};
 let authorAvatarsById = {};
 let feedViewObserver = null;
+let feedInfiniteObserver = null;
 let feedSearchQuery = '';
 let feedSearchScope = 'all'; // 'all' | 'people' | 'posts'
 let feedPeopleResults = [];
@@ -184,6 +185,7 @@ async function loadFeedPosts() {
 
     const requests = [
         supabaseClient.from('feed_posts').select('*').eq('is_approved', true).order('created_at', { ascending: false }).limit(150),
+        supabaseClient.from('feed_posts').select('*').eq('is_approved', true).order('created_at', { ascending: true }).limit(100),
         supabaseClient.from('post_likes').select('post_id').eq('voter_key', getVoterKey()),
         supabaseClient.from('post_comments').select('post_id').limit(2500),
         supabaseClient
@@ -202,7 +204,7 @@ async function loadFeedPosts() {
         );
     }
 
-    const [postsRes, likesRes, commentsRes, repostsRes, revokedRes, followsRes, viewsRes] = await Promise.all(requests);
+    const [postsRes, olderPostsRes, likesRes, commentsRes, repostsRes, revokedRes, followsRes, viewsRes] = await Promise.all(requests);
 
     if (postsRes.error) {
         streamContainer.innerHTML = `
@@ -215,8 +217,14 @@ async function loadFeedPosts() {
     }
 
     revokedAuthorIds = new Set((!revokedRes?.error && revokedRes?.data ? revokedRes.data : []).map(r => String(r.id)));
-    allFeedPosts = (postsRes.data || [])
-        .filter(p => !p.author_id || !revokedAuthorIds.has(String(p.author_id)));
+    const mergedPostsById = new Map();
+    [...(postsRes.data || []), ...((!olderPostsRes?.error && olderPostsRes?.data) ? olderPostsRes.data : [])].forEach(p => {
+        if (!p || !p.id) return;
+        if (p.author_id && revokedAuthorIds.has(String(p.author_id))) return;
+        const key = String(p.id);
+        if (!mergedPostsById.has(key)) mergedPostsById.set(key, p);
+    });
+    allFeedPosts = Array.from(mergedPostsById.values());
 
     const authorIds = [...new Set(allFeedPosts.map(p => p.author_id).filter(Boolean))];
     authorHandlesById = {};
@@ -266,6 +274,34 @@ function matchesFeedSearch(post) {
     return body.includes(q) || author.includes(q) || type.includes(q);
 }
 
+function computeFeedItemWeight(item, now = Date.now()) {
+    const ageHours = Math.max(0, (now - item.timestamp) / 3600000);
+    // Prioritize newer content (~5x weight for fresh posts, decaying over ~72h half-life)
+    // while keeping a 1.0 baseline so older unseen posts/videos can still surface at the top.
+    const recencyWeight = 1.0 + 4.0 * Math.exp(-ageHours / 72);
+    const followBoost = (item.actorId && followingIds.has(String(item.actorId))) ? 1.5 : 1.0;
+    const engagement =
+        (Number(item.post.likes_count) || 0) * 2 +
+        (commentCountsByPost[String(item.post.id)] || 0) * 3 +
+        (Number(item.post.reposts_count) || 0) * 4;
+    const engagementBoost = 1.0 + Math.min(0.4, engagement / 150);
+    return Math.max(0.1, recencyWeight * followBoost * engagementBoost);
+}
+
+function weightedShuffleItems(list, now = Date.now()) {
+    return list
+        .map(item => {
+            const weight = computeFeedItemWeight(item, now);
+            const u = Math.max(1e-9, Math.random());
+            return {
+                item,
+                sortKey: Math.pow(u, 1 / weight)
+            };
+        })
+        .sort((a, b) => b.sortKey - a.sortKey)
+        .map(entry => entry.item);
+}
+
 function buildRankedFeedItems() {
     if (feedSearchQuery.trim() && feedSearchScope === 'people') {
         return [];
@@ -299,21 +335,21 @@ function buildRankedFeedItems() {
     });
 
     const now = Date.now();
+    const unseenItems = [];
+    const watchedItems = [];
+
     items.forEach(item => {
-        const isViewed = initialViewedPostIds.has(String(item.post.id));
-        const unseenBonus = isViewed ? 0 : 100000;
-        const isFollowedActor = Boolean(item.actorId && followingIds.has(String(item.actorId)));
-        const ageHours = Math.max(0, (now - item.timestamp) / 3600000);
-        const engagement =
-            (Number(item.post.likes_count) || 0) * 2 +
-            (commentCountsByPost[String(item.post.id)] || 0) * 3 +
-            (Number(item.post.reposts_count) || 0) * 4;
-        const recencyScore = Math.max(0, 500 - ageHours * 1.5);
-        item.score = unseenBonus + (isFollowedActor ? 10000 : 0) + recencyScore + Math.min(200, engagement);
+        if (initialViewedPostIds.has(String(item.post.id))) {
+            watchedItems.push(item);
+        } else {
+            unseenItems.push(item);
+        }
     });
 
-    items.sort((a, b) => b.score - a.score || b.timestamp - a.timestamp);
-    return items;
+    return [
+        ...weightedShuffleItems(unseenItems, now),
+        ...weightedShuffleItems(watchedItems, now)
+    ];
 }
 
 function markPostAsViewed(postId) {
@@ -420,17 +456,51 @@ async function renderFeedStream() {
 
     feedRenderState = {
         visibleItems,
+        recyclePool: visibleItems.slice(),
         sponsoredCards,
         createFeedAdEl,
         postAdChunkSize,
         suggestionsTargetIdx,
         suggestionsSection,
         renderedCount: 0,
-        adIdx: 0
+        adIdx: 0,
+        renderedDomCountsByPost: new Map(),
+        canRecycle: !isSearching && visibleItems.length > 0
     };
 
     appendNextFeedBatch();
     renderFeedSuggestions();
+}
+
+function generateRecycledFeedBatch(state) {
+    const pool = state.recyclePool || [];
+    if (!pool.length) return [];
+
+    // Avoid repeating the most recently rendered post IDs back-to-back at cycle boundaries
+    const recentTailIds = new Set(
+        state.visibleItems.slice(-Math.min(6, Math.max(1, pool.length - 1))).map(it => String(it.post.id))
+    );
+    const preferred = pool.filter(it => !recentTailIds.has(String(it.post.id)));
+    const source = preferred.length > 0 ? preferred : pool;
+    const shuffled = weightedShuffleItems(source, Date.now());
+    return shuffled.slice(0, FEED_PAGE_SIZE);
+}
+
+function setupFeedInfiniteScrollObserver() {
+    if (feedInfiniteObserver) {
+        feedInfiniteObserver.disconnect();
+        feedInfiniteObserver = null;
+    }
+    const sentinel = document.getElementById('feed-infinite-sentinel');
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+    feedInfiniteObserver = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) {
+            appendNextFeedBatch();
+        }
+    }, { rootMargin: '400px 0px' });
+
+    feedInfiniteObserver.observe(sentinel);
 }
 
 function appendNextFeedBatch() {
@@ -438,14 +508,27 @@ function appendNextFeedBatch() {
     if (!streamContainer || !feedRenderState) return;
 
     document.getElementById('feed-load-more-wrap')?.remove();
+    document.getElementById('feed-infinite-sentinel')?.remove();
 
     const state = feedRenderState;
+    if (state.renderedCount >= state.visibleItems.length) {
+        if (!state.canRecycle) return;
+        const recycledBatch = generateRecycledFeedBatch(state);
+        if (recycledBatch.length === 0) return;
+        state.visibleItems.push(...recycledBatch);
+    }
+
     const startIdx = state.renderedCount;
     const endIdx = Math.min(startIdx + FEED_PAGE_SIZE, state.visibleItems.length);
 
     for (let idx = startIdx; idx < endIdx; idx++) {
         const item = state.visibleItems[idx];
-        streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
+        const postIdStr = String(item.post.id);
+        const seenInDomCount = state.renderedDomCountsByPost.get(postIdStr) || 0;
+        state.renderedDomCountsByPost.set(postIdStr, seenInDomCount + 1);
+        const domId = seenInDomCount === 0 ? postIdStr : `${postIdStr}__r${seenInDomCount}`;
+
+        streamContainer.appendChild(renderFeedCard(item.post, item.repost || null, domId));
         if (idx === state.suggestionsTargetIdx && state.suggestionsSection) {
             streamContainer.appendChild(state.suggestionsSection);
         }
@@ -463,14 +546,24 @@ function appendNextFeedBatch() {
         state.adIdx++;
     }
 
-    if (state.renderedCount < state.visibleItems.length) {
-        const remaining = state.visibleItems.length - state.renderedCount;
+    const hasMoreToLoad = state.renderedCount < state.visibleItems.length || state.canRecycle;
+    if (hasMoreToLoad) {
+        const sentinel = document.createElement('div');
+        sentinel.id = 'feed-infinite-sentinel';
+        sentinel.className = 'h-1 w-full';
+        sentinel.setAttribute('aria-hidden', 'true');
+        streamContainer.appendChild(sentinel);
+
+        const remaining = Math.max(0, state.visibleItems.length - state.renderedCount);
+        const btnLabel = state.canRecycle
+            ? 'Load more posts'
+            : `Load more posts (${remaining} remaining)`;
         const wrap = document.createElement('div');
         wrap.id = 'feed-load-more-wrap';
         wrap.className = 'pt-1 pb-2 flex justify-center';
         wrap.innerHTML = `
             <button type="button" onclick="appendNextFeedBatch()" class="px-6 py-2.5 rounded-full bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200 shadow-sm text-xs font-bold text-accord-slate transition-all">
-                Load more posts (${remaining} remaining)
+                ${btnLabel}
             </button>
         `;
         streamContainer.appendChild(wrap);
@@ -480,6 +573,7 @@ function appendNextFeedBatch() {
     hydrateFeedBookLinkPreviews();
     setupFeedViewObserver();
     window.setupMobileFeedVideoObserver?.();
+    setupFeedInfiniteScrollObserver();
 }
 
 function extractBookIdFromText(text) {
@@ -847,7 +941,7 @@ function getFeedPostDetailUrl(post) {
     return getPostShareUrl(post.id);
 }
 
-function renderFeedCard(post, repost = null) {
+function renderFeedCard(post, repost = null, domId = '') {
     const myAvatarInitial = (currentProfile?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase();
     return createSharedFeedCardElement(post, {
         repost,
@@ -858,7 +952,8 @@ function renderFeedCard(post, repost = null) {
         authorHandle: post.author_id ? (authorHandlesById[String(post.author_id)] || '') : '',
         authorAvatarUrl: post.author_id ? (authorAvatarsById[String(post.author_id)] || '') : '',
         reposterHandle: repost?.profiles?.handle || '',
-        currentUserId: currentUser?.id || null
+        currentUserId: currentUser?.id || null,
+        domId
     });
 }
 
@@ -866,9 +961,9 @@ function closeAllFeedPostMenus() {
     document.querySelectorAll('.feed-post-menu').forEach(el => el.classList.add('hidden'));
 }
 
-function toggleFeedPostMenu(e, postId) {
+function toggleFeedPostMenu(e, domId) {
     e.stopPropagation();
-    const menu = document.getElementById(`feed-post-menu-${postId}`);
+    const menu = document.getElementById(`feed-post-menu-${domId}`);
     if (!menu) return;
     const isHidden = menu.classList.contains('hidden');
     closeAllFeedPostMenus();
@@ -877,10 +972,11 @@ function toggleFeedPostMenu(e, postId) {
 
 window.addEventListener('click', closeAllFeedPostMenus);
 
-function toggleExpandPostBody(postId) {
+function toggleExpandPostBody(postId, domId = '') {
+    const resolvedDomId = String(domId || postId);
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
-    const bodyEl = document.getElementById(`post-body-${postId}`);
-    const btnEl = document.getElementById(`post-see-more-${postId}`);
+    const bodyEl = document.getElementById(`post-body-${resolvedDomId}`);
+    const btnEl = document.getElementById(`post-see-more-${resolvedDomId}`);
     if (!post || !bodyEl || !btnEl) return;
 
     const expanded = btnEl.dataset.expanded === 'true';
@@ -895,19 +991,21 @@ function toggleExpandPostBody(postId) {
     }
 }
 
-async function toggleInlineComments(postId) {
-    const container = document.getElementById(`inline-comments-${postId}`);
+async function toggleInlineComments(postId, domId = '') {
+    const resolvedDomId = String(domId || postId);
+    const container = document.getElementById(`inline-comments-${resolvedDomId}`);
     if (!container) return;
     const willOpen = container.classList.contains('hidden');
     container.classList.toggle('hidden');
     if (willOpen) {
-        await loadInlineComments(postId);
-        document.getElementById(`inline-comment-input-${postId}`)?.focus();
+        await loadInlineComments(postId, resolvedDomId);
+        document.getElementById(`inline-comment-input-${resolvedDomId}`)?.focus();
     }
 }
 
-async function loadInlineComments(postId) {
-    const listEl = document.getElementById(`inline-comments-list-${postId}`);
+async function loadInlineComments(postId, domId = '') {
+    const resolvedDomId = String(domId || postId);
+    const listEl = document.getElementById(`inline-comments-list-${resolvedDomId}`);
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!listEl || !post) return;
 
@@ -921,7 +1019,7 @@ async function loadInlineComments(postId) {
     listEl.innerHTML = renderSharedCommentsHtml(data || []);
 }
 
-async function submitInlineComment(e, postId) {
+async function submitInlineComment(e, postId, domId = '') {
     e.preventDefault();
     if (!currentUser) {
         showToast('Please sign in to comment on posts.', true);
@@ -929,7 +1027,8 @@ async function submitInlineComment(e, postId) {
         return;
     }
 
-    const input = document.getElementById(`inline-comment-input-${postId}`);
+    const resolvedDomId = String(domId || postId);
+    const input = document.getElementById(`inline-comment-input-${resolvedDomId}`);
     const text = input?.value.trim() || '';
     const post = allFeedPosts.find(p => String(p.id) === String(postId));
     if (!text || !post) return;
@@ -964,9 +1063,11 @@ async function submitInlineComment(e, postId) {
 
     markPostAsViewed(postId);
     commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
-    const countEl = document.getElementById(`comment-count-${postId}`);
-    if (countEl) countEl.textContent = commentCountsByPost[String(postId)];
-    await loadInlineComments(postId);
+    const nextCommentCount = commentCountsByPost[String(postId)];
+    document.querySelectorAll(`[data-comment-count-for="${CSS.escape(String(postId))}"]`).forEach(el => {
+        el.textContent = nextCommentCount;
+    });
+    await loadInlineComments(postId, resolvedDomId);
 }
 
 function handleShareClick(postId) {
@@ -1106,16 +1207,17 @@ async function togglePostLike(postId) {
     post.likes_count = nextCount;
     await supabaseClient.from('feed_posts').update({ likes_count: nextCount }).eq('id', postId);
 
-    const countEl = document.getElementById(`like-count-${postId}`);
-    const btnEl = document.getElementById(`like-btn-${postId}`);
-    if (countEl) countEl.textContent = nextCount;
-    if (btnEl) {
+    const escapedId = CSS.escape(String(postId));
+    document.querySelectorAll(`[data-like-count-for="${escapedId}"]`).forEach(countEl => {
+        countEl.textContent = nextCount;
+    });
+    document.querySelectorAll(`[data-like-btn-for="${escapedId}"]`).forEach(btnEl => {
         btnEl.className = !alreadyLiked
             ? 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-rose-600'
             : 'py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold transition-colors text-slate-600';
         const icon = btnEl.querySelector('i');
         if (icon) icon.className = !alreadyLiked ? 'fa-solid fa-heart text-sm' : 'fa-regular fa-heart text-sm';
-    }
+    });
 }
 
 function showCreatePostError(message) {

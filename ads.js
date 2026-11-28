@@ -134,6 +134,35 @@
         return isPagePlacementAllowed(cfg, targetPlacement);
     };
 
+    function normalizeCallingCategory(role) {
+        const raw = String(role || '').trim();
+        const map = {
+            'Church / Local Assembly': 'Church / Ministry',
+            'Christian Ministry / Fellowship': 'Church / Ministry',
+            'Pastor / Ordained Minister': 'Preacher',
+            'Evangelist / Missionary': 'Preacher',
+            'Christian Educator / Author': 'Christian Creative'
+        };
+        return map[raw] || raw;
+    }
+
+    async function getCurrentUserCallingCategory() {
+        const client = window.supabaseClient;
+        if (!client) return '';
+        try {
+            const { data: { session } } = await client.auth.getSession();
+            if (!session?.user?.id) return '';
+            const { data } = await client
+                .from('profiles')
+                .select('ministry_role')
+                .eq('id', session.user.id)
+                .maybeSingle();
+            return normalizeCallingCategory(data?.ministry_role);
+        } catch (_) {
+            return '';
+        }
+    }
+
     async function fetchActivePromotions(forceRefresh = false) {
         if (_activePromotionsCache && !forceRefresh) return _activePromotionsCache;
         const client = window.supabaseClient;
@@ -146,12 +175,15 @@
         }
 
         const nowIso = new Date().toISOString();
-        const { data, error } = await client
-            .from('promotions')
-            .select('*')
-            .eq('status', 'approved')
-            .order('created_at', { ascending: false })
-            .limit(60);
+        const [{ data, error }, userCategory] = await Promise.all([
+            client
+                .from('promotions')
+                .select('*')
+                .eq('status', 'approved')
+                .order('created_at', { ascending: false })
+                .limit(60),
+            getCurrentUserCallingCategory()
+        ]);
 
         if (error || !Array.isArray(data)) {
             _activePromotionsCache = [];
@@ -161,6 +193,7 @@
         const nowMs = Date.now();
         const placement = getCurrentPagePlacement();
         const userCountry = getUserGeoCountry();
+        const userCategoryLower = String(userCategory || '').toLowerCase();
 
         _activePromotionsCache = data.filter(p => {
             if (p.starts_at && Date.parse(p.starts_at) > nowMs) return false;
@@ -176,6 +209,13 @@
                 : [];
             if (countries.length > 0 && !countries.includes('ALL') && !countries.includes('GLOBAL') && userCountry !== 'GLOBAL') {
                 if (!countries.includes(userCountry)) return false;
+            }
+
+            const categories = Array.isArray(p.target_categories)
+                ? p.target_categories.map(c => String(c).trim().toLowerCase()).filter(Boolean)
+                : [];
+            if (categories.length > 0 && !categories.includes('all')) {
+                if (!userCategoryLower || !categories.includes(userCategoryLower)) return false;
             }
             return true;
         });

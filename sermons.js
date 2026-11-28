@@ -130,13 +130,45 @@ function collectNormalizedPlaylistUrls(playlists) {
     return urls;
 }
 
+const SERMON_CALLING_CATEGORIES = new Set([
+    'church / ministry',
+    'preacher',
+    'church / local assembly',
+    'christian ministry / fellowship',
+    'pastor / ordained minister',
+    'evangelist / missionary'
+]);
+
+function getSermonCategoryGenre(ministryRole, audioStreamType) {
+    const roleLower = String(ministryRole || '').trim().toLowerCase();
+    if (roleLower === 'church / ministry' || roleLower === 'church / local assembly' || roleLower === 'christian ministry / fellowship') {
+        return 'Church / Ministry Sermons';
+    }
+    if (roleLower === 'preacher' || roleLower === 'pastor / ordained minister' || roleLower === 'evangelist / missionary') {
+        return 'Preacher Sermons';
+    }
+    if (String(audioStreamType || '').trim().toLowerCase() === 'podcast') {
+        return 'Podcast & Teaching';
+    }
+    return 'Creator & Ministry Sermons';
+}
+
 async function fetchPinnedProfileSermonPlaylists(existingPlaylists = []) {
     try {
-        const { data, error } = await supabaseClient
+        let { data, error } = await supabaseClient
             .from('profiles')
-            .select('id, full_name, handle, bio, avatar_url, audio_stream_url, audio_stream_type')
-            .eq('audio_stream_type', 'sermons')
+            .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, ministry_role, audio_stream_url, audio_stream_type')
             .not('audio_stream_url', 'is', null);
+
+        if (error && /ministry_role|upgrade_status|account_type/i.test(error.message || '')) {
+            const fallbackRes = await supabaseClient
+                .from('profiles')
+                .select('id, full_name, handle, bio, avatar_url, audio_stream_url, audio_stream_type')
+                .in('audio_stream_type', ['sermons', 'podcast'])
+                .not('audio_stream_url', 'is', null);
+            data = fallbackRes.data;
+            error = fallbackRes.error;
+        }
 
         if (error || !Array.isArray(data)) {
             if (error && !/audio_stream_/i.test(error.message || '')) {
@@ -149,8 +181,23 @@ async function fetchPinnedProfileSermonPlaylists(existingPlaylists = []) {
         const derived = [];
 
         data.forEach(profile => {
+            if (String(profile?.upgrade_status || '').toLowerCase() === 'revoked') return;
+
             const url = String(profile?.audio_stream_url || '').trim();
             if (!url) return;
+
+            const streamType = String(profile?.audio_stream_type || '').trim().toLowerCase();
+            // Music links never feed into the Sermons page.
+            if (streamType === 'music') return;
+
+            const roleLower = String(profile?.ministry_role || '').trim().toLowerCase();
+            const isSermonCalling = SERMON_CALLING_CATEGORIES.has(roleLower);
+            const isSermonOrPodcastStream = streamType === 'sermons' || streamType === 'podcast';
+
+            // Feed pinned audio links from Church / Ministry and Preacher profiles,
+            // as well as any profile explicitly categorized as sermons or podcast.
+            if (!isSermonCalling && !isSermonOrPodcastStream) return;
+
             const normalizedUrl = url.toLowerCase().replace(/\/+$/, '');
             if (existingUrls.has(normalizedUrl)) return;
             existingUrls.add(normalizedUrl);
@@ -167,7 +214,7 @@ async function fetchPinnedProfileSermonPlaylists(existingPlaylists = []) {
             derived.push({
                 id: `profile_sermon_${profile.id}`,
                 title: `${displayName} — Sermons`,
-                genre: 'Creator & Ministry Sermons',
+                genre: getSermonCategoryGenre(profile.ministry_role, streamType),
                 curator: handleLabel,
                 image: avatarUrl || DEFAULT_SERMON_COVER_IMAGE,
                 description: bioText || `Pinned sermon stream from ${displayName}.`,

@@ -554,7 +554,7 @@ async function loadAuthorDashboardData() {
     if (bookIds.length > 0) {
         const { data: purchases } = await supabaseClient
             .from('user_purchases')
-            .select('book_id, amount_paid')
+            .select('book_id, amount_paid, platform_fee_amount, author_royalty_amount')
             .in('book_id', bookIds);
 
         (purchases || []).forEach(p => {
@@ -562,8 +562,15 @@ async function loadAuthorDashboardData() {
             if (!salesStatsByBook[key]) {
                 salesStatsByBook[key] = { count: 0, earned: 0 };
             }
+            const gross = Math.max(0, Number(p.amount_paid) || 0);
+            const fee = p.platform_fee_amount != null
+                ? (Number(p.platform_fee_amount) || 0)
+                : Math.round(gross * 10) / 100;
+            const net = p.author_royalty_amount != null
+                ? (Number(p.author_royalty_amount) || 0)
+                : Math.max(0, gross - fee);
             salesStatsByBook[key].count += 1;
-            salesStatsByBook[key].earned += Number(p.amount_paid) || 0;
+            salesStatsByBook[key].earned += net;
         });
     }
 
@@ -578,12 +585,12 @@ function renderAuthorMetrics() {
     const totalDownloads = authorBooks.reduce((sum, b) => sum + (Number(b.downloads) || 0), 0);
 
     let totalSales = 0;
-    let grossEarned = 0;
+    let netEarned = 0;
     authorBooks.forEach(b => {
         const stat = salesStatsByBook[Number(b.id)];
         if (stat) {
             totalSales += stat.count;
-            grossEarned += stat.earned;
+            netEarned += stat.earned;
         }
     });
 
@@ -591,14 +598,14 @@ function renderAuthorMetrics() {
         .filter(w => w.status !== 'rejected')
         .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
 
-    availableBalance = Math.max(0, grossEarned - committedWithdrawals);
+    availableBalance = Math.max(0, netEarned - committedWithdrawals);
 
     document.getElementById('metric-uploaded-count').textContent = uploadedCount.toLocaleString();
     document.getElementById('metric-downloads-count').textContent = totalDownloads.toLocaleString();
     document.getElementById('metric-sales-count').textContent = totalSales.toLocaleString();
     document.getElementById('metric-earned-amount').textContent = `USD ${availableBalance.toFixed(2)}`;
     document.getElementById('metric-withdrawn-note').textContent =
-        `Gross: USD ${grossEarned.toFixed(2)} • Allocated: USD ${committedWithdrawals.toFixed(2)}`;
+        `Total Earned: USD ${netEarned.toFixed(2)} • Allocated: USD ${committedWithdrawals.toFixed(2)}`;
 }
 
 function renderAuthorBooksTable() {

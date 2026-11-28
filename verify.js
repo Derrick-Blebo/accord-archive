@@ -1,6 +1,18 @@
 let verifyUser = null;
 let verifyProfile = null;
 
+function normalizeMinistryRole(role) {
+    const raw = String(role || '').trim();
+    const map = {
+        'Church / Local Assembly': 'Church / Ministry',
+        'Christian Ministry / Fellowship': 'Church / Ministry',
+        'Pastor / Ordained Minister': 'Preacher',
+        'Evangelist / Missionary': 'Preacher',
+        'Christian Educator / Author': 'Christian Creative'
+    };
+    return map[raw] || raw || 'Church / Ministry';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     renderSamplePostFields();
 
@@ -278,7 +290,7 @@ function syncVerificationPageUI(profile) {
     // Populate existing values if available
     if (profile?.ministry_role) {
         const roleEl = document.getElementById('verify-ministry-role');
-        if (roleEl) roleEl.value = profile.ministry_role;
+        if (roleEl) roleEl.value = normalizeMinistryRole(profile.ministry_role);
     }
     if (profile?.upgrade_pitch) {
         const pitchEl = document.getElementById('verify-gospel-statement');

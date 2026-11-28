@@ -655,6 +655,9 @@ async function handlePromotionSubmit(e) {
     const targetCountries = targetCountryRaw
         ? targetCountryRaw.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
         : [];
+    const targetCategories = Array.from(document.querySelectorAll('input[name="promo-target-category"]:checked'))
+        .map(cb => cb.value.trim())
+        .filter(Boolean);
     const targetPostId = promoType === 'post' ? (document.getElementById('promo-post-id').value || null) : null;
     const targetBookId = promoType === 'book' ? (Number(document.getElementById('promo-book-id').value) || null) : null;
     const desktopImg = isBanner ? (document.getElementById('promo-desktop-img').value.trim() || null) : null;
@@ -780,6 +783,7 @@ async function handlePromotionSubmit(e) {
                 cta_url: ctaUrl || null,
                 placements: [placement],
                 target_countries: targetCountries,
+                target_categories: targetCategories,
                 duration_days,
                 budget_amount,
                 daily_budget_usd,
@@ -794,8 +798,8 @@ async function handlePromotionSubmit(e) {
             };
 
             let { error } = await supabaseClient.from('promotions').insert([insertPayload]);
-            if (error && /(ad_goal|daily_budget_usd|local_currency|local_budget_amount|payment_card_label)/i.test(error.message || '')) {
-                const { ad_goal: _ag, daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, payment_card_label: _pcl, ...fallbackPayload } = insertPayload;
+            if (error && /(ad_goal|daily_budget_usd|local_currency|local_budget_amount|payment_card_label|target_categories)/i.test(error.message || '')) {
+                const { ad_goal: _ag, daily_budget_usd: _d, local_currency: _lc, local_budget_amount: _lb, payment_card_label: _pcl, target_categories: _tc, ...fallbackPayload } = insertPayload;
                 ({ error } = await supabaseClient.from('promotions').insert([fallbackPayload]));
             }
 
