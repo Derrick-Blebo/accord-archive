@@ -88,6 +88,8 @@
         const lower = rawUrl.toLowerCase();
 
         if (lower.includes('podcasts.apple.com')) {
+            const parsed = parseUrlSafe(rawUrl);
+            const isEpisode = Boolean(parsed && (parsed.searchParams.has('i') || /\/episode\//i.test(parsed.pathname)));
             const embedUrl = lower.includes('embed.podcasts.apple.com')
                 ? rawUrl.replace(/^http:\/\//i, 'https://')
                 : rawUrl.replace(/^https?:\/\/podcasts\.apple\.com/i, 'https://embed.podcasts.apple.com');
@@ -98,11 +100,13 @@
                 platform: 'apple_podcasts',
                 label: 'Apple Podcasts',
                 icon: 'fa-solid fa-podcast',
-                height: 380
+                height: isEpisode ? 175 : 380
             };
         }
 
         if (lower.includes('music.apple.com')) {
+            const parsed = parseUrlSafe(rawUrl);
+            const isSong = Boolean(parsed && parsed.searchParams.has('i'));
             const embedUrl = lower.includes('embed.music.apple.com')
                 ? rawUrl.replace(/^http:\/\//i, 'https://')
                 : rawUrl.replace(/^https?:\/\/music\.apple\.com/i, 'https://embed.music.apple.com');
@@ -113,7 +117,7 @@
                 platform: 'apple_music',
                 label: 'Apple Music',
                 icon: 'fa-brands fa-apple',
-                height: 420
+                height: isSong ? 175 : 420
             };
         }
 
@@ -123,6 +127,7 @@
                 : rawUrl
                     .replace(/^http:\/\//i, 'https://')
                     .replace(/open\.spotify\.com\/(?:intl-[a-z0-9-]+\/)?/i, 'open.spotify.com/embed/');
+            const isCompactSpotify = /\/(track|episode)\//i.test(embedUrl);
             return {
                 kind: 'iframe',
                 embedUrl,
@@ -130,7 +135,7 @@
                 platform: 'spotify',
                 label: 'Spotify',
                 icon: 'fa-brands fa-spotify',
-                height: 380
+                height: isCompactSpotify ? 152 : 352
             };
         }
 
@@ -155,6 +160,7 @@
                 : rawUrl
                     .replace(/^http:\/\//i, 'https://')
                     .replace(/audiomack\.com\//i, 'audiomack.com/embed/');
+            const isSong = /\/song\//i.test(embedUrl);
             return {
                 kind: 'iframe',
                 embedUrl,
@@ -162,7 +168,7 @@
                 platform: 'audiomack',
                 label: 'Audiomack',
                 icon: 'fa-solid fa-headphones',
-                height: 380
+                height: isSong ? 252 : 352
             };
         }
 
@@ -170,6 +176,7 @@
             const embedUrl = lower.includes('w.soundcloud.com/player/')
                 ? rawUrl.replace(/^http:\/\//i, 'https://')
                 : `https://w.soundcloud.com/player/?url=${encodeURIComponent(rawUrl)}&color=%232563eb&auto_play=false&show_teaser=true`;
+            const isSet = /\/sets\//i.test(rawUrl);
             return {
                 kind: 'iframe',
                 embedUrl,
@@ -177,7 +184,7 @@
                 platform: 'soundcloud',
                 label: 'SoundCloud',
                 icon: 'fa-brands fa-soundcloud',
-                height: 300
+                height: isSet ? 300 : 166
             };
         }
 
@@ -228,7 +235,7 @@
         }
 
         const height = (opts && opts.height) || target.height || 380;
-        return `<iframe src="${escapeHTML(target.embedUrl)}" allow="${IFRAME_ALLOW}" frameborder="0" height="${escapeHTML(String(height))}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" sandbox="${IFRAME_SANDBOX}"></iframe>`;
+        return `<iframe src="${escapeHTML(target.embedUrl)}" allow="${IFRAME_ALLOW}" frameborder="0" height="${escapeHTML(String(height))}" style="display:block;width:100%;height:${escapeHTML(String(height))}px;overflow:hidden;border-radius:12px;background:transparent;" sandbox="${IFRAME_SANDBOX}"></iframe>`;
     }
 
     window.AccordAudioEmbed = {

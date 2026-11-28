@@ -390,7 +390,7 @@ function renderSharedEmbeddedPlayerHtml(target, opts = {}) {
     if (target.kind === 'iframe') {
         const height = Number(target.height) || 360;
         const title = escapeShareHtml(opts.title || target.label || 'Audio Player');
-        return `<iframe src="${escapeShareHtml(target.embedUrl)}" title="${title}" style="height:${height}px;" class="w-full border-0 rounded-lg bg-white" loading="lazy" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
+        return `<iframe src="${escapeShareHtml(target.embedUrl)}" title="${title}" style="height:${height}px;" class="block w-full border-0 rounded-lg bg-white" loading="lazy" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
     }
     return '';
 }
@@ -414,10 +414,28 @@ function bindSharedAudioCardInteractions(card, target, title) {
     const playBtn = audioCard.querySelector('[data-audio-play-btn]');
     const primaryTrigger = audioCard.querySelector('[data-audio-primary-trigger]');
 
+    const collapseAudioCardPanel = (targetAudioCard) => {
+        if (!targetAudioCard) return;
+        const p = targetAudioCard.querySelector('[data-audio-player-panel]');
+        const pb = targetAudioCard.querySelector('[data-audio-player-body]');
+        const btn = targetAudioCard.querySelector('[data-audio-play-btn]');
+        if (p) p.classList.add('hidden');
+        if (pb) {
+            pb.innerHTML = '';
+            delete pb.dataset.loaded;
+        }
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-play text-[11px]"></i><span>Play in App</span>';
+        }
+    };
+
     const toggleInlinePlayer = () => {
         if (!panel || !playerBody || target.kind === 'external') return;
         const isHidden = panel.classList.contains('hidden');
         if (isHidden) {
+            if (typeof pauseAllOtherAccordMedia === 'function') {
+                pauseAllOtherAccordMedia(audioCard);
+            }
             if (playerBody.dataset.loaded !== '1') {
                 playerBody.innerHTML = renderSharedEmbeddedPlayerHtml(target, { title });
                 playerBody.dataset.loaded = '1';
@@ -428,12 +446,7 @@ function bindSharedAudioCardInteractions(card, target, title) {
                 playBtn.innerHTML = '<i class="fa-solid fa-chevron-up text-[11px]"></i><span>Hide Player</span>';
             }
         } else {
-            panel.classList.add('hidden');
-            playerBody.innerHTML = '';
-            delete playerBody.dataset.loaded;
-            if (playBtn) {
-                playBtn.innerHTML = '<i class="fa-solid fa-play text-[11px]"></i><span>Play in App</span>';
-            }
+            collapseAudioCardPanel(audioCard);
         }
     };
 
@@ -746,7 +759,7 @@ function createSharedFeedCardElement(post, options = {}) {
                 const desktopVideoHtml = isDirectVideo
                     ? `<video controls playsinline preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-contain"></video>`
                     : (thumbUrl
-                        ? `<button type="button" onclick="this.outerHTML='<iframe src=\\'${escapeShareHtml(embedUrl + (embedUrl.includes('?') ? '&' : '?') + 'autoplay=1')}\\' class=\\'w-full h-full border-0\\' allow=\\'autoplay; encrypted-media; picture-in-picture\\' allowfullscreen></iframe>'" aria-label="Play video" class="relative w-full h-full block group cursor-pointer overflow-hidden bg-black">
+                        ? `<button type="button" onclick="playDesktopFeedYouTube(this, '${escapeShareHtml(embedUrl)}')" aria-label="Play video" class="relative w-full h-full block group cursor-pointer overflow-hidden bg-black">
                                <img loading="lazy" decoding="async" src="${escapeShareHtml(thumbUrl)}" alt="${escapeShareHtml(post.body ? String(post.body).slice(0, 60) : 'Video')}" class="w-full h-full object-cover">
                                <span class="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors flex items-center justify-center">
                                    <span class="w-16 h-16 rounded-full bg-black/65 border border-white/30 text-white flex items-center justify-center shadow-xl group-hover:scale-105 transition-transform">
@@ -842,7 +855,7 @@ function createSharedFeedCardElement(post, options = {}) {
                             <button type="button" data-audio-pref-btn="external" class="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-600 hover:bg-slate-200/70 transition-colors">External</button>
                         </div>
                     </div>
-                    <div data-audio-player-body class="w-full"></div>
+                    <div data-audio-player-body class="w-full overflow-hidden rounded-xl leading-none"></div>
                 </div>` : '';
 
             mediaHtml = `<div data-audio-card="${post.id}" ${needsHydrate ? `data-audio-meta-url="${escapeShareHtml(post.media_url)}"` : ''} class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
@@ -1819,10 +1832,90 @@ async function submitMobileModalComment(e, postId) {
 let _mobileFeedVideoObserver = null;
 let _mobileFeedVideoSelectTimer = null;
 let _activeMobileFeedVideoId = null;
+let _mobileFeedVideoUnmutedPref = false;
 const _mobileFeedVideoRatios = new Map();
 const _mobileFeedVideoTimeMap = new Map();
 const _mobileFeedVideoState = new Map();
 let _activeMobileVideoModalOptions = { startTime: 0, unmuted: false };
+
+function pauseAllOtherAccordMedia(exceptEl = null) {
+    if (typeof document === 'undefined') return;
+
+    document.querySelectorAll('video, audio').forEach((el) => {
+        if (exceptEl && (el === exceptEl || (typeof exceptEl.contains === 'function' && exceptEl.contains(el)))) {
+            return;
+        }
+        try {
+            if (!el.paused) el.pause();
+        } catch (_) {}
+    });
+
+    document.querySelectorAll('iframe').forEach((iframe) => {
+        if (exceptEl && (iframe === exceptEl || (typeof exceptEl.contains === 'function' && exceptEl.contains(iframe)))) {
+            return;
+        }
+        const src = String(iframe.getAttribute('src') || '');
+        if (src.includes('youtube.com/embed/') || src.includes('youtube-nocookie.com/embed/')) {
+            sendYouTubePlayerCommand(iframe, 'pauseVideo');
+        }
+    });
+
+    if (_activeMobileFeedVideoId) {
+        const activeSlot = document.getElementById(`mobile-feed-video-slot-${_activeMobileFeedVideoId}`);
+        const activePlayer = document.getElementById(`mobile-feed-video-player-${_activeMobileFeedVideoId}`);
+        const isExceptActiveFeed = Boolean(
+            exceptEl && (
+                exceptEl === activePlayer ||
+                exceptEl === activeSlot ||
+                (activeSlot && typeof activeSlot.contains === 'function' && activeSlot.contains(exceptEl))
+            )
+        );
+        if (!isExceptActiveFeed) {
+            teardownActiveMobileFeedVideo();
+        }
+    }
+
+    document.querySelectorAll('[data-audio-card]').forEach((audioCard) => {
+        if (exceptEl && (audioCard === exceptEl || (typeof audioCard.contains === 'function' && audioCard.contains(exceptEl)))) {
+            return;
+        }
+        const panel = audioCard.querySelector('[data-audio-player-panel]');
+        if (panel && !panel.classList.contains('hidden')) {
+            panel.classList.add('hidden');
+            const playerBody = audioCard.querySelector('[data-audio-player-body]');
+            if (playerBody) {
+                playerBody.innerHTML = '';
+                delete playerBody.dataset.loaded;
+            }
+            const playBtn = audioCard.querySelector('[data-audio-play-btn]');
+            if (playBtn) {
+                playBtn.innerHTML = '<i class="fa-solid fa-play text-[11px]"></i><span>Play in App</span>';
+            }
+        }
+    });
+}
+
+function playDesktopFeedYouTube(btnEl, embedUrl) {
+    if (!btnEl || !embedUrl) return;
+    pauseAllOtherAccordMedia(null);
+
+    const sep = embedUrl.includes('?') ? '&' : '?';
+    const params = ['autoplay=1', 'enablejsapi=1', 'playsinline=1'];
+    if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
+        params.push(`origin=${encodeURIComponent(window.location.origin)}`);
+    }
+    const finalUrl = `${embedUrl}${sep}${params.join('&')}`;
+
+    const iframe = document.createElement('iframe');
+    iframe.src = finalUrl;
+    iframe.className = 'w-full h-full border-0';
+    iframe.setAttribute('allow', 'autoplay *; encrypted-media *; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.addEventListener('load', () => {
+        registerYouTubeIframeListener(iframe, `desktop-${Date.now()}`);
+    });
+    btnEl.replaceWith(iframe);
+}
 
 function sendYouTubePlayerCommand(iframe, func, args = []) {
     if (!iframe || !iframe.contentWindow) return;
@@ -1883,7 +1976,7 @@ function updateMobileFeedVideoStatusBadge(postId, { visible = false, unmuted = f
     statusEl.classList.remove('hidden');
     statusEl.classList.add('flex');
     statusEl.innerHTML = unmuted
-        ? '<i class="fa-solid fa-volume-high text-[10px] text-sky-300"></i><span>Sound on · Tap again for full view</span>'
+        ? '<i class="fa-solid fa-volume-high text-[10px] text-sky-300"></i><span>Sound on · Tap to mute</span>'
         : '<i class="fa-solid fa-volume-xmark text-[10px]"></i><span>Tap for sound</span>';
 }
 
@@ -1934,16 +2027,20 @@ function mountMobileFeedVideoPlayer(postId) {
     const isDirectVideo = cardMedia.getAttribute('data-is-direct-video') === '1';
     if (!mediaUrl) return;
 
+    pauseAllOtherAccordMedia(slot);
+
+    const shouldUnmute = Boolean(_mobileFeedVideoUnmutedPref);
     _activeMobileFeedVideoId = idStr;
-    _mobileFeedVideoState.set(idStr, { tappedOnce: false, unmuted: false });
+    _mobileFeedVideoState.set(idStr, { unmuted: shouldUnmute });
 
     const savedStart = Math.floor(_mobileFeedVideoTimeMap.get(idStr) || 0);
     slot.classList.remove('hidden');
 
     if (isDirectVideo) {
-        slot.innerHTML = `<video id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(mediaUrl)}" autoplay muted playsinline loop preload="metadata" class="w-full h-full object-cover bg-black pointer-events-none"></video>`;
+        slot.innerHTML = `<video id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(mediaUrl)}" autoplay ${shouldUnmute ? '' : 'muted'} playsinline loop preload="metadata" class="w-full h-full object-cover bg-black pointer-events-none"></video>`;
         const videoEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
         if (videoEl) {
+            videoEl.muted = !shouldUnmute;
             if (savedStart > 0) {
                 videoEl.addEventListener('loadedmetadata', () => {
                     try { videoEl.currentTime = savedStart; } catch (_) {}
@@ -1954,25 +2051,39 @@ function mountMobileFeedVideoPlayer(postId) {
                     _mobileFeedVideoTimeMap.set(idStr, videoEl.currentTime);
                 }
             });
-            videoEl.play().catch(() => {});
+            videoEl.play().catch(() => {
+                if (shouldUnmute) {
+                    videoEl.muted = true;
+                    _mobileFeedVideoState.set(idStr, { unmuted: false });
+                    updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: false });
+                    videoEl.play().catch(() => {});
+                }
+            });
         }
     } else {
         const autoplayUrl = getSharedFeedAutoplayEmbedUrl(mediaUrl, { startTime: savedStart, mute: true });
-        slot.innerHTML = `<iframe id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(autoplayUrl)}" class="w-full h-full border-0 pointer-events-none" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        slot.innerHTML = `<iframe id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(autoplayUrl)}" class="w-full h-full border-0 pointer-events-none" allow="autoplay *; encrypted-media *; picture-in-picture" allowfullscreen></iframe>`;
         const iframeEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
         if (iframeEl) {
-            iframeEl.addEventListener('load', () => {
+            const syncFeedYouTube = () => {
+                if (String(_activeMobileFeedVideoId) !== idStr) return;
                 registerYouTubeIframeListener(iframeEl, `feed-${idStr}`);
                 sendYouTubePlayerCommand(iframeEl, 'playVideo');
-                setTimeout(() => {
-                    registerYouTubeIframeListener(iframeEl, `feed-${idStr}`);
-                    sendYouTubePlayerCommand(iframeEl, 'playVideo');
-                }, 400);
+                if (_mobileFeedVideoState.get(idStr)?.unmuted) {
+                    sendYouTubePlayerCommand(iframeEl, 'unMute');
+                } else {
+                    sendYouTubePlayerCommand(iframeEl, 'mute');
+                }
+            };
+            iframeEl.addEventListener('load', () => {
+                syncFeedYouTube();
+                setTimeout(syncFeedYouTube, 350);
+                setTimeout(syncFeedYouTube, 800);
             });
         }
     }
 
-    updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: false });
+    updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: shouldUnmute });
 }
 
 function scheduleActiveMobileFeedVideoSelection() {
@@ -2046,35 +2157,34 @@ function handleMobileFeedVideoTap(e, postId) {
     if (e) e.stopPropagation();
     const idStr = String(postId);
 
-    // If this video isn't actively playing yet (e.g. quick tap before observer settles), open full view immediately.
+    // If this video isn't actively mounted yet (e.g. quick tap before observer settles), mount and unmute it immediately.
     if (String(_activeMobileFeedVideoId) !== idStr) {
-        openMobileVideoFromFeed(e, idStr);
+        _mobileFeedVideoUnmutedPref = true;
+        teardownActiveMobileFeedVideo();
+        mountMobileFeedVideoPlayer(idStr);
         return;
     }
 
-    const state = _mobileFeedVideoState.get(idStr) || { tappedOnce: false, unmuted: false };
-    if (!state.tappedOnce) {
-        state.tappedOnce = true;
-        state.unmuted = true;
-        _mobileFeedVideoState.set(idStr, state);
+    const state = _mobileFeedVideoState.get(idStr) || { unmuted: Boolean(_mobileFeedVideoUnmutedPref) };
+    const nextUnmuted = !state.unmuted;
+    state.unmuted = nextUnmuted;
+    _mobileFeedVideoState.set(idStr, state);
+    _mobileFeedVideoUnmutedPref = nextUnmuted;
 
-        const playerEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
-        if (playerEl) {
-            if (playerEl.tagName === 'VIDEO') {
-                playerEl.muted = false;
+    const playerEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
+    if (playerEl) {
+        if (playerEl.tagName === 'VIDEO') {
+            playerEl.muted = !nextUnmuted;
+            if (playerEl.paused) {
                 playerEl.play().catch(() => {});
-            } else if (playerEl.tagName === 'IFRAME') {
-                registerYouTubeIframeListener(playerEl, `feed-${idStr}`);
-                sendYouTubePlayerCommand(playerEl, 'unMute');
-                sendYouTubePlayerCommand(playerEl, 'playVideo');
             }
+        } else if (playerEl.tagName === 'IFRAME') {
+            registerYouTubeIframeListener(playerEl, `feed-${idStr}`);
+            sendYouTubePlayerCommand(playerEl, nextUnmuted ? 'unMute' : 'mute');
+            sendYouTubePlayerCommand(playerEl, 'playVideo');
         }
-        updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: true });
-        return;
     }
-
-    // Second tap: open full view modal continuing from current playback position
-    openMobileVideoFromFeed(e, idStr);
+    updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: nextUnmuted });
 }
 
 function openMobileVideoFromFeed(e, postId) {
@@ -2087,7 +2197,8 @@ function openMobileVideoFromFeed(e, postId) {
     }
 
     const startTime = Math.floor(_mobileFeedVideoTimeMap.get(idStr) || 0);
-    const unmuted = Boolean(_mobileFeedVideoState.get(idStr)?.unmuted);
+    const activeState = _mobileFeedVideoState.get(idStr);
+    const unmuted = activeState ? Boolean(activeState.unmuted) : Boolean(_mobileFeedVideoUnmutedPref);
 
     teardownActiveMobileFeedVideo();
     openMobileVideoModal(idStr, { startTime, unmuted });
@@ -2096,6 +2207,15 @@ function openMobileVideoFromFeed(e, postId) {
 if (typeof window !== 'undefined') {
     window.setupMobileFeedVideoObserver = setupMobileFeedVideoObserver;
     window.teardownActiveMobileFeedVideo = teardownActiveMobileFeedVideo;
+    window.pauseAllOtherAccordMedia = pauseAllOtherAccordMedia;
+    window.playDesktopFeedYouTube = playDesktopFeedYouTube;
+
+    document.addEventListener('play', (event) => {
+        const target = event.target;
+        if (target && (target.tagName === 'VIDEO' || target.tagName === 'AUDIO')) {
+            pauseAllOtherAccordMedia(target);
+        }
+    }, true);
 
     window.addEventListener('message', (event) => {
         if (!event.origin || (!event.origin.includes('youtube.com') && !event.origin.includes('youtube-nocookie.com'))) {
@@ -2118,12 +2238,34 @@ if (typeof window !== 'undefined') {
             }
         }
 
+        if (data.event === 'onStateChange' && data.info === 1) {
+            const iframes = document.querySelectorAll('iframe');
+            for (const iframe of iframes) {
+                if (iframe.contentWindow === event.source) {
+                    pauseAllOtherAccordMedia(iframe);
+                    break;
+                }
+            }
+        }
+
         if (data.event === 'onReady') {
             const modalIframe = document.getElementById('mobile-video-player');
             if (modalIframe && modalIframe.tagName === 'IFRAME' && modalIframe.contentWindow === event.source) {
+                modalIframe.dataset.ytReady = '1';
                 sendYouTubePlayerCommand(modalIframe, 'playVideo');
                 if (_activeMobileVideoModalOptions.unmuted) {
                     sendYouTubePlayerCommand(modalIframe, 'unMute');
+                }
+            }
+            if (_activeMobileFeedVideoId) {
+                const feedIframe = document.getElementById(`mobile-feed-video-player-${_activeMobileFeedVideoId}`);
+                if (feedIframe && feedIframe.tagName === 'IFRAME' && feedIframe.contentWindow === event.source) {
+                    sendYouTubePlayerCommand(feedIframe, 'playVideo');
+                    if (_mobileFeedVideoState.get(String(_activeMobileFeedVideoId))?.unmuted) {
+                        sendYouTubePlayerCommand(feedIframe, 'unMute');
+                    } else {
+                        sendYouTubePlayerCommand(feedIframe, 'mute');
+                    }
                 }
             }
         }
@@ -2208,7 +2350,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
     const playerHtml = isDirectVideo
         ? `<video id="mobile-video-player" src="${escapeShareHtml(post.media_url)}" controls autoplay ${unmuted ? '' : 'muted'} playsinline loop class="w-full max-h-[62dvh] object-contain bg-black"></video>`
         : `<div class="w-full aspect-video bg-black shadow-2xl">
-               <iframe id="mobile-video-player" src="${escapeShareHtml(autoplayEmbedUrl)}" class="w-full h-full border-0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+               <iframe id="mobile-video-player" src="${escapeShareHtml(autoplayEmbedUrl)}" class="w-full h-full border-0" allow="autoplay *; encrypted-media *; picture-in-picture" allowfullscreen></iframe>
            </div>`;
 
     const ambientBgHtml = thumbUrl
@@ -2405,7 +2547,14 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
 
     const modalPlayer = document.getElementById('mobile-video-player');
     if (modalPlayer) {
+        pauseAllOtherAccordMedia(modalPlayer);
         if (modalPlayer.tagName === 'VIDEO') {
+            modalPlayer.muted = !unmuted;
+            modalPlayer.addEventListener('volumechange', () => {
+                const isNowUnmuted = !modalPlayer.muted;
+                _activeMobileVideoModalOptions.unmuted = isNowUnmuted;
+                _mobileFeedVideoUnmutedPref = isNowUnmuted;
+            });
             if (startTime > 0) {
                 modalPlayer.addEventListener('loadedmetadata', () => {
                     try { modalPlayer.currentTime = startTime; } catch (_) {}
@@ -2417,6 +2566,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
             });
         } else if (modalPlayer.tagName === 'IFRAME') {
             const syncModalYouTubePlayback = () => {
+                if (String(_activeMobileVideoId) !== String(postId)) return;
                 registerYouTubeIframeListener(modalPlayer, `modal-${postId}`);
                 sendYouTubePlayerCommand(modalPlayer, 'playVideo');
                 if (unmuted) {
@@ -2425,8 +2575,15 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
             };
             modalPlayer.addEventListener('load', () => {
                 syncModalYouTubePlayback();
-                setTimeout(syncModalYouTubePlayback, 350);
-                setTimeout(syncModalYouTubePlayback, 800);
+                [150, 400, 850, 1400].forEach((delay) => {
+                    setTimeout(() => {
+                        if (modalPlayer.dataset.ytReady !== '1') {
+                            syncModalYouTubePlayback();
+                        } else if (String(_activeMobileVideoId) === String(postId)) {
+                            sendYouTubePlayerCommand(modalPlayer, 'playVideo');
+                        }
+                    }, delay);
+                });
             });
         }
     }
@@ -2547,10 +2704,32 @@ function navigateMobileVideoByOffset(offset) {
         return;
     }
 
+    const currentPlayer = document.getElementById('mobile-video-player');
+    if (currentPlayer) {
+        if (currentPlayer.tagName === 'VIDEO') {
+            try {
+                currentPlayer.pause();
+                currentPlayer.removeAttribute('src');
+                currentPlayer.load();
+            } catch (_) {}
+        } else if (currentPlayer.tagName === 'IFRAME') {
+            sendYouTubePlayerCommand(currentPlayer, 'pauseVideo');
+            try { currentPlayer.src = 'about:blank'; } catch (_) {}
+        }
+    }
+
     const nextPostId = videoList[nextIdx];
     _activeMobileVideoId = String(nextPostId);
     _mobileVideoCommentsOpen = false;
-    renderMobileVideoModalContent(nextPostId, { slideDirection: offset > 0 ? 'up' : 'down' });
+    _activeMobileVideoModalOptions = {
+        startTime: 0,
+        unmuted: Boolean(_activeMobileVideoModalOptions.unmuted)
+    };
+    renderMobileVideoModalContent(nextPostId, {
+        slideDirection: offset > 0 ? 'up' : 'down',
+        startTime: 0,
+        unmuted: Boolean(_activeMobileVideoModalOptions.unmuted)
+    });
 
     if (typeof markPostAsViewed === 'function') {
         markPostAsViewed(nextPostId);
