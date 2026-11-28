@@ -98,7 +98,7 @@ async function loadMinistryPage() {
         .eq('id', ministryId)
         .maybeSingle();
 
-    const isVerified = profile && (profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved');
+    const isVerified = profile && (profile.account_type === 'ministry_minister' || profile.upgrade_status === 'approved') && profile.upgrade_status !== 'revoked';
     if (error || !isVerified) {
         showMinistryNotFound();
         return;

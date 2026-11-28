@@ -684,6 +684,8 @@ function getNotificationIconMeta(type) {
             return { icon: 'fa-comment-dots', bgClass: 'bg-rose-50 text-rose-500' };
         case 'new_message':
             return { icon: 'fa-paper-plane', bgClass: 'bg-indigo-50 text-indigo-600' };
+        case 'verification_approved':
+            return { icon: 'fa-circle-check', bgClass: 'bg-emerald-50 text-emerald-600' };
         case 'content_warning':
         case 'verification_revoked':
             return { icon: 'fa-triangle-exclamation', bgClass: 'bg-red-100 text-red-600' };

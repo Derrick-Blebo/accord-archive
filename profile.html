@@ -438,20 +438,6 @@
             }
             ctaBox?.classList.remove('hidden');
         }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (typeof supabaseClient === 'undefined') return;
-            const { data: { user } } = await supabaseClient.auth.getUser();
-            if (!user) return;
-
-            const { data: profile } = await supabaseClient
-                .from('profiles')
-                .select('id, email, full_name, account_type, upgrade_status, upgrade_pitch, verification_revoked_reason')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            syncUpgradeCardUI(profile || { account_type: 'normal_user', upgrade_status: 'none' });
-        });
     </script>
 </body>
 </html>

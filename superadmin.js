@@ -167,7 +167,7 @@ async function loadMinistryUpgradeRequests() {
     const { data, error } = await supabaseClient
         .from('profiles')
         .select('id, full_name, email, account_type, upgrade_status, upgrade_pitch, upgrade_requested_at, ministry_role, verification_samples, verification_socials, verification_revoked_reason')
-        .in('upgrade_status', ['pending', 'approved', 'rejected', 'revoked'])
+        .or('upgrade_status.in.(pending,approved,rejected,revoked),account_type.eq.ministry_minister')
         .order('upgrade_requested_at', { ascending: false });
 
     if (error) {
@@ -213,6 +213,7 @@ function renderMinistryUpgradeRequests() {
     tbody.innerHTML = '';
     ministryUpgradeRequests.forEach(req => {
         const status = req.upgrade_status || 'none';
+        const isVerifiedAccount = (status === 'approved' || req.account_type === 'ministry_minister') && status !== 'revoked';
         const reqDate = req.upgrade_requested_at
             ? new Date(req.upgrade_requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : '—';
@@ -221,7 +222,7 @@ function renderMinistryUpgradeRequests() {
         let statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-accord-muted">${escapeSuperHtml(status)}</span>`;
         if (status === 'pending') {
             statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending</span>`;
-        } else if (status === 'approved') {
+        } else if (isVerifiedAccount) {
             statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Approved</span>`;
         } else if (status === 'rejected') {
             statusPill = `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600">Rejected</span>`;
@@ -234,9 +235,12 @@ function renderMinistryUpgradeRequests() {
             actionsHtml += `
                 <button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Approve</button>
                 <button type="button" onclick="rejectMinistryUpgrade('${req.id}')" class="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Reject</button>`;
-        } else if (status === 'approved' || req.account_type === 'ministry_minister') {
+        } else if (isVerifiedAccount) {
             actionsHtml += `
                 <button type="button" onclick="openRevokeVerificationModal('${req.id}')" class="bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">Revoke</button>`;
+        } else if (status === 'rejected' || status === 'revoked') {
+            actionsHtml += `
+                <button type="button" onclick="approveMinistryUpgrade('${req.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all">${status === 'revoked' ? 'Restore' : 'Approve'}</button>`;
         }
 
         const tr = document.createElement('tr');
@@ -270,7 +274,7 @@ function openInspectVerificationModal(userId) {
 
     const samples = Array.isArray(req.verification_samples) ? req.verification_samples : [];
     const socials = req.verification_socials && typeof req.verification_socials === 'object' ? req.verification_socials : {};
-    const socialEntries = Object.entries(socials).filter(([, val]) => val && String(val).trim().startsWith('http'));
+    const socialEntries = Object.entries(socials).filter(([, val]) => val && /^https?:\/\//i.test(String(val).trim()));
 
     const socialsHtml = socialEntries.length > 0
         ? `<div class="flex flex-wrap gap-2">${socialEntries.map(([k, v]) => `<a href="${escapeSuperHtml(v)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-accord-lightBlue text-accord-slate hover:text-accord-blue font-bold capitalize"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i><span>${escapeSuperHtml(k)}</span></a>`).join('')}</div>`
@@ -320,6 +324,11 @@ function openInspectVerificationModal(userId) {
                 <button type="button" onclick="closeInspectVerificationModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-accord-slate text-xs font-bold">Close</button>
                 <button type="button" onclick="closeInspectVerificationModal(); rejectMinistryUpgrade('${req.id}')" class="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold">Reject</button>
                 <button type="button" onclick="closeInspectVerificationModal(); approveMinistryUpgrade('${req.id}')" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">Approve Verification</button>
+            `;
+        } else if (req.upgrade_status === 'rejected' || req.upgrade_status === 'revoked') {
+            footer.innerHTML = `
+                <button type="button" onclick="closeInspectVerificationModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-accord-slate text-xs font-bold">Close</button>
+                <button type="button" onclick="closeInspectVerificationModal(); approveMinistryUpgrade('${req.id}')" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">${req.upgrade_status === 'revoked' ? 'Restore Verification' : 'Approve Verification'}</button>
             `;
         } else {
             footer.innerHTML = `<button type="button" onclick="closeInspectVerificationModal()" class="px-4 py-2 rounded-xl bg-slate-200 text-accord-slate text-xs font-bold">Close</button>`;
@@ -406,7 +415,9 @@ async function approveMinistryUpgrade(userId) {
             .from('profiles')
             .update({
                 account_type: 'ministry_minister',
-                upgrade_status: 'approved'
+                upgrade_status: 'approved',
+                verification_revoked_at: null,
+                verification_revoked_reason: null
             })
             .eq('id', userId)
             .select('id, account_type, upgrade_status');

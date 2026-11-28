@@ -88,6 +88,12 @@ SET search_path = public
 AS $$
 BEGIN
     IF NEW.upgrade_status = 'revoked' AND OLD.upgrade_status IS DISTINCT FROM 'revoked' THEN
+        IF NEW.account_type IS DISTINCT FROM 'normal_user' THEN
+            UPDATE public.profiles
+            SET account_type = 'normal_user'
+            WHERE id = NEW.id;
+        END IF;
+
         UPDATE public.feed_posts
         SET is_approved = false
         WHERE author_id = NEW.id;

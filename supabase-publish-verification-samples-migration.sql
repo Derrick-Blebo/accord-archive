@@ -194,7 +194,9 @@ BEGIN
     UPDATE public.profiles
     SET
         account_type = 'ministry_minister',
-        upgrade_status = 'approved'
+        upgrade_status = 'approved',
+        verification_revoked_at = NULL,
+        verification_revoked_reason = NULL
     WHERE id = target_user_id;
 
     IF NOT FOUND THEN

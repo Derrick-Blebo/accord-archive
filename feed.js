@@ -686,7 +686,7 @@ async function searchFeedPeople(query) {
         .from('profiles')
         .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, ministry_role')
         .or(`full_name.ilike.${safePattern},handle.ilike.${safePattern},bio.ilike.${safePattern},ministry_role.ilike.${safePattern}`)
-        .neq('upgrade_status', 'revoked')
+        .or('upgrade_status.is.null,upgrade_status.neq.revoked')
         .limit(12);
 
     if (error) {
@@ -820,7 +820,7 @@ async function loadFeedSuggestions() {
     const { data, error } = await supabaseClient
         .from('profiles')
         .select('id, full_name, handle, bio, avatar_url, account_type, upgrade_status, ministry_role')
-        .neq('upgrade_status', 'revoked')
+        .or('upgrade_status.is.null,upgrade_status.neq.revoked')
         .limit(40);
 
     if (error) {

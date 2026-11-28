@@ -76,14 +76,14 @@ async function loadUserProfileData() {
 
     let { data: profile } = await supabaseClient
         .from('profiles')
-        .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch, audio_stream_url, audio_stream_type')
+        .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch, verification_revoked_reason, audio_stream_url, audio_stream_type')
         .eq('id', currentProfileUser.id)
         .maybeSingle();
 
     if (!profile) {
         const fallbackRes = await supabaseClient
             .from('profiles')
-            .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch')
+            .select('id, email, full_name, handle, bio, avatar_url, banner_url, account_type, upgrade_status, upgrade_pitch, verification_revoked_reason')
             .eq('id', currentProfileUser.id)
             .maybeSingle();
         profile = fallbackRes.data || null;

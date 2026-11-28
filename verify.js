@@ -1,5 +1,13 @@
 let verifyUser = null;
 let verifyProfile = null;
+let verifyProfileExists = false;
+
+const CANONICAL_MINISTRY_ROLES = new Set([
+    'Church / Ministry',
+    'Preacher',
+    'Musician',
+    'Christian Creative'
+]);
 
 function normalizeMinistryRole(role) {
     const raw = String(role || '').trim();
@@ -10,7 +18,8 @@ function normalizeMinistryRole(role) {
         'Evangelist / Missionary': 'Preacher',
         'Christian Educator / Author': 'Christian Creative'
     };
-    return map[raw] || raw || 'Church / Ministry';
+    const mapped = map[raw] || raw;
+    return CANONICAL_MINISTRY_ROLES.has(mapped) ? mapped : 'Church / Ministry';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -221,6 +230,7 @@ async function loadVerificationApplication() {
         console.warn('Could not load full profile verification fields:', error.message);
     }
 
+    verifyProfileExists = Boolean(profile);
     verifyProfile = profile || {
         id: verifyUser.id,
         email: verifyUser.email,
@@ -256,6 +266,21 @@ function syncVerificationPageUI(profile) {
         return;
     }
 
+    if (status === 'revoked') {
+        if (pill) {
+            pill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200';
+            pill.textContent = 'Status: Verification Revoked';
+        }
+        revokedBanner?.classList.remove('hidden');
+        if (revokedReasonEl) {
+            revokedReasonEl.textContent = profile.verification_revoked_reason
+                ? `Reason: ${profile.verification_revoked_reason} — Resubmission is disabled while your verification is revoked.`
+                : 'Your verification was revoked by an administrator due to policy or activity concerns. Resubmission is disabled while revoked.';
+        }
+        form?.classList.add('hidden');
+        return;
+    }
+
     form?.classList.remove('hidden');
 
     if (status === 'pending') {
@@ -264,17 +289,6 @@ function syncVerificationPageUI(profile) {
             pill.textContent = 'Status: Pending Review';
         }
         pendingBanner?.classList.remove('hidden');
-    } else if (status === 'revoked') {
-        if (pill) {
-            pill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200';
-            pill.textContent = 'Status: Verification Revoked';
-        }
-        revokedBanner?.classList.remove('hidden');
-        if (revokedReasonEl) {
-            revokedReasonEl.textContent = profile.verification_revoked_reason
-                ? `Reason: ${profile.verification_revoked_reason}`
-                : 'Your verification was revoked by an administrator due to policy or activity concerns.';
-        }
     } else if (status === 'rejected') {
         if (pill) {
             pill.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-600';
@@ -373,11 +387,9 @@ async function submitVerificationApplication(e) {
     }));
 
     const fallbackName = verifyProfile?.full_name || verifyUser.user_metadata?.full_name || verifyUser.email?.split('@')[0] || 'Member';
-    const payload = {
-        id: verifyUser.id,
+    const updateFields = {
         email: verifyUser.email,
         full_name: fallbackName,
-        account_type: 'normal_user',
         upgrade_status: 'pending',
         upgrade_pitch: statement,
         ministry_role: ministryRole,
@@ -386,11 +398,22 @@ async function submitVerificationApplication(e) {
         upgrade_requested_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabaseClient
-        .from('profiles')
-        .upsert(payload, { onConflict: 'id' })
-        .select()
-        .single();
+    const { data, error } = verifyProfileExists
+        ? await supabaseClient
+            .from('profiles')
+            .update(updateFields)
+            .eq('id', verifyUser.id)
+            .select()
+            .single()
+        : await supabaseClient
+            .from('profiles')
+            .upsert({
+                id: verifyUser.id,
+                account_type: 'normal_user',
+                ...updateFields
+            }, { onConflict: 'id' })
+            .select()
+            .single();
 
     if (btn) {
         btn.disabled = false;
@@ -402,6 +425,7 @@ async function submitVerificationApplication(e) {
         return;
     }
 
+    verifyProfileExists = true;
     verifyProfile = data;
     syncVerificationPageUI(data);
     showVerifyToast('Verification application with 5 sample posts submitted!');
