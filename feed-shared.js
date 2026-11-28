@@ -329,7 +329,145 @@ function getSharedAudioPlatformInfo(url) {
     if (raw.includes('audiomack.com')) {
         return { key: 'audiomack', label: 'Audiomack', icon: 'fa-solid fa-headphones', color: 'text-amber-600 bg-amber-50' };
     }
+    if (raw.includes('soundcloud.com')) {
+        return { key: 'soundcloud', label: 'SoundCloud', icon: 'fa-brands fa-soundcloud', color: 'text-orange-600 bg-orange-50' };
+    }
+    if (raw.includes('youtube.com') || raw.includes('youtu.be') || raw.includes('music.youtube.com')) {
+        return { key: 'youtube', label: 'YouTube', icon: 'fa-brands fa-youtube', color: 'text-red-600 bg-red-50' };
+    }
     return { key: 'audio', label: 'Audio Stream', icon: 'fa-solid fa-circle-play', color: 'text-accord-gold bg-accord-goldLight' };
+}
+
+function getSharedAudioPlaybackPreference() {
+    if (window.AccordAudioEmbed && typeof window.AccordAudioEmbed.getPlaybackPreference === 'function') {
+        return window.AccordAudioEmbed.getPlaybackPreference();
+    }
+    try {
+        return localStorage.getItem('accord_audio_playback_pref') === 'external' ? 'external' : 'in_app';
+    } catch {
+        return 'in_app';
+    }
+}
+
+function setSharedAudioPlaybackPreference(pref) {
+    const normalized = pref === 'external' ? 'external' : 'in_app';
+    if (window.AccordAudioEmbed && typeof window.AccordAudioEmbed.setPlaybackPreference === 'function') {
+        window.AccordAudioEmbed.setPlaybackPreference(normalized);
+        return normalized;
+    }
+    try {
+        localStorage.setItem('accord_audio_playback_pref', normalized);
+    } catch {}
+    return normalized;
+}
+
+function resolveSharedAudioTarget(url) {
+    const rawUrl = String(url || '').trim();
+    if (window.AccordAudioEmbed && typeof window.AccordAudioEmbed.resolveInAppAudioTarget === 'function') {
+        return window.AccordAudioEmbed.resolveInAppAudioTarget(rawUrl);
+    }
+    const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac|flac|opus)([?#]|$)/i.test(rawUrl);
+    const pInfo = getSharedAudioPlatformInfo(rawUrl);
+    return {
+        kind: isDirectAudio ? 'audio' : 'external',
+        embedUrl: isDirectAudio ? rawUrl : '',
+        rawUrl,
+        platform: pInfo.key,
+        label: pInfo.label,
+        icon: pInfo.icon,
+        height: 360
+    };
+}
+
+function renderSharedEmbeddedPlayerHtml(target, opts = {}) {
+    if (window.AccordAudioEmbed && typeof window.AccordAudioEmbed.renderEmbeddedPlayerHtml === 'function') {
+        return window.AccordAudioEmbed.renderEmbeddedPlayerHtml(target, opts);
+    }
+    if (!target || !target.embedUrl) return '';
+    if (target.kind === 'audio') {
+        return `<audio controls preload="none" src="${escapeShareHtml(target.embedUrl)}" class="w-full"></audio>`;
+    }
+    if (target.kind === 'iframe') {
+        const height = Number(target.height) || 360;
+        const title = escapeShareHtml(opts.title || target.label || 'Audio Player');
+        return `<iframe src="${escapeShareHtml(target.embedUrl)}" title="${title}" style="height:${height}px;" class="w-full border-0 rounded-lg bg-white" loading="lazy" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
+    }
+    return '';
+}
+
+function syncSharedAudioPrefButtons(panel, pref) {
+    const buttons = panel.querySelectorAll('[data-audio-pref-btn]');
+    buttons.forEach(btn => {
+        const isActive = btn.getAttribute('data-audio-pref-btn') === pref;
+        btn.className = isActive
+            ? 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-accord-blue text-white transition-colors'
+            : 'px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-600 hover:bg-slate-200/70 transition-colors';
+    });
+}
+
+function bindSharedAudioCardInteractions(card, target, title) {
+    const audioCard = card.querySelector('[data-audio-card]');
+    if (!audioCard || !target) return;
+
+    const panel = audioCard.querySelector('[data-audio-player-panel]');
+    const playerBody = audioCard.querySelector('[data-audio-player-body]');
+    const playBtn = audioCard.querySelector('[data-audio-play-btn]');
+    const primaryTrigger = audioCard.querySelector('[data-audio-primary-trigger]');
+
+    const toggleInlinePlayer = () => {
+        if (!panel || !playerBody || target.kind === 'external') return;
+        const isHidden = panel.classList.contains('hidden');
+        if (isHidden) {
+            if (playerBody.dataset.loaded !== '1') {
+                playerBody.innerHTML = renderSharedEmbeddedPlayerHtml(target, { title });
+                playerBody.dataset.loaded = '1';
+            }
+            syncSharedAudioPrefButtons(panel, getSharedAudioPlaybackPreference());
+            panel.classList.remove('hidden');
+            if (playBtn) {
+                playBtn.innerHTML = '<i class="fa-solid fa-chevron-up text-[11px]"></i><span>Hide Player</span>';
+            }
+        } else {
+            panel.classList.add('hidden');
+            playerBody.innerHTML = '';
+            delete playerBody.dataset.loaded;
+            if (playBtn) {
+                playBtn.innerHTML = '<i class="fa-solid fa-play text-[11px]"></i><span>Play in App</span>';
+            }
+        }
+    };
+
+    if (playBtn) {
+        playBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleInlinePlayer();
+        });
+    }
+
+    if (primaryTrigger) {
+        primaryTrigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (target.kind !== 'external' && getSharedAudioPlaybackPreference() !== 'external') {
+                toggleInlinePlayer();
+            } else if (target.rawUrl) {
+                window.open(target.rawUrl, '_blank', 'noopener,noreferrer');
+            }
+        });
+    }
+
+    if (panel) {
+        panel.querySelectorAll('[data-audio-pref-btn]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const chosen = btn.getAttribute('data-audio-pref-btn');
+                const saved = setSharedAudioPlaybackPreference(chosen);
+                syncSharedAudioPrefButtons(panel, saved);
+            });
+        });
+    }
 }
 
 const _sharedAudioMetaCache = new Map();
@@ -561,6 +699,8 @@ function createSharedFeedCardElement(post, options = {}) {
     const typeMeta = getSharedPostTypeMeta(post.post_type);
     let mediaHtml = '';
 
+    let audioTarget = null;
+    let audioCardTitle = '';
     if (post.post_type === 'video' && post.media_url) {
         const embedUrl = getSharedYouTubeEmbedUrl(post.media_url);
         const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url);
@@ -569,8 +709,6 @@ function createSharedFeedCardElement(post, options = {}) {
 
         if (showOpenFullPostLink !== false) {
             if (isMobileViewport) {
-                // On mobile/iOS PWA, never mount hidden desktop iframes or preload videos in the feed DOM;
-                // each video opens its player on-demand inside openMobileVideoModal.
                 const mobilePreviewVisual = isDirectVideo
                     ? `<video playsinline muted preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-cover pointer-events-none"></video>`
                     : (thumbUrl
@@ -578,17 +716,30 @@ function createSharedFeedCardElement(post, options = {}) {
                         : `<div class="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-white/25"></i></div>`);
 
                 mediaHtml = `
-                    <div onclick="openMobileVideoModal('${post.id}')" role="button" tabindex="0" aria-label="Watch video in full screen" class="relative w-full aspect-video bg-black cursor-pointer overflow-hidden group">
-                        ${mobilePreviewVisual}
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center">
-                            <span class="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
-                                <i class="fa-solid fa-play text-lg ml-0.5"></i>
-                            </span>
+                    <div data-mobile-video-card="${post.id}" data-video-url="${escapeShareHtml(post.media_url)}" data-is-direct-video="${isDirectVideo ? '1' : '0'}" class="relative w-full aspect-video bg-black cursor-pointer overflow-hidden group select-none">
+                        <div id="mobile-feed-video-poster-${post.id}" class="absolute inset-0 w-full h-full">
+                            ${mobilePreviewVisual}
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center pointer-events-none">
+                                <span class="w-12 h-12 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
+                                    <i class="fa-solid fa-play text-base ml-0.5"></i>
+                                </span>
+                            </div>
                         </div>
-                        <span class="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                            <i class="fa-solid fa-expand text-[9px]"></i>
-                            <span>Full view</span>
-                        </span>
+                        <div id="mobile-feed-video-slot-${post.id}" class="absolute inset-0 w-full h-full hidden"></div>
+                        <div id="mobile-feed-video-overlay-${post.id}" onclick="handleMobileFeedVideoTap(event, '${post.id}')" role="button" tabindex="0" aria-label="Unmute or open video in full view" class="absolute inset-0 z-10 flex flex-col justify-between p-2.5">
+                            <div class="flex justify-end">
+                                <span id="mobile-feed-video-status-${post.id}" class="hidden bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full items-center gap-1.5 shadow">
+                                    <i class="fa-solid fa-volume-xmark text-[10px]"></i>
+                                    <span>Tap for sound</span>
+                                </span>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="button" onclick="openMobileVideoFromFeed(event, '${post.id}')" class="bg-black/65 hover:bg-black/80 active:scale-95 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all shadow">
+                                    <i class="fa-solid fa-expand text-[9px]"></i>
+                                    <span>Full view</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 `;
             } else {
@@ -622,33 +773,83 @@ function createSharedFeedCardElement(post, options = {}) {
             `;
         }
     } else if (post.post_type === 'audio' && post.media_url) {
-        const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
-        if (isDirectAudio) {
+        audioTarget = resolveSharedAudioTarget(post.media_url);
+        const pInfo = getSharedAudioPlatformInfo(post.media_url);
+        const platformLabel = audioTarget.label || pInfo.label;
+        const platformIcon = audioTarget.icon || pInfo.icon;
+        const pulledTitle = String(post.media_title || '').trim();
+        audioCardTitle = pulledTitle || platformLabel;
+
+        if (audioTarget.kind === 'audio') {
             mediaHtml = `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
-                   ${post.media_title ? `<p class="text-xs font-bold text-accord-slate truncate">${escapeShareHtml(post.media_title)}</p>` : ''}
+                   <div class="flex items-center justify-between gap-2">
+                       <p class="text-xs font-bold text-accord-slate truncate">${escapeShareHtml(pulledTitle || 'Audio File')}</p>
+                       <a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-semibold text-accord-blue hover:underline inline-flex items-center gap-1 shrink-0">
+                           <span>Open File</span>
+                           <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                       </a>
+                   </div>
                    <audio controls preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full"></audio>
                </div>`;
         } else {
-            const pInfo = getSharedAudioPlatformInfo(post.media_url);
-            const pulledTitle = String(post.media_title || '').trim();
             const pulledThumb = String(post.media_thumbnail || '').trim();
             const needsHydrate = !pulledTitle || !pulledThumb;
-            mediaHtml = `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" ${needsHydrate ? `data-audio-meta-url="${escapeShareHtml(post.media_url)}"` : ''} class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-center space-x-3.5 transition-colors group">
+            const canPlayInApp = audioTarget.kind !== 'external' && Boolean(audioTarget.embedUrl);
+            const currentPref = getSharedAudioPlaybackPreference();
+
+            const summaryInnerHtml = `
                    <div data-audio-thumb class="w-14 h-14 rounded-xl overflow-hidden ${pInfo.color} flex items-center justify-center shrink-0 border border-slate-200/70">
                        ${pulledThumb
-                           ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(pulledThumb)}" alt="${escapeShareHtml(pulledTitle || pInfo.label)}" class="w-full h-full object-cover">`
-                           : `<i class="${pInfo.icon} text-xl"></i>`}
+                           ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(pulledThumb)}" alt="${escapeShareHtml(audioCardTitle)}" class="w-full h-full object-cover">`
+                           : `<i class="${platformIcon} text-xl"></i>`}
                    </div>
                    <div class="flex-grow min-w-0">
                        <p class="text-[10px] font-extrabold uppercase tracking-wider text-accord-muted flex items-center gap-1.5">
-                           <i class="${pInfo.icon}"></i>
-                           <span>${escapeShareHtml(pInfo.label)}</span>
+                           <i class="${platformIcon}"></i>
+                           <span>${escapeShareHtml(platformLabel)}</span>
                        </p>
-                       <p data-audio-title class="text-xs sm:text-sm font-bold text-accord-slate truncate mt-0.5">${escapeShareHtml(pulledTitle || pInfo.label)}</p>
-                       <span class="text-[11px] text-accord-blue font-semibold group-hover:underline truncate block mt-0.5">Listen on ${escapeShareHtml(pInfo.label)} →</span>
-                   </div>
-                   <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 group-hover:text-accord-blue shrink-0 pr-1"></i>
-               </a>`;
+                       <p data-audio-title class="text-xs sm:text-sm font-bold text-accord-slate truncate mt-0.5">${escapeShareHtml(audioCardTitle)}</p>
+                       <span class="text-[11px] text-accord-blue font-semibold truncate block mt-0.5">${canPlayInApp && currentPref !== 'external' ? 'Tap to play in app' : `Open on ${escapeShareHtml(platformLabel)} →`}</span>
+                   </div>`;
+
+            const summaryRowHtml = canPlayInApp
+                ? `<div data-audio-primary-trigger role="button" tabindex="0" class="p-3 flex items-center space-x-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors">${summaryInnerHtml}</div>`
+                : `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="p-3 flex items-center space-x-3.5 hover:bg-slate-100/80 transition-colors group">${summaryInnerHtml}<i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 group-hover:text-accord-blue shrink-0 pr-1"></i></a>`;
+
+            const actionsRowHtml = `
+                <div class="px-3 pb-3 pt-0.5 flex flex-wrap items-center gap-2">
+                    ${canPlayInApp ? `
+                    <button type="button" data-audio-play-btn class="bg-accord-blue hover:bg-accord-darkBlue text-white text-xs font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition-colors shadow-sm">
+                        <i class="fa-solid fa-play text-[11px]"></i>
+                        <span>Play in App</span>
+                    </button>` : ''}
+                    <a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition-colors">
+                        <span>Open on ${escapeShareHtml(platformLabel)}</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-400"></i>
+                    </a>
+                </div>`;
+
+            const playerPanelHtml = canPlayInApp ? `
+                <div data-audio-player-panel class="hidden border-t border-slate-200 bg-white p-3 space-y-2.5">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                            <i class="${platformIcon}"></i>
+                            <span>In-App Player</span>
+                        </span>
+                        <div class="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+                            <span class="text-[10px] font-semibold text-slate-500 px-1.5">Remember:</span>
+                            <button type="button" data-audio-pref-btn="in_app" class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-accord-blue text-white transition-colors">In-App</button>
+                            <button type="button" data-audio-pref-btn="external" class="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-600 hover:bg-slate-200/70 transition-colors">External</button>
+                        </div>
+                    </div>
+                    <div data-audio-player-body class="w-full"></div>
+                </div>` : '';
+
+            mediaHtml = `<div data-audio-card="${post.id}" ${needsHydrate ? `data-audio-meta-url="${escapeShareHtml(post.media_url)}"` : ''} class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                   ${summaryRowHtml}
+                   ${actionsRowHtml}
+                   ${playerPanelHtml}
+               </div>`;
         }
     }
 
@@ -806,6 +1007,10 @@ function createSharedFeedCardElement(post, options = {}) {
             </div>` : ''}
         </div>
     `;
+
+    if (audioTarget && card.querySelector('[data-audio-card]')) {
+        bindSharedAudioCardInteractions(card, audioTarget, audioCardTitle);
+    }
 
     if (card.querySelector('[data-audio-meta-url]')) {
         hydrateSharedAudioLinkPreviews(card);
@@ -1608,17 +1813,329 @@ async function submitMobileModalComment(e, postId) {
 }
 
 // ==========================================
-// MOBILE FULL-SCREEN VIDEO MODAL + SWIPE + COMMENT SHEET
+// MOBILE FEED AUTOPLAY + FULL-SCREEN VIDEO MODAL + SWIPE + COMMENT SHEET
 // ==========================================
 
-function getSharedAutoplayVideoEmbedUrl(url) {
+let _mobileFeedVideoObserver = null;
+let _mobileFeedVideoSelectTimer = null;
+let _activeMobileFeedVideoId = null;
+const _mobileFeedVideoRatios = new Map();
+const _mobileFeedVideoTimeMap = new Map();
+const _mobileFeedVideoState = new Map();
+let _activeMobileVideoModalOptions = { startTime: 0, unmuted: false };
+
+function sendYouTubePlayerCommand(iframe, func, args = []) {
+    if (!iframe || !iframe.contentWindow) return;
+    try {
+        iframe.contentWindow.postMessage(JSON.stringify({
+            event: 'command',
+            func,
+            args
+        }), '*');
+    } catch (_) {}
+}
+
+function registerYouTubeIframeListener(iframe, id) {
+    if (!iframe || !iframe.contentWindow) return;
+    try {
+        iframe.contentWindow.postMessage(JSON.stringify({
+            event: 'listening',
+            id: String(id || '')
+        }), '*');
+    } catch (_) {}
+}
+
+function getSharedFeedAutoplayEmbedUrl(url, { startTime = 0, mute = true } = {}) {
     const embed = getSharedYouTubeEmbedUrl(url);
     if (!embed) return '';
     if (embed.includes('youtube.com/embed/')) {
         const sep = embed.includes('?') ? '&' : '?';
-        return `${embed}${sep}autoplay=1&playsinline=1&rel=0&modestbranding=1`;
+        const params = [
+            'autoplay=1',
+            'playsinline=1',
+            'enablejsapi=1',
+            'rel=0',
+            'modestbranding=1',
+            'loop=1'
+        ];
+        if (mute) params.push('mute=1');
+        if (startTime > 0) params.push(`start=${Math.floor(startTime)}`);
+        if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
+            params.push(`origin=${encodeURIComponent(window.location.origin)}`);
+        }
+        return `${embed}${sep}${params.join('&')}`;
     }
     return embed;
+}
+
+function getSharedAutoplayVideoEmbedUrl(url, options = {}) {
+    return getSharedFeedAutoplayEmbedUrl(url, { mute: true, ...options });
+}
+
+function updateMobileFeedVideoStatusBadge(postId, { visible = false, unmuted = false } = {}) {
+    const statusEl = document.getElementById(`mobile-feed-video-status-${postId}`);
+    if (!statusEl) return;
+    if (!visible) {
+        statusEl.classList.add('hidden');
+        statusEl.classList.remove('flex');
+        return;
+    }
+    statusEl.classList.remove('hidden');
+    statusEl.classList.add('flex');
+    statusEl.innerHTML = unmuted
+        ? '<i class="fa-solid fa-volume-high text-[10px] text-sky-300"></i><span>Sound on · Tap again for full view</span>'
+        : '<i class="fa-solid fa-volume-xmark text-[10px]"></i><span>Tap for sound</span>';
+}
+
+function teardownActiveMobileFeedVideo() {
+    if (_mobileFeedVideoSelectTimer) {
+        clearTimeout(_mobileFeedVideoSelectTimer);
+        _mobileFeedVideoSelectTimer = null;
+    }
+    if (!_activeMobileFeedVideoId) return;
+    const postId = String(_activeMobileFeedVideoId);
+    _activeMobileFeedVideoId = null;
+
+    const directPlayer = document.getElementById(`mobile-feed-video-player-${postId}`);
+    if (directPlayer && directPlayer.tagName === 'VIDEO') {
+        if (!Number.isNaN(directPlayer.currentTime) && directPlayer.currentTime > 0) {
+            _mobileFeedVideoTimeMap.set(postId, directPlayer.currentTime);
+        }
+        try {
+            directPlayer.pause();
+            directPlayer.removeAttribute('src');
+            directPlayer.load();
+        } catch (_) {}
+    }
+
+    const slot = document.getElementById(`mobile-feed-video-slot-${postId}`);
+    if (slot) {
+        slot.innerHTML = '';
+        slot.classList.add('hidden');
+    }
+    const poster = document.getElementById(`mobile-feed-video-poster-${postId}`);
+    if (poster) {
+        poster.classList.remove('hidden');
+    }
+    updateMobileFeedVideoStatusBadge(postId, { visible: false });
+    _mobileFeedVideoState.delete(postId);
+}
+
+function mountMobileFeedVideoPlayer(postId) {
+    const idStr = String(postId);
+    if (typeof window === 'undefined' || window.innerWidth >= 768) return;
+    if (_activeMobileVideoId || _activeMobilePostId) return;
+
+    const cardMedia = document.querySelector(`[data-mobile-video-card="${CSS.escape(idStr)}"]`);
+    const slot = document.getElementById(`mobile-feed-video-slot-${idStr}`);
+    if (!cardMedia || !slot) return;
+
+    const mediaUrl = cardMedia.getAttribute('data-video-url') || '';
+    const isDirectVideo = cardMedia.getAttribute('data-is-direct-video') === '1';
+    if (!mediaUrl) return;
+
+    _activeMobileFeedVideoId = idStr;
+    _mobileFeedVideoState.set(idStr, { tappedOnce: false, unmuted: false });
+
+    const savedStart = Math.floor(_mobileFeedVideoTimeMap.get(idStr) || 0);
+    slot.classList.remove('hidden');
+
+    if (isDirectVideo) {
+        slot.innerHTML = `<video id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(mediaUrl)}" autoplay muted playsinline loop preload="metadata" class="w-full h-full object-cover bg-black pointer-events-none"></video>`;
+        const videoEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
+        if (videoEl) {
+            if (savedStart > 0) {
+                videoEl.addEventListener('loadedmetadata', () => {
+                    try { videoEl.currentTime = savedStart; } catch (_) {}
+                }, { once: true });
+            }
+            videoEl.addEventListener('timeupdate', () => {
+                if (!Number.isNaN(videoEl.currentTime)) {
+                    _mobileFeedVideoTimeMap.set(idStr, videoEl.currentTime);
+                }
+            });
+            videoEl.play().catch(() => {});
+        }
+    } else {
+        const autoplayUrl = getSharedFeedAutoplayEmbedUrl(mediaUrl, { startTime: savedStart, mute: true });
+        slot.innerHTML = `<iframe id="mobile-feed-video-player-${idStr}" src="${escapeShareHtml(autoplayUrl)}" class="w-full h-full border-0 pointer-events-none" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        const iframeEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
+        if (iframeEl) {
+            iframeEl.addEventListener('load', () => {
+                registerYouTubeIframeListener(iframeEl, `feed-${idStr}`);
+                sendYouTubePlayerCommand(iframeEl, 'playVideo');
+                setTimeout(() => {
+                    registerYouTubeIframeListener(iframeEl, `feed-${idStr}`);
+                    sendYouTubePlayerCommand(iframeEl, 'playVideo');
+                }, 400);
+            });
+        }
+    }
+
+    updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: false });
+}
+
+function scheduleActiveMobileFeedVideoSelection() {
+    if (_mobileFeedVideoSelectTimer) {
+        clearTimeout(_mobileFeedVideoSelectTimer);
+    }
+    _mobileFeedVideoSelectTimer = setTimeout(() => {
+        _mobileFeedVideoSelectTimer = null;
+        if (typeof window === 'undefined' || window.innerWidth >= 768) {
+            teardownActiveMobileFeedVideo();
+            return;
+        }
+        if (_activeMobileVideoId || _activeMobilePostId || document.hidden) return;
+
+        let bestId = null;
+        let bestRatio = 0;
+        _mobileFeedVideoRatios.forEach((ratio, id) => {
+            if (ratio >= 0.45 && ratio > bestRatio) {
+                bestRatio = ratio;
+                bestId = id;
+            }
+        });
+
+        if (!bestId) {
+            teardownActiveMobileFeedVideo();
+            return;
+        }
+        if (String(_activeMobileFeedVideoId) === String(bestId)) return;
+
+        teardownActiveMobileFeedVideo();
+        mountMobileFeedVideoPlayer(bestId);
+    }, 120);
+}
+
+function setupMobileFeedVideoObserver() {
+    if (_mobileFeedVideoObserver) {
+        _mobileFeedVideoObserver.disconnect();
+        _mobileFeedVideoObserver = null;
+    }
+    _mobileFeedVideoRatios.clear();
+
+    if (typeof window === 'undefined' || window.innerWidth >= 768) {
+        teardownActiveMobileFeedVideo();
+        return;
+    }
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const cards = document.querySelectorAll('[data-mobile-video-card]');
+    if (!cards.length) {
+        teardownActiveMobileFeedVideo();
+        return;
+    }
+
+    _mobileFeedVideoObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            const postId = entry.target.getAttribute('data-mobile-video-card');
+            if (!postId) return;
+            if (entry.isIntersecting) {
+                _mobileFeedVideoRatios.set(String(postId), entry.intersectionRatio);
+            } else {
+                _mobileFeedVideoRatios.delete(String(postId));
+            }
+        });
+        scheduleActiveMobileFeedVideoSelection();
+    }, { threshold: [0, 0.25, 0.45, 0.65, 0.85] });
+
+    cards.forEach((el) => _mobileFeedVideoObserver.observe(el));
+}
+
+function handleMobileFeedVideoTap(e, postId) {
+    if (e) e.stopPropagation();
+    const idStr = String(postId);
+
+    // If this video isn't actively playing yet (e.g. quick tap before observer settles), open full view immediately.
+    if (String(_activeMobileFeedVideoId) !== idStr) {
+        openMobileVideoFromFeed(e, idStr);
+        return;
+    }
+
+    const state = _mobileFeedVideoState.get(idStr) || { tappedOnce: false, unmuted: false };
+    if (!state.tappedOnce) {
+        state.tappedOnce = true;
+        state.unmuted = true;
+        _mobileFeedVideoState.set(idStr, state);
+
+        const playerEl = document.getElementById(`mobile-feed-video-player-${idStr}`);
+        if (playerEl) {
+            if (playerEl.tagName === 'VIDEO') {
+                playerEl.muted = false;
+                playerEl.play().catch(() => {});
+            } else if (playerEl.tagName === 'IFRAME') {
+                registerYouTubeIframeListener(playerEl, `feed-${idStr}`);
+                sendYouTubePlayerCommand(playerEl, 'unMute');
+                sendYouTubePlayerCommand(playerEl, 'playVideo');
+            }
+        }
+        updateMobileFeedVideoStatusBadge(idStr, { visible: true, unmuted: true });
+        return;
+    }
+
+    // Second tap: open full view modal continuing from current playback position
+    openMobileVideoFromFeed(e, idStr);
+}
+
+function openMobileVideoFromFeed(e, postId) {
+    if (e) e.stopPropagation();
+    const idStr = String(postId);
+
+    const directPlayer = document.getElementById(`mobile-feed-video-player-${idStr}`);
+    if (directPlayer && directPlayer.tagName === 'VIDEO' && !Number.isNaN(directPlayer.currentTime)) {
+        _mobileFeedVideoTimeMap.set(idStr, directPlayer.currentTime);
+    }
+
+    const startTime = Math.floor(_mobileFeedVideoTimeMap.get(idStr) || 0);
+    const unmuted = Boolean(_mobileFeedVideoState.get(idStr)?.unmuted);
+
+    teardownActiveMobileFeedVideo();
+    openMobileVideoModal(idStr, { startTime, unmuted });
+}
+
+if (typeof window !== 'undefined') {
+    window.setupMobileFeedVideoObserver = setupMobileFeedVideoObserver;
+    window.teardownActiveMobileFeedVideo = teardownActiveMobileFeedVideo;
+
+    window.addEventListener('message', (event) => {
+        if (!event.origin || (!event.origin.includes('youtube.com') && !event.origin.includes('youtube-nocookie.com'))) {
+            return;
+        }
+        let data = null;
+        try {
+            data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        } catch (_) {
+            return;
+        }
+        if (!data || typeof data !== 'object') return;
+
+        if (data.event === 'infoDelivery' && data.info && typeof data.info.currentTime === 'number') {
+            if (_activeMobileFeedVideoId) {
+                const feedIframe = document.getElementById(`mobile-feed-video-player-${_activeMobileFeedVideoId}`);
+                if (feedIframe && feedIframe.contentWindow === event.source) {
+                    _mobileFeedVideoTimeMap.set(String(_activeMobileFeedVideoId), data.info.currentTime);
+                }
+            }
+        }
+
+        if (data.event === 'onReady') {
+            const modalIframe = document.getElementById('mobile-video-player');
+            if (modalIframe && modalIframe.tagName === 'IFRAME' && modalIframe.contentWindow === event.source) {
+                sendYouTubePlayerCommand(modalIframe, 'playVideo');
+                if (_activeMobileVideoModalOptions.unmuted) {
+                    sendYouTubePlayerCommand(modalIframe, 'unMute');
+                }
+            }
+        }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            teardownActiveMobileFeedVideo();
+        } else {
+            setupMobileFeedVideoObserver();
+        }
+    });
 }
 
 function getMobileVideoList() {
@@ -1643,7 +2160,7 @@ function ensureMobileVideoModalDom() {
     document.body.appendChild(modal);
 }
 
-function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
+function renderMobileVideoModalContent(postId, { slideDirection = '', startTime = 0, unmuted = false } = {}) {
     const modal = document.getElementById('accord-mobile-video-modal');
     const entry = _sharedMobilePostRegistry.get(String(postId));
     if (!modal || !entry) return;
@@ -1668,7 +2185,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
 
     const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url || '');
     const thumbUrl = getSharedVideoThumbnailUrl(post.media_url || '');
-    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '');
+    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '', { startTime, mute: true });
 
     const videoList = getMobileVideoList();
     const currentIdx = videoList.indexOf(String(postId));
@@ -1689,7 +2206,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
     const isLongCaption = bodyText.length > 90;
 
     const playerHtml = isDirectVideo
-        ? `<video id="mobile-video-player" src="${escapeShareHtml(post.media_url)}" controls autoplay playsinline loop class="w-full max-h-[62dvh] object-contain bg-black"></video>`
+        ? `<video id="mobile-video-player" src="${escapeShareHtml(post.media_url)}" controls autoplay ${unmuted ? '' : 'muted'} playsinline loop class="w-full max-h-[62dvh] object-contain bg-black"></video>`
         : `<div class="w-full aspect-video bg-black shadow-2xl">
                <iframe id="mobile-video-player" src="${escapeShareHtml(autoplayEmbedUrl)}" class="w-full h-full border-0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
            </div>`;
@@ -1885,6 +2402,34 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
     if (sheetHeader) {
         attachMobileVideoSheetDragHandlers(sheetHeader);
     }
+
+    const modalPlayer = document.getElementById('mobile-video-player');
+    if (modalPlayer) {
+        if (modalPlayer.tagName === 'VIDEO') {
+            if (startTime > 0) {
+                modalPlayer.addEventListener('loadedmetadata', () => {
+                    try { modalPlayer.currentTime = startTime; } catch (_) {}
+                }, { once: true });
+            }
+            modalPlayer.play().catch(() => {
+                modalPlayer.muted = true;
+                modalPlayer.play().catch(() => {});
+            });
+        } else if (modalPlayer.tagName === 'IFRAME') {
+            const syncModalYouTubePlayback = () => {
+                registerYouTubeIframeListener(modalPlayer, `modal-${postId}`);
+                sendYouTubePlayerCommand(modalPlayer, 'playVideo');
+                if (unmuted) {
+                    sendYouTubePlayerCommand(modalPlayer, 'unMute');
+                }
+            };
+            modalPlayer.addEventListener('load', () => {
+                syncModalYouTubePlayback();
+                setTimeout(syncModalYouTubePlayback, 350);
+                setTimeout(syncModalYouTubePlayback, 800);
+            });
+        }
+    }
 }
 
 function toggleMobileVideoCaption(postId) {
@@ -2016,10 +2561,16 @@ async function openMobileVideoModal(postId, options = {}) {
     const entry = _sharedMobilePostRegistry.get(String(postId));
     if (!entry) return;
 
+    teardownActiveMobileFeedVideo();
+    _activeMobileVideoModalOptions = {
+        startTime: Number(options.startTime) || 0,
+        unmuted: Boolean(options.unmuted)
+    };
+
     ensureMobileVideoModalDom();
     _activeMobileVideoId = String(postId);
     _mobileVideoCommentsOpen = false;
-    renderMobileVideoModalContent(postId);
+    renderMobileVideoModalContent(postId, _activeMobileVideoModalOptions);
 
     const modal = document.getElementById('accord-mobile-video-modal');
     lockMobileModalBodyScroll();
@@ -2059,7 +2610,12 @@ function closeMobileVideoModal({ fromPopState = false } = {}) {
     resetMobileModalViewportGeometry(modal);
     _activeMobileVideoId = null;
     _mobileVideoCommentsOpen = false;
+    _activeMobileVideoModalOptions = { startTime: 0, unmuted: false };
     unlockMobileModalBodyScroll();
+
+    setTimeout(() => {
+        setupMobileFeedVideoObserver();
+    }, 80);
 
     if (!fromPopState && _mobileModalHistoryPushed) {
         _mobileModalHistoryPushed = false;
@@ -2164,7 +2720,10 @@ window.addEventListener('popstate', () => {
 
 window.addEventListener('resize', () => {
     if (window.innerWidth >= 768) {
+        teardownActiveMobileFeedVideo();
         if (_activeMobileVideoId) closeMobileVideoModal();
         if (_activeMobilePostId) closeMobileTextPostModal();
+    } else {
+        setupMobileFeedVideoObserver();
     }
 });
