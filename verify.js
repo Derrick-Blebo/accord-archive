@@ -14,6 +14,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadVerificationApplication();
 });
 
+const _sampleMediaMetaCache = new Map();
+const _sampleMetaTimers = {};
+
+function getSampleFieldConfig(postType, idx) {
+    const isText = postType === 'text';
+    const isAudio = postType === 'audio';
+    return {
+        isText,
+        bodyLabel: isText ? 'Message / Teaching Content *' : 'Message / Teaching Content (Optional)',
+        bodyPlaceholder: isText
+            ? `Write the Gospel message, scripture reflection, or sermon summary for sample #${idx}...`
+            : `Add an optional message, reflection, or sermon note for sample #${idx}...`,
+        mediaLabel: isText
+            ? 'Media / Reference URL (Optional)'
+            : (isAudio ? 'Audio Source URL * (Spotify, Audiomack, Apple, SoundCloud, YouTube)' : 'Video URL *'),
+        mediaPlaceholder: isText
+            ? 'https://youtube.com/... or reference link (optional)'
+            : (isAudio ? 'Paste Spotify, Audiomack, Apple Music, SoundCloud, or YouTube link...' : 'https://www.youtube.com/watch?v=...')
+    };
+}
+
 function renderSamplePostFields(existingSamples = []) {
     const container = document.getElementById('sample-posts-container');
     if (!container) return;
@@ -22,39 +43,159 @@ function renderSamplePostFields(existingSamples = []) {
     for (let i = 0; i < 5; i++) {
         const sample = existingSamples[i] || {};
         const idx = i + 1;
+        const postType = (sample.post_type === 'video' || sample.post_type === 'audio') ? sample.post_type : 'text';
+        const cfg = getSampleFieldConfig(postType, idx);
+
+        if (sample.media_url && (sample.title || sample.media_thumbnail)) {
+            _sampleMediaMetaCache.set(sample.media_url, {
+                title: sample.title || '',
+                image: sample.media_thumbnail || '',
+                curator: sample.media_curator || ''
+            });
+        }
+
         html += `
             <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-extrabold uppercase tracking-wider text-accord-blue">Sample Post #${idx}</span>
                     <span class="text-[10px] font-semibold text-accord-muted">Required</span>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                        <label for="sample-type-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Post Type *</label>
-                        <select id="sample-type-${idx}" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-accord-blue">
-                            <option value="text" ${sample.post_type === 'text' ? 'selected' : ''}>Text Post / Devotional</option>
-                            <option value="video" ${sample.post_type === 'video' ? 'selected' : ''}>Video Sermon</option>
-                            <option value="audio" ${sample.post_type === 'audio' ? 'selected' : ''}>Audio Teaching</option>
-                            <option value="testimony" ${sample.post_type === 'testimony' ? 'selected' : ''}>Gospel Testimony</option>
-                        </select>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label for="sample-title-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Title *</label>
-                        <input type="text" id="sample-title-${idx}" required minlength="4" maxlength="140" value="${escapeVerifyAttr(sample.title || '')}" placeholder="e.g., Walking in Grace — John 1:14" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                <div>
+                    <label for="sample-type-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Post Type *</label>
+                    <select id="sample-type-${idx}" onchange="handleSampleTypeChange(${idx})" required class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-accord-blue">
+                        <option value="text" ${postType === 'text' ? 'selected' : ''}>Text Post / Devotional</option>
+                        <option value="video" ${postType === 'video' ? 'selected' : ''}>Video Sermon</option>
+                        <option value="audio" ${postType === 'audio' ? 'selected' : ''}>Audio Teaching</option>
+                    </select>
+                </div>
+                <div>
+                    <label id="sample-media-label-${idx}" for="sample-media-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">${cfg.mediaLabel}</label>
+                    <input type="url" id="sample-media-${idx}" ${cfg.isText ? '' : 'required'} oninput="scheduleSampleMediaMetaPreview(${idx})" value="${escapeVerifyAttr(sample.media_url || '')}" placeholder="${escapeVerifyAttr(cfg.mediaPlaceholder)}" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                    <div id="sample-meta-preview-${idx}" class="hidden mt-2 bg-white border border-slate-200 rounded-xl p-2.5 flex items-center gap-3">
+                        <div id="sample-meta-thumb-${idx}" class="w-11 h-11 rounded-lg bg-accord-goldLight text-accord-gold flex items-center justify-center overflow-hidden shrink-0">
+                            <i class="fa-solid fa-link"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p id="sample-meta-status-${idx}" class="text-[10px] font-bold uppercase tracking-wider text-accord-muted">Auto-pulled Link Info</p>
+                            <p id="sample-meta-title-${idx}" class="text-xs font-bold text-accord-slate truncate">Waiting for link...</p>
+                        </div>
                     </div>
                 </div>
                 <div>
-                    <label for="sample-body-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Message / Teaching Content *</label>
-                    <textarea id="sample-body-${idx}" rows="3" required minlength="20" maxlength="1000" placeholder="Write the Gospel message, scripture reflection, or sermon summary for sample #${idx}..." class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue">${escapeVerifyHtml(sample.body || '')}</textarea>
-                </div>
-                <div>
-                    <label for="sample-media-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Media / Reference URL (Optional)</label>
-                    <input type="url" id="sample-media-${idx}" value="${escapeVerifyAttr(sample.media_url || '')}" placeholder="https://youtube.com/... or audio link (optional)" class="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                    <label id="sample-body-label-${idx}" for="sample-body-${idx}" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">${cfg.bodyLabel}</label>
+                    <textarea id="sample-body-${idx}" rows="3" ${cfg.isText ? 'required minlength="20"' : ''} maxlength="1000" placeholder="${escapeVerifyAttr(cfg.bodyPlaceholder)}" class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-accord-blue">${escapeVerifyHtml(sample.body || '')}</textarea>
                 </div>
             </div>
         `;
     }
     container.innerHTML = html;
+
+    for (let i = 0; i < 5; i++) {
+        const sample = existingSamples[i] || {};
+        if (sample.media_url && /^https?:\/\//i.test(sample.media_url)) {
+            scheduleSampleMediaMetaPreview(i + 1, true);
+        }
+    }
+}
+
+function handleSampleTypeChange(idx) {
+    const postType = document.getElementById(`sample-type-${idx}`)?.value || 'text';
+    const cfg = getSampleFieldConfig(postType, idx);
+
+    const bodyEl = document.getElementById(`sample-body-${idx}`);
+    const bodyLabelEl = document.getElementById(`sample-body-label-${idx}`);
+    const mediaEl = document.getElementById(`sample-media-${idx}`);
+    const mediaLabelEl = document.getElementById(`sample-media-label-${idx}`);
+
+    if (bodyLabelEl) bodyLabelEl.textContent = cfg.bodyLabel;
+    if (bodyEl) {
+        bodyEl.required = cfg.isText;
+        if (cfg.isText) {
+            bodyEl.setAttribute('minlength', '20');
+        } else {
+            bodyEl.removeAttribute('minlength');
+        }
+        bodyEl.placeholder = cfg.bodyPlaceholder;
+    }
+
+    if (mediaLabelEl) mediaLabelEl.textContent = cfg.mediaLabel;
+    if (mediaEl) {
+        mediaEl.required = !cfg.isText;
+        mediaEl.placeholder = cfg.mediaPlaceholder;
+    }
+}
+
+async function fetchSampleLinkMetadata(url) {
+    const clean = String(url || '').trim();
+    if (!clean || !/^https?:\/\//i.test(clean)) return null;
+    if (_sampleMediaMetaCache.has(clean)) return _sampleMediaMetaCache.get(clean);
+    try {
+        const res = await fetch(`/api/music-metadata?url=${encodeURIComponent(clean)}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const meta = {
+            title: String(data?.title || '').trim(),
+            image: String(data?.image || '').trim(),
+            curator: String(data?.curator || data?.artist || '').trim()
+        };
+        if (meta.title || meta.image || meta.curator) {
+            _sampleMediaMetaCache.set(clean, meta);
+        }
+        return meta;
+    } catch {
+        return null;
+    }
+}
+
+function scheduleSampleMediaMetaPreview(idx, immediate = false) {
+    const url = document.getElementById(`sample-media-${idx}`)?.value.trim() || '';
+    const box = document.getElementById(`sample-meta-preview-${idx}`);
+    const statusEl = document.getElementById(`sample-meta-status-${idx}`);
+    const titleEl = document.getElementById(`sample-meta-title-${idx}`);
+    const thumbEl = document.getElementById(`sample-meta-thumb-${idx}`);
+
+    clearTimeout(_sampleMetaTimers[idx]);
+
+    if (!url || !/^https?:\/\//i.test(url)) {
+        box?.classList.add('hidden');
+        return;
+    }
+
+    const runLookup = async () => {
+        if (!box) return;
+        box.classList.remove('hidden');
+        if (statusEl) statusEl.textContent = 'Pulling title & thumbnail...';
+        if (titleEl) titleEl.textContent = url;
+        if (thumbEl) thumbEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        const meta = await fetchSampleLinkMetadata(url);
+        const currentUrl = document.getElementById(`sample-media-${idx}`)?.value.trim() || '';
+        if (currentUrl !== url) return;
+
+        if (meta && (meta.title || meta.image)) {
+            if (statusEl) {
+                statusEl.textContent = meta.curator
+                    ? `Auto-pulled • ${meta.curator}`
+                    : 'Auto-pulled from source';
+            }
+            if (titleEl) titleEl.textContent = meta.title || 'Media Link';
+            if (thumbEl) {
+                thumbEl.innerHTML = meta.image
+                    ? `<img src="${escapeVerifyAttr(meta.image)}" alt="Media thumbnail" class="w-full h-full object-cover">`
+                    : '<i class="fa-solid fa-circle-play"></i>';
+            }
+        } else {
+            if (statusEl) statusEl.textContent = 'Link attached';
+            if (titleEl) titleEl.textContent = 'Preview info unavailable for this link';
+            if (thumbEl) thumbEl.innerHTML = '<i class="fa-solid fa-link"></i>';
+        }
+    };
+
+    if (immediate) {
+        runLookup();
+    } else {
+        _sampleMetaTimers[idx] = setTimeout(runLookup, 350);
+    }
 }
 
 async function loadVerificationApplication() {
@@ -172,18 +313,24 @@ async function submitVerificationApplication(e) {
         return;
     }
 
-    const samples = [];
+    const rawSamples = [];
     for (let i = 1; i <= 5; i++) {
         const post_type = document.getElementById(`sample-type-${i}`)?.value || 'text';
-        const title = document.getElementById(`sample-title-${i}`)?.value.trim() || '';
         const body = document.getElementById(`sample-body-${i}`)?.value.trim() || '';
         const media_url = document.getElementById(`sample-media-${i}`)?.value.trim() || '';
 
-        if (title.length < 4 || body.length < 20) {
-            showVerifyToast(`Please complete Sample Post #${i} (title and at least 20 characters of content).`, true);
-            return;
+        if (post_type === 'text') {
+            if (body.length < 20) {
+                showVerifyToast(`Please complete Sample Post #${i} (at least 20 characters of message content).`, true);
+                return;
+            }
+        } else {
+            if (!media_url || !/^https?:\/\//i.test(media_url)) {
+                showVerifyToast(`Please provide a valid ${post_type === 'audio' ? 'audio' : 'video'} URL for Sample Post #${i}.`, true);
+                return;
+            }
         }
-        samples.push({ post_type, title, body, media_url });
+        rawSamples.push({ post_type, body, media_url });
     }
 
     const socials = {
@@ -198,6 +345,20 @@ async function submitVerificationApplication(e) {
         btn.disabled = true;
         btn.textContent = 'Submitting Application...';
     }
+
+    const samples = await Promise.all(rawSamples.map(async (sample) => {
+        const meta = sample.media_url && /^https?:\/\//i.test(sample.media_url)
+            ? await fetchSampleLinkMetadata(sample.media_url)
+            : null;
+        return {
+            post_type: sample.post_type,
+            title: meta?.title || '',
+            body: sample.body,
+            media_url: sample.media_url,
+            ...(meta?.image ? { media_thumbnail: meta.image } : {}),
+            ...(meta?.curator ? { media_curator: meta.curator } : {})
+        };
+    }));
 
     const fallbackName = verifyProfile?.full_name || verifyUser.user_metadata?.full_name || verifyUser.email?.split('@')[0] || 'Member';
     const payload = {

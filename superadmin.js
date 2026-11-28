@@ -283,8 +283,16 @@ function openInspectVerificationModal(userId) {
                     <span class="text-[10px] font-extrabold uppercase tracking-wider text-accord-blue">Sample #${idx + 1} • ${escapeSuperHtml(s.post_type || 'text')}</span>
                     ${s.media_url ? `<a href="${escapeSuperHtml(s.media_url)}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-bold text-accord-blue hover:underline">Media Link</a>` : ''}
                 </div>
-                <p class="font-bold text-accord-slate text-xs">${escapeSuperHtml(s.title || 'Untitled')}</p>
-                <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(s.body || '')}</p>
+                ${(s.title || s.media_thumbnail) ? `
+                    <div class="flex items-center gap-2.5 pt-0.5">
+                        ${s.media_thumbnail ? `<img src="${escapeSuperHtml(s.media_thumbnail)}" alt="" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200">` : ''}
+                        <div class="min-w-0">
+                            ${s.title ? `<p class="font-bold text-accord-slate text-xs truncate">${escapeSuperHtml(s.title)}</p>` : ''}
+                            ${s.media_curator ? `<p class="text-[11px] text-accord-muted truncate">${escapeSuperHtml(s.media_curator)}</p>` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+                ${s.body ? `<p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeSuperHtml(s.body)}</p>` : ''}
             </div>
         `).join('')
         : `<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">No sample posts submitted yet (legacy request).</p>`;
