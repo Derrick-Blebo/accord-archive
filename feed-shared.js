@@ -438,7 +438,11 @@ function renderSharedCommentsHtml(comments) {
 }
 
 const _sharedMobilePostRegistry = new Map();
+const _sharedMobileVideoIds = [];
 let _activeMobilePostId = null;
+let _activeMobileVideoId = null;
+let _mobileVideoCommentsOpen = false;
+let _mobileVideoCaptionExpanded = false;
 let _mobileModalHistoryPushed = false;
 
 function createSharedFeedCardElement(post, options = {}) {
@@ -468,7 +472,8 @@ function createSharedFeedCardElement(post, options = {}) {
     );
 
     const isTextPost = post.post_type === 'text' || post.post_type === 'testimony';
-    const enableMobileFullscreen = showOpenFullPostLink !== false && isTextPost;
+    const isVideoPost = post.post_type === 'video' && Boolean(post.media_url);
+    const enableMobileFullscreen = showOpenFullPostLink !== false && (isTextPost || isVideoPost);
     if (enableMobileFullscreen) {
         _sharedMobilePostRegistry.set(String(post.id), {
             post,
@@ -485,8 +490,14 @@ function createSharedFeedCardElement(post, options = {}) {
                 canManage
             }
         });
+        if (isVideoPost && !_sharedMobileVideoIds.includes(String(post.id))) {
+            _sharedMobileVideoIds.push(String(post.id));
+        }
         if (_activeMobilePostId && String(_activeMobilePostId) === String(post.id)) {
             setTimeout(() => syncMobileModalFromRegistry(String(post.id)), 0);
+        }
+        if (_activeMobileVideoId && String(_activeMobileVideoId) === String(post.id)) {
+            setTimeout(() => syncMobileVideoModalFromRegistry(String(post.id)), 0);
         }
     }
 
@@ -552,11 +563,43 @@ function createSharedFeedCardElement(post, options = {}) {
 
     if (post.post_type === 'video' && post.media_url) {
         const embedUrl = getSharedYouTubeEmbedUrl(post.media_url);
-        mediaHtml = `
-            <div class="relative w-full aspect-video bg-black">
-                <iframe src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
-            </div>
-        `;
+        const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url);
+        const thumbUrl = getSharedVideoThumbnailUrl(post.media_url);
+        const desktopVideoHtml = isDirectVideo
+            ? `<video controls playsinline preload="metadata" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-contain"></video>`
+            : `<iframe src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>`;
+
+        if (showOpenFullPostLink !== false) {
+            const mobilePreviewVisual = isDirectVideo
+                ? `<video playsinline muted preload="metadata" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-cover pointer-events-none"></video>`
+                : (thumbUrl
+                    ? `<img src="${escapeShareHtml(thumbUrl)}" alt="${escapeShareHtml(post.body ? String(post.body).slice(0, 60) : 'Video')}" class="w-full h-full object-cover">`
+                    : `<iframe src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0 pointer-events-none"></iframe>`);
+
+            mediaHtml = `
+                <div class="relative w-full aspect-video bg-black hidden md:block">
+                    ${desktopVideoHtml}
+                </div>
+                <div onclick="openMobileVideoModal('${post.id}')" role="button" tabindex="0" aria-label="Watch video in full screen" class="relative w-full aspect-video bg-black md:hidden cursor-pointer overflow-hidden group">
+                    ${mobilePreviewVisual}
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center">
+                        <span class="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
+                            <i class="fa-solid fa-play text-lg ml-0.5"></i>
+                        </span>
+                    </div>
+                    <span class="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <i class="fa-solid fa-expand text-[9px]"></i>
+                        <span>Full view</span>
+                    </span>
+                </div>
+            `;
+        } else {
+            mediaHtml = `
+                <div class="relative w-full aspect-video bg-black">
+                    ${desktopVideoHtml}
+                </div>
+            `;
+        }
     } else if (post.post_type === 'audio' && post.media_url) {
         const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
         if (isDirectAudio) {
@@ -915,22 +958,36 @@ async function executeSharedDeletePost(postId, onDeleted) {
     if (_activeMobilePostId && String(_activeMobilePostId) === String(postId)) {
         closeMobileTextPostModal();
     }
+    if (_activeMobileVideoId && String(_activeMobileVideoId) === String(postId)) {
+        const idx = _sharedMobileVideoIds.indexOf(String(postId));
+        if (idx !== -1) _sharedMobileVideoIds.splice(idx, 1);
+        closeMobileVideoModal();
+    }
     if (typeof onDeleted === 'function') onDeleted(postId);
 }
 
 // ==========================================
-// MOBILE FULL-SCREEN TEXT POST MODAL
+// MOBILE FULL-SCREEN TEXT & VIDEO MODALS
 // ==========================================
 
 function handleSharedTextPostBodyClick(e, postId) {
     if (window.innerWidth >= 768) return;
     if (e.target && e.target.closest('a, button, input, textarea, select')) return;
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (entry && entry.post.post_type === 'video' && entry.post.media_url) {
+        openMobileVideoModal(postId);
+        return;
+    }
     openMobileTextPostModal(postId);
 }
 
 function handleSharedCommentTrigger(postId) {
     const entry = _sharedMobilePostRegistry.get(String(postId));
     if (entry && window.innerWidth < 768) {
+        if (entry.post.post_type === 'video' && entry.post.media_url) {
+            openMobileVideoModal(postId, { openComments: true });
+            return;
+        }
         openMobileTextPostModal(postId, { focusComment: true });
         return;
     }
@@ -1270,32 +1327,60 @@ function closeMobileTextPostModal({ fromPopState = false } = {}) {
 }
 
 function syncMobileModalFromRegistry(postId) {
-    if (!_activeMobilePostId || String(_activeMobilePostId) !== String(postId)) return;
-    const entry = _sharedMobilePostRegistry.get(String(postId));
+    const idStr = String(postId);
+    const entry = _sharedMobilePostRegistry.get(idStr);
     if (!entry) return;
 
     const { post, options } = entry;
     const live = getLiveCardPostState(postId, options, post);
 
-    const bodyEl = document.getElementById(`mobile-modal-post-body-${postId}`);
-    if (bodyEl) bodyEl.textContent = String(post.body || '');
+    if (_activeMobilePostId && String(_activeMobilePostId) === idStr) {
+        const bodyEl = document.getElementById(`mobile-modal-post-body-${postId}`);
+        if (bodyEl) bodyEl.textContent = String(post.body || '');
 
-    const likeCountEl = document.getElementById(`mobile-modal-like-count-${postId}`);
-    if (likeCountEl) likeCountEl.textContent = live.likesCount;
+        const likeCountEl = document.getElementById(`mobile-modal-like-count-${postId}`);
+        if (likeCountEl) likeCountEl.textContent = live.likesCount;
 
-    const likeBtnEl = document.getElementById(`mobile-modal-like-btn-${postId}`);
-    if (likeBtnEl) {
-        likeBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isLiked ? 'text-rose-600' : 'text-slate-600'}`;
-        const icon = likeBtnEl.querySelector('i');
-        if (icon) icon.className = `${live.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm`;
+        const likeBtnEl = document.getElementById(`mobile-modal-like-btn-${postId}`);
+        if (likeBtnEl) {
+            likeBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isLiked ? 'text-rose-600' : 'text-slate-600'}`;
+            const icon = likeBtnEl.querySelector('i');
+            if (icon) icon.className = `${live.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm`;
+        }
+
+        const repostLabelEl = document.getElementById(`mobile-modal-repost-count-label-${postId}`);
+        if (repostLabelEl) repostLabelEl.textContent = `${live.repostsCount} ${live.repostsCount === 1 ? 'repost' : 'reposts'}`;
+
+        const repostBtnEl = document.getElementById(`mobile-modal-repost-btn-${postId}`);
+        if (repostBtnEl) {
+            repostBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isReposted ? 'text-emerald-600' : 'text-slate-600'}`;
+        }
     }
 
-    const repostLabelEl = document.getElementById(`mobile-modal-repost-count-label-${postId}`);
-    if (repostLabelEl) repostLabelEl.textContent = `${live.repostsCount} ${live.repostsCount === 1 ? 'repost' : 'reposts'}`;
+    if (_activeMobileVideoId && String(_activeMobileVideoId) === idStr) {
+        const vLikeCount = document.getElementById(`mobile-video-like-count-${postId}`);
+        if (vLikeCount) vLikeCount.textContent = live.likesCount;
 
-    const repostBtnEl = document.getElementById(`mobile-modal-repost-btn-${postId}`);
-    if (repostBtnEl) {
-        repostBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isReposted ? 'text-emerald-600' : 'text-slate-600'}`;
+        const vLikeBtn = document.getElementById(`mobile-video-like-btn-${postId}`);
+        if (vLikeBtn) {
+            const icon = vLikeBtn.querySelector('i');
+            if (icon) icon.className = `${live.isLiked ? 'fa-solid text-rose-500' : 'fa-regular text-white'} fa-heart text-2xl drop-shadow`;
+        }
+
+        const vCommentCount = document.getElementById(`mobile-video-comment-count-${postId}`);
+        if (vCommentCount) vCommentCount.textContent = live.commentsCount;
+
+        const vSheetCount = document.getElementById(`mobile-video-sheet-comment-count-${postId}`);
+        if (vSheetCount) vSheetCount.textContent = live.commentsCount;
+
+        const vRepostCount = document.getElementById(`mobile-video-repost-count-${postId}`);
+        if (vRepostCount) vRepostCount.textContent = live.repostsCount;
+
+        const vRepostBtn = document.getElementById(`mobile-video-repost-btn-${postId}`);
+        if (vRepostBtn) {
+            const icon = vRepostBtn.querySelector('i');
+            if (icon) icon.className = `fa-solid fa-retweet text-2xl drop-shadow ${live.isReposted ? 'text-emerald-400' : 'text-white'}`;
+        }
     }
 }
 
@@ -1306,16 +1391,88 @@ async function handleMobileModalLike(postId) {
     syncMobileModalFromRegistry(postId);
 }
 
-async function loadMobileModalComments(postId, { scrollToBottom = false } = {}) {
-    const listEl = document.getElementById('mobile-modal-comments-list');
+async function fetchPostCommentsShared(postId) {
     const client = window.supabaseClient;
-    if (!listEl || !client) return;
-
-    const { data, error } = await client
+    if (!client) return { data: null, error: new Error('No client') };
+    return await client
         .from('post_comments')
         .select('id, author_name, comment_text, created_at')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
+}
+
+async function submitSharedCommentPayload(postId, inputEl, submitBtnEl) {
+    const client = window.supabaseClient;
+    if (!client || !inputEl) return false;
+
+    const { data: { session } } = await client.auth.getSession();
+    if (!session?.user) {
+        if (typeof showToast === 'function') showToast('Please sign in to comment on posts.', true);
+        setTimeout(() => {
+            window.location.href = `signin.html?next=${encodeURIComponent(window.location.pathname.split('/').pop() + window.location.search)}`;
+        }, 800);
+        return false;
+    }
+
+    const text = inputEl.value.trim();
+    if (!text) return false;
+
+    const activeCtx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (activeCtx?.isSwitched && !activeCtx.permissions?.can_post) {
+        if (typeof showToast === 'function') showToast('You do not have permission to comment on behalf of this verified page.', true);
+        return false;
+    }
+
+    const commentAuthorId = activeCtx?.isSwitched ? activeCtx.activeProfileId : session.user.id;
+    let authorName = activeCtx?.isSwitched
+        ? (activeCtx.activeProfile?.full_name || 'Verified Page')
+        : (session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Member');
+
+    if (!activeCtx?.isSwitched) {
+        const { data: prof } = await client.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle();
+        if (prof?.full_name) authorName = prof.full_name;
+    }
+
+    inputEl.value = '';
+    if (submitBtnEl) submitBtnEl.disabled = true;
+
+    const { error } = await client.from('post_comments').insert([{
+        post_id: postId,
+        user_id: session.user.id,
+        author_id: commentAuthorId,
+        author_name: authorName,
+        comment_text: text
+    }]);
+
+    if (submitBtnEl) submitBtnEl.disabled = false;
+
+    if (error) {
+        if (typeof showToast === 'function') showToast(`Could not post comment: ${error.message}`, true);
+        inputEl.value = text;
+        return false;
+    }
+
+    if (typeof markPostAsViewed === 'function') {
+        markPostAsViewed(postId);
+    }
+
+    if (typeof commentCountsByPost === 'object' && commentCountsByPost !== null) {
+        commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
+    }
+
+    const inlineContainer = document.getElementById(`inline-comments-${postId}`);
+    if (inlineContainer && !inlineContainer.classList.contains('hidden') && typeof loadInlineComments === 'function') {
+        loadInlineComments(postId);
+    }
+
+    return true;
+}
+
+async function loadMobileModalComments(postId, { scrollToBottom = false } = {}) {
+    const listEl = document.getElementById('mobile-modal-comments-list');
+    if (!listEl) return;
+
+    const { data, error } = await fetchPostCommentsShared(postId);
 
     if (error) {
         listEl.innerHTML = `<p class="text-xs text-red-500 text-center py-3">Could not load comments.</p>`;
@@ -1342,82 +1499,568 @@ async function loadMobileModalComments(postId, { scrollToBottom = false } = {}) 
 
 async function submitMobileModalComment(e, postId) {
     e.preventDefault();
-    const client = window.supabaseClient;
-    if (!client) return;
-
-    const { data: { session } } = await client.auth.getSession();
-    if (!session?.user) {
-        if (typeof showToast === 'function') showToast('Please sign in to comment on posts.', true);
-        setTimeout(() => {
-            window.location.href = `signin.html?next=${encodeURIComponent(window.location.pathname.split('/').pop() + window.location.search)}`;
-        }, 800);
-        return;
-    }
-
     const input = document.getElementById('mobile-modal-comment-input');
     const submitBtn = document.getElementById('mobile-modal-comment-submit');
-    const text = input?.value.trim() || '';
-    if (!text) return;
+    const ok = await submitSharedCommentPayload(postId, input, submitBtn);
+    if (ok) {
+        await loadMobileModalComments(postId, { scrollToBottom: true });
+    }
+}
 
-    const activeCtx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
-    if (activeCtx?.isSwitched && !activeCtx.permissions?.can_post) {
-        if (typeof showToast === 'function') showToast('You do not have permission to comment on behalf of this verified page.', true);
+// ==========================================
+// MOBILE FULL-SCREEN VIDEO MODAL + SWIPE + COMMENT SHEET
+// ==========================================
+
+function getSharedAutoplayVideoEmbedUrl(url) {
+    const embed = getSharedYouTubeEmbedUrl(url);
+    if (!embed) return '';
+    if (embed.includes('youtube.com/embed/')) {
+        const sep = embed.includes('?') ? '&' : '?';
+        return `${embed}${sep}autoplay=1&playsinline=1&rel=0&modestbranding=1`;
+    }
+    return embed;
+}
+
+function getMobileVideoList() {
+    if (Array.isArray(window.allFeedPosts) && window.allFeedPosts.length > 0) {
+        window.allFeedPosts.forEach(p => {
+            if (p && p.post_type === 'video' && p.media_url && _sharedMobilePostRegistry.has(String(p.id))) {
+                if (!_sharedMobileVideoIds.includes(String(p.id))) {
+                    _sharedMobileVideoIds.push(String(p.id));
+                }
+            }
+        });
+    }
+    return _sharedMobileVideoIds.filter(id => _sharedMobilePostRegistry.has(String(id)));
+}
+
+function ensureMobileVideoModalDom() {
+    if (document.getElementById('accord-mobile-video-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'accord-mobile-video-modal';
+    modal.className = 'fixed inset-0 z-[46] bg-black hidden flex-col md:hidden overflow-hidden select-none';
+    modal.addEventListener('click', closeMobileModalMenus);
+    document.body.appendChild(modal);
+}
+
+function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
+    const modal = document.getElementById('accord-mobile-video-modal');
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (!modal || !entry) return;
+
+    const { post, options } = entry;
+    const {
+        myAvatarInitial = 'U',
+        authorHandle = '',
+        authorAvatarUrl = '',
+        canManage = false
+    } = options;
+
+    _mobileVideoCaptionExpanded = false;
+    const live = getLiveCardPostState(postId, options, post);
+    const postUrl = getPostShareUrl(post.id);
+    const dateFormatted = formatSharedFeedTimeAgo(post.created_at);
+    const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
+    const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
+    const authorProfileUrl = (!post.is_anonymous && post.author_id)
+        ? `user.html?id=${encodeURIComponent(post.author_id)}`
+        : null;
+
+    const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url || '');
+    const thumbUrl = getSharedVideoThumbnailUrl(post.media_url || '');
+    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '');
+
+    const videoList = getMobileVideoList();
+    const currentIdx = videoList.indexOf(String(postId));
+    const hasMultiple = videoList.length > 1;
+
+    const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
+        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
+
+    const avatarInner = `
+        <div class="relative w-9 h-9 rounded-full bg-white/20 text-white font-bold flex items-center justify-center text-sm shrink-0 ring-2 ring-white/80 overflow-hidden">
+            ${avatarVisual}
+            ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-black"><i class="fa-solid fa-check text-[7px]"></i></span>` : ''}
+        </div>
+    `;
+
+    const bodyText = String(post.body || '').trim();
+    const isLongCaption = bodyText.length > 90;
+
+    const playerHtml = isDirectVideo
+        ? `<video id="mobile-video-player" src="${escapeShareHtml(post.media_url)}" controls autoplay playsinline loop class="w-full max-h-[62dvh] object-contain bg-black"></video>`
+        : `<div class="w-full aspect-video bg-black shadow-2xl">
+               <iframe id="mobile-video-player" src="${escapeShareHtml(autoplayEmbedUrl)}" class="w-full h-full border-0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+           </div>`;
+
+    const ambientBgHtml = thumbUrl
+        ? `<img src="${escapeShareHtml(thumbUrl)}" alt="" class="absolute inset-0 w-full h-full object-cover blur-3xl scale-125 opacity-55 pointer-events-none">`
+        : `<div class="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-800 to-black pointer-events-none"></div>`;
+
+    modal.innerHTML = `
+        <!-- Ambient Blurred Backdrop -->
+        ${ambientBgHtml}
+        <div class="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/80 pointer-events-none"></div>
+
+        <!-- Top Overlay Bar -->
+        <div class="relative z-30 shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-between">
+            <button type="button" onclick="closeMobileVideoModal()" class="w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 active:bg-black/70 text-white flex items-center justify-center transition-colors" aria-label="Back to feed">
+                <i class="fa-solid fa-chevron-left text-lg"></i>
+            </button>
+
+            <div class="flex items-center gap-2">
+                ${hasMultiple && currentIdx !== -1 ? `
+                <span class="text-[11px] font-semibold text-white/80 bg-black/35 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                    ${currentIdx + 1} / ${videoList.length}
+                </span>` : ''}
+                <div class="relative">
+                    <button type="button" onclick="toggleMobileModalPostMenu(event, '${post.id}')" class="w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 active:bg-black/70 text-white flex items-center justify-center transition-colors" aria-label="Video options">
+                        <i class="fa-solid fa-ellipsis text-lg"></i>
+                    </button>
+                    <div id="mobile-modal-post-menu-${post.id}" onclick="event.stopPropagation()" class="mobile-modal-menu hidden absolute right-0 top-11 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40">
+                        <a href="${escapeShareHtml(postUrl)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
+                            <span>Open Full Post</span>
+                        </a>
+                        ${canManage ? `
+                        <button type="button" onclick="closeMobileModalMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
+                            <span>Edit Post</span>
+                        </button>
+                        <a href="promote.html?post=${encodeURIComponent(post.id)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-gold hover:bg-amber-50/70 flex items-center gap-2.5">
+                            <i class="fa-solid fa-bullhorn w-3.5 text-center"></i>
+                            <span>Promote Post</span>
+                        </a>` : ''}
+                        <button type="button" onclick="closeMobileModalMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                            <span>Send to Chat</span>
+                        </button>
+                        <button type="button" onclick="closeMobileModalMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                            <span>Copy Link / Share</span>
+                        </button>
+                        ${canManage ? `
+                        <button type="button" onclick="closeMobileModalMenus(); handleDeletePostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                            <i class="fa-regular fa-trash-can w-3.5 text-center"></i>
+                            <span>Delete Post</span>
+                        </button>` : `
+                        <button type="button" onclick="closeMobileModalMenus(); openReportModal('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                            <i class="fa-regular fa-flag w-3.5 text-center"></i>
+                            <span>Flag Post</span>
+                        </button>`}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Swipeable Video Stage -->
+        <div id="mobile-video-stage" class="relative z-10 flex-1 flex items-center justify-center touch-none transition-transform duration-200 ease-out" style="${slideDirection === 'up' ? 'transform: translateY(36px); opacity: 0.7;' : slideDirection === 'down' ? 'transform: translateY(-36px); opacity: 0.7;' : ''}">
+            ${playerHtml}
+
+            <!-- Right-Side Vertical Action Rail (Facebook Video Style) -->
+            <div class="absolute right-3 bottom-5 z-20 flex flex-col items-center gap-4">
+                <button type="button" onclick="handleMobileVideoLike('${post.id}')" id="mobile-video-like-btn-${post.id}" class="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Like video">
+                    <i class="${live.isLiked ? 'fa-solid text-rose-500' : 'fa-regular text-white'} fa-heart text-2xl drop-shadow"></i>
+                    <span id="mobile-video-like-count-${post.id}" class="text-[11px] font-bold text-white drop-shadow">${live.likesCount}</span>
+                </button>
+
+                <button type="button" onclick="openMobileVideoCommentsSheet('${post.id}')" class="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Open comments">
+                    <i class="fa-regular fa-comment text-white text-2xl drop-shadow"></i>
+                    <span id="mobile-video-comment-count-${post.id}" class="text-[11px] font-bold text-white drop-shadow">${live.commentsCount}</span>
+                </button>
+
+                <button type="button" onclick="handleRepostClick('${post.id}')" id="mobile-video-repost-btn-${post.id}" class="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Repost video">
+                    <i class="fa-solid fa-retweet text-2xl drop-shadow ${live.isReposted ? 'text-emerald-400' : 'text-white'}"></i>
+                    <span id="mobile-video-repost-count-${post.id}" class="text-[11px] font-bold text-white drop-shadow">${live.repostsCount}</span>
+                </button>
+
+                <div class="relative">
+                    <button type="button" onclick="toggleMobileModalShareMenu(event, '${post.id}')" class="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Share video">
+                        <i class="fa-solid fa-share text-white text-2xl drop-shadow"></i>
+                        <span class="text-[11px] font-bold text-white drop-shadow">Share</span>
+                    </button>
+                    <div id="mobile-modal-share-menu-${post.id}" onclick="event.stopPropagation()" class="mobile-modal-menu hidden absolute right-11 bottom-0 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40">
+                        <button type="button" onclick="closeMobileModalMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-accord-lightBlue/60 flex items-center gap-2.5">
+                            <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                            <span>Send to Chat</span>
+                        </button>
+                        <button type="button" onclick="closeMobileModalMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                            <span>Copy Link / Share</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom-Left Author & Caption Overlay -->
+            <div class="absolute left-3.5 right-16 bottom-4 z-20 text-white space-y-1.5">
+                <div class="flex items-center gap-2.5">
+                    ${authorProfileUrl ? `<a href="${escapeShareHtml(authorProfileUrl)}" class="shrink-0">${avatarInner}</a>` : avatarInner}
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            ${authorProfileUrl
+                                ? `<a href="${escapeShareHtml(authorProfileUrl)}" class="text-[14px] font-bold text-white hover:underline truncate drop-shadow">${escapeShareHtml(displayAuthor)}</a>`
+                                : `<span class="text-[14px] font-bold text-white truncate drop-shadow">${escapeShareHtml(displayAuthor)}</span>`}
+                            ${isVerifiedAuthor ? '<i class="fa-solid fa-circle-check text-sky-400 text-xs drop-shadow"></i>' : ''}
+                            ${authorHandle ? `<span class="text-[11px] text-white/75 truncate">${escapeShareHtml(authorHandle)}</span>` : ''}
+                        </div>
+                        <p class="text-[11px] text-white/75">${dateFormatted} · Video</p>
+                    </div>
+                </div>
+                ${bodyText ? `
+                <div class="text-[13px] text-white/95 leading-snug drop-shadow">
+                    <p id="mobile-video-caption-${post.id}" class="line-clamp-2 whitespace-pre-wrap break-words">${escapeShareHtml(bodyText)}</p>
+                    ${isLongCaption ? `<button type="button" id="mobile-video-caption-toggle-${post.id}" onclick="toggleMobileVideoCaption('${post.id}')" class="text-xs font-bold text-white/80 hover:text-white mt-0.5">... more</button>` : ''}
+                </div>` : ''}
+                ${hasMultiple ? `
+                <p class="text-[10px] text-white/60 flex items-center gap-1 pt-0.5">
+                    <i class="fa-solid fa-arrows-up-down text-[9px]"></i>
+                    <span>Swipe up or down for more videos</span>
+                </p>` : ''}
+            </div>
+        </div>
+
+        <!-- Bottom "Add a comment" Trigger Bar -->
+        <div class="relative z-20 shrink-0 px-3.5 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/75 border-t border-white/10">
+            <button type="button" onclick="openMobileVideoCommentsSheet('${post.id}', { focusInput: true })" class="w-full flex items-center justify-between bg-white/15 hover:bg-white/20 active:bg-white/25 text-white/80 rounded-full px-4 py-2.5 text-xs transition-colors">
+                <span>Add a comment...</span>
+                <i class="fa-regular fa-comment text-sm text-white/75"></i>
+            </button>
+        </div>
+
+        <!-- Scrollable Comment Bottom Sheet -->
+        <div id="mobile-video-comments-backdrop" onclick="closeMobileVideoCommentsSheet()" class="fixed inset-0 z-40 bg-black/45 hidden transition-opacity duration-200"></div>
+        <div id="mobile-video-comments-sheet" onclick="event.stopPropagation()" class="fixed inset-x-0 bottom-0 z-50 h-[72dvh] bg-white rounded-t-2xl shadow-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
+            <!-- Drag Handle & Header -->
+            <div id="mobile-video-sheet-header" class="shrink-0 pt-2.5 pb-2.5 px-4 border-b border-slate-200/80 touch-none">
+                <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-2.5"></div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-bold text-slate-900">All comments</h3>
+                        <span id="mobile-video-sheet-comment-count-${post.id}" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">${live.commentsCount}</span>
+                    </div>
+                    <button type="button" onclick="closeMobileVideoCommentsSheet()" class="w-8 h-8 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors" aria-label="Close comments">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Comments List -->
+            <div id="mobile-video-comments-scroll" class="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 bg-white">
+                <div id="mobile-video-comments-list" class="space-y-3">
+                    <p class="text-xs text-slate-400 text-center py-6">Loading comments...</p>
+                </div>
+            </div>
+
+            <!-- Sticky Comment Input -->
+            <div class="shrink-0 bg-white border-t border-slate-200 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
+                        ${escapeShareHtml(myAvatarInitial)}
+                    </div>
+                    <form onsubmit="submitMobileVideoComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                        <input type="text" id="mobile-video-comment-input" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                        <button type="submit" id="mobile-video-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const stage = document.getElementById('mobile-video-stage');
+    if (stage) {
+        if (slideDirection) {
+            requestAnimationFrame(() => {
+                stage.style.transform = 'translateY(0)';
+                stage.style.opacity = '1';
+            });
+        }
+        attachMobileVideoSwipeHandlers(stage);
+    }
+
+    const sheetHeader = document.getElementById('mobile-video-sheet-header');
+    if (sheetHeader) {
+        attachMobileVideoSheetDragHandlers(sheetHeader);
+    }
+}
+
+function toggleMobileVideoCaption(postId) {
+    const captionEl = document.getElementById(`mobile-video-caption-${postId}`);
+    const toggleBtn = document.getElementById(`mobile-video-caption-toggle-${postId}`);
+    if (!captionEl || !toggleBtn) return;
+    _mobileVideoCaptionExpanded = !_mobileVideoCaptionExpanded;
+    if (_mobileVideoCaptionExpanded) {
+        captionEl.classList.remove('line-clamp-2');
+        toggleBtn.textContent = 'less';
+    } else {
+        captionEl.classList.add('line-clamp-2');
+        toggleBtn.textContent = '... more';
+    }
+}
+
+function attachMobileVideoSwipeHandlers(stageEl) {
+    let startY = 0;
+    let startX = 0;
+    let currentDeltaY = 0;
+    let tracking = false;
+
+    stageEl.addEventListener('touchstart', (e) => {
+        if (_mobileVideoCommentsOpen || e.touches.length !== 1) return;
+        if (e.target && e.target.closest('button, a, .mobile-modal-menu')) return;
+        startY = e.touches[0].clientY;
+        startX = e.touches[0].clientX;
+        currentDeltaY = 0;
+        tracking = true;
+        stageEl.style.transition = 'none';
+    }, { passive: true });
+
+    stageEl.addEventListener('touchmove', (e) => {
+        if (!tracking || _mobileVideoCommentsOpen || e.touches.length !== 1) return;
+        const dy = e.touches[0].clientY - startY;
+        const dx = e.touches[0].clientX - startX;
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
+            currentDeltaY = dy;
+            stageEl.style.transform = `translateY(${Math.max(-140, Math.min(140, dy * 0.45))}px)`;
+        }
+    }, { passive: true });
+
+    stageEl.addEventListener('touchend', () => {
+        if (!tracking) return;
+        tracking = false;
+        stageEl.style.transition = 'transform 200ms ease-out, opacity 200ms ease-out';
+
+        const threshold = 55;
+        if (!_mobileVideoCommentsOpen && Math.abs(currentDeltaY) > threshold) {
+            if (currentDeltaY < 0) {
+                navigateMobileVideoByOffset(1);
+                return;
+            } else {
+                navigateMobileVideoByOffset(-1);
+                return;
+            }
+        }
+        stageEl.style.transform = 'translateY(0)';
+    }, { passive: true });
+}
+
+function attachMobileVideoSheetDragHandlers(headerEl) {
+    let startY = 0;
+    let deltaY = 0;
+    let dragging = false;
+    const sheet = document.getElementById('mobile-video-comments-sheet');
+    if (!sheet) return;
+
+    headerEl.addEventListener('touchstart', (e) => {
+        if (!_mobileVideoCommentsOpen || e.touches.length !== 1) return;
+        startY = e.touches[0].clientY;
+        deltaY = 0;
+        dragging = true;
+        sheet.style.transition = 'none';
+    }, { passive: true });
+
+    headerEl.addEventListener('touchmove', (e) => {
+        if (!dragging || e.touches.length !== 1) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 0) {
+            deltaY = dy;
+            sheet.style.transform = `translateY(${dy}px)`;
+        }
+    }, { passive: true });
+
+    headerEl.addEventListener('touchend', () => {
+        if (!dragging) return;
+        dragging = false;
+        sheet.style.transition = '';
+        if (deltaY > 75) {
+            closeMobileVideoCommentsSheet();
+        } else {
+            sheet.style.transform = '';
+        }
+    }, { passive: true });
+}
+
+function navigateMobileVideoByOffset(offset) {
+    if (!_activeMobileVideoId) return;
+    const videoList = getMobileVideoList();
+    const idx = videoList.indexOf(String(_activeMobileVideoId));
+    const stage = document.getElementById('mobile-video-stage');
+
+    if (idx === -1 || videoList.length <= 1) {
+        if (stage) stage.style.transform = 'translateY(0)';
         return;
     }
 
-    const commentAuthorId = activeCtx?.isSwitched ? activeCtx.activeProfileId : session.user.id;
-    let authorName = activeCtx?.isSwitched
-        ? (activeCtx.activeProfile?.full_name || 'Verified Page')
-        : (session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Member');
-
-    if (!activeCtx?.isSwitched) {
-        const { data: prof } = await client.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle();
-        if (prof?.full_name) authorName = prof.full_name;
+    const nextIdx = idx + offset;
+    if (nextIdx < 0 || nextIdx >= videoList.length) {
+        if (stage) stage.style.transform = 'translateY(0)';
+        if (typeof showToast === 'function' && nextIdx >= videoList.length) {
+            showToast('No more videos below.');
+        }
+        return;
     }
 
-    input.value = '';
-    if (submitBtn) submitBtn.disabled = true;
+    const nextPostId = videoList[nextIdx];
+    _activeMobileVideoId = String(nextPostId);
+    _mobileVideoCommentsOpen = false;
+    renderMobileVideoModalContent(nextPostId, { slideDirection: offset > 0 ? 'up' : 'down' });
 
-    const { error } = await client.from('post_comments').insert([{
-        post_id: postId,
-        user_id: session.user.id,
-        author_id: commentAuthorId,
-        author_name: authorName,
-        comment_text: text
-    }]);
+    if (typeof markPostAsViewed === 'function') {
+        markPostAsViewed(nextPostId);
+    }
+}
 
-    if (submitBtn) submitBtn.disabled = false;
+async function openMobileVideoModal(postId, options = {}) {
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (!entry) return;
 
-    if (error) {
-        if (typeof showToast === 'function') showToast(`Could not post comment: ${error.message}`, true);
-        input.value = text;
-        return;
+    ensureMobileVideoModalDom();
+    _activeMobileVideoId = String(postId);
+    _mobileVideoCommentsOpen = false;
+    renderMobileVideoModalContent(postId);
+
+    const modal = document.getElementById('accord-mobile-video-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+
+    if (!_mobileModalHistoryPushed) {
+        try {
+            window.history.pushState({ accordMobileVideoModal: String(postId) }, '');
+            _mobileModalHistoryPushed = true;
+        } catch (_) {}
     }
 
     if (typeof markPostAsViewed === 'function') {
         markPostAsViewed(postId);
     }
 
-    if (typeof commentCountsByPost === 'object' && commentCountsByPost !== null) {
-        commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
+    if (options.openComments) {
+        setTimeout(() => {
+            openMobileVideoCommentsSheet(postId, { focusInput: true });
+        }, 60);
+    }
+}
+
+function closeMobileVideoModal({ fromPopState = false } = {}) {
+    const modal = document.getElementById('accord-mobile-video-modal');
+    if (!modal || modal.classList.contains('hidden')) {
+        _activeMobileVideoId = null;
+        _mobileVideoCommentsOpen = false;
+        return;
     }
 
-    await loadMobileModalComments(postId, { scrollToBottom: true });
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    modal.innerHTML = '';
+    document.body.style.overflow = '';
+    _activeMobileVideoId = null;
+    _mobileVideoCommentsOpen = false;
 
-    const inlineContainer = document.getElementById(`inline-comments-${postId}`);
-    if (inlineContainer && !inlineContainer.classList.contains('hidden') && typeof loadInlineComments === 'function') {
-        loadInlineComments(postId);
+    if (!fromPopState && _mobileModalHistoryPushed) {
+        _mobileModalHistoryPushed = false;
+        if (window.history.state && window.history.state.accordMobileVideoModal) {
+            try {
+                window.history.back();
+            } catch (_) {}
+        }
+    } else {
+        _mobileModalHistoryPushed = false;
+    }
+}
+
+async function openMobileVideoCommentsSheet(postId, { focusInput = false } = {}) {
+    const sheet = document.getElementById('mobile-video-comments-sheet');
+    const backdrop = document.getElementById('mobile-video-comments-backdrop');
+    if (!sheet || !backdrop) return;
+
+    _mobileVideoCommentsOpen = true;
+    backdrop.classList.remove('hidden');
+    sheet.style.transform = '';
+    requestAnimationFrame(() => {
+        sheet.classList.remove('translate-y-full');
+    });
+
+    await loadMobileVideoComments(postId);
+
+    if (focusInput) {
+        setTimeout(() => {
+            document.getElementById('mobile-video-comment-input')?.focus();
+        }, 180);
+    }
+}
+
+function closeMobileVideoCommentsSheet() {
+    const sheet = document.getElementById('mobile-video-comments-sheet');
+    const backdrop = document.getElementById('mobile-video-comments-backdrop');
+    if (!sheet || !backdrop) return;
+
+    _mobileVideoCommentsOpen = false;
+    sheet.style.transform = '';
+    sheet.classList.add('translate-y-full');
+    backdrop.classList.add('hidden');
+}
+
+async function handleMobileVideoLike(postId) {
+    if (typeof togglePostLike === 'function') {
+        await togglePostLike(postId);
+    }
+    syncMobileModalFromRegistry(postId);
+}
+
+async function loadMobileVideoComments(postId, { scrollToBottom = false } = {}) {
+    const listEl = document.getElementById('mobile-video-comments-list');
+    if (!listEl) return;
+
+    const { data, error } = await fetchPostCommentsShared(postId);
+
+    if (error) {
+        listEl.innerHTML = `<p class="text-xs text-red-500 text-center py-4">Could not load comments.</p>`;
+        return;
+    }
+
+    const comments = data || [];
+    listEl.innerHTML = renderSharedCommentsHtml(comments);
+
+    const countEl = document.getElementById(`mobile-video-comment-count-${postId}`);
+    if (countEl) countEl.textContent = comments.length;
+    const sheetCountEl = document.getElementById(`mobile-video-sheet-comment-count-${postId}`);
+    if (sheetCountEl) sheetCountEl.textContent = comments.length;
+    const cardCountEl = document.getElementById(`comment-count-${postId}`);
+    if (cardCountEl) cardCountEl.textContent = comments.length;
+
+    if (scrollToBottom) {
+        const scrollArea = document.getElementById('mobile-video-comments-scroll');
+        if (scrollArea) {
+            scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
+        }
+    }
+}
+
+async function submitMobileVideoComment(e, postId) {
+    e.preventDefault();
+    const input = document.getElementById('mobile-video-comment-input');
+    const submitBtn = document.getElementById('mobile-video-comment-submit');
+    const ok = await submitSharedCommentPayload(postId, input, submitBtn);
+    if (ok) {
+        await loadMobileVideoComments(postId, { scrollToBottom: true });
     }
 }
 
 window.addEventListener('popstate', () => {
-    if (_activeMobilePostId && !(window.history.state && window.history.state.accordMobilePostModal === _activeMobilePostId)) {
+    if (_activeMobileVideoId && !(window.history.state && window.history.state.accordMobileVideoModal)) {
+        closeMobileVideoModal({ fromPopState: true });
+    }
+    if (_activeMobilePostId && !(window.history.state && window.history.state.accordMobilePostModal)) {
         closeMobileTextPostModal({ fromPopState: true });
     }
 });
 
 window.addEventListener('resize', () => {
-    if (_activeMobilePostId && window.innerWidth >= 768) {
-        closeMobileTextPostModal();
+    if (window.innerWidth >= 768) {
+        if (_activeMobileVideoId) closeMobileVideoModal();
+        if (_activeMobilePostId) closeMobileTextPostModal();
     }
 });
