@@ -442,8 +442,12 @@
             return;
         }
 
+        if (window.AccordAudioEmbed?.mountEmbeddedPlayer) {
+            window.AccordAudioEmbed.mountEmbeddedPlayer(bodyEl, target, { autoplay: true });
+            return;
+        }
         if (window.AccordAudioEmbed?.renderEmbeddedPlayerHtml) {
-            bodyEl.innerHTML = window.AccordAudioEmbed.renderEmbeddedPlayerHtml(target);
+            bodyEl.innerHTML = window.AccordAudioEmbed.renderEmbeddedPlayerHtml(target, { autoplay: true });
             return;
         }
 

@@ -553,7 +553,8 @@ function renderSharedEmbeddedPlayerHtml(target, opts = {}) {
     }
     if (!target || !target.embedUrl) return '';
     if (target.kind === 'audio') {
-        return `<audio controls preload="none" src="${escapeShareHtml(target.embedUrl)}" class="w-full"></audio>`;
+        const autoplayAttr = opts && opts.autoplay ? ' autoplay' : '';
+        return `<audio controls preload="none"${autoplayAttr} src="${escapeShareHtml(target.embedUrl)}" class="w-full"></audio>`;
     }
     if (target.kind === 'iframe') {
         const height = Number(target.height) || 360;
@@ -561,6 +562,21 @@ function renderSharedEmbeddedPlayerHtml(target, opts = {}) {
         return `<iframe src="${escapeShareHtml(target.embedUrl)}" title="${title}" style="height:${height}px;" class="block w-full border-0 rounded-lg bg-white" loading="lazy" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
     }
     return '';
+}
+
+function mountSharedEmbeddedPlayer(containerEl, target, opts = {}) {
+    if (!containerEl) return;
+    if (window.AccordAudioEmbed && typeof window.AccordAudioEmbed.mountEmbeddedPlayer === 'function') {
+        window.AccordAudioEmbed.mountEmbeddedPlayer(containerEl, target, opts);
+        return;
+    }
+    containerEl.innerHTML = renderSharedEmbeddedPlayerHtml(target, opts);
+    if (opts && opts.autoplay) {
+        const audioEl = containerEl.querySelector('audio');
+        if (audioEl && typeof audioEl.play === 'function') {
+            audioEl.play().catch(() => {});
+        }
+    }
 }
 
 function syncSharedAudioPrefButtons(panel, pref) {
@@ -605,7 +621,7 @@ function bindSharedAudioCardInteractions(card, target, title) {
                 pauseAllOtherAccordMedia(audioCard);
             }
             if (playerBody.dataset.loaded !== '1') {
-                playerBody.innerHTML = renderSharedEmbeddedPlayerHtml(target, { title });
+                mountSharedEmbeddedPlayer(playerBody, target, { title, autoplay: true });
                 playerBody.dataset.loaded = '1';
             }
             syncSharedAudioPrefButtons(panel, getSharedAudioPlaybackPreference());
