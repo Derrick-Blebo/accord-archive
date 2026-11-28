@@ -59,8 +59,8 @@ function ensureShareToChatModalDom() {
                 </button>
             </div>
             <div class="p-4 space-y-3 border-b border-slate-100">
-                <input type="text" id="share-chat-search" oninput="renderShareToChatTargets()" placeholder="Search conversations or people..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue">
-                <input type="text" id="share-chat-note" placeholder="Add an optional message..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-accord-blue">
+                <input type="text" id="share-chat-search" oninput="renderShareToChatTargets()" placeholder="Search conversations or people..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[16px] sm:text-xs focus:outline-none focus:border-accord-blue">
+                <input type="text" id="share-chat-note" placeholder="Add an optional message..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-[16px] sm:text-xs focus:outline-none focus:border-accord-blue">
             </div>
             <div id="share-chat-targets" class="p-3 overflow-y-auto space-y-1.5 max-h-72">
                 <p class="py-6 text-center text-xs text-accord-muted">Loading chats...</p>
@@ -769,8 +769,8 @@ function createSharedFeedCardElement(post, options = {}) {
                 <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
                     ${escapeShareHtml(myAvatarInitial)}
                 </div>
-                <form onsubmit="submitInlineComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                    <input type="text" id="inline-comment-input-${post.id}" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                <form onsubmit="submitInlineComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="inline-comment-input-${post.id}" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[13px] text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
                     <button type="submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
                         <i class="fa-solid fa-paper-plane"></i>
                     </button>
@@ -825,11 +825,11 @@ function ensureEditPostModalDom() {
             <form id="accord-edit-post-form" onsubmit="submitSharedEditPost(event)" class="space-y-3.5">
                 <div id="accord-edit-post-media-wrap" class="hidden">
                     <label class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Media URL</label>
-                    <input type="url" id="accord-edit-post-media" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
+                    <input type="url" id="accord-edit-post-media" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[16px] sm:text-xs focus:outline-none focus:border-accord-blue focus:bg-white">
                 </div>
                 <div>
                     <label id="accord-edit-post-body-label" class="block text-[11px] font-bold uppercase tracking-wider text-accord-slate mb-1">Content</label>
-                    <textarea id="accord-edit-post-body" rows="5" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
+                    <textarea id="accord-edit-post-body" rows="5" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[16px] sm:text-xs focus:outline-none focus:border-accord-blue focus:bg-white"></textarea>
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-2">
                     <button type="button" onclick="closeSharedEditPostModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-xs font-bold">Cancel</button>
@@ -850,16 +850,16 @@ function openSharedEditPostModal(post, onSaved) {
 
     const bodyInput = document.getElementById('accord-edit-post-body');
     const bodyLabel = document.getElementById('accord-edit-post-body-label');
-    if (bodyInput) {
-        bodyInput.value = post.body || '';
-        bodyInput.required = post.post_type !== 'audio';
-    }
-    if (bodyLabel) {
-        bodyLabel.textContent = post.post_type === 'audio' ? 'Content (Optional)' : 'Content *';
-    }
     const mediaWrap = document.getElementById('accord-edit-post-media-wrap');
     const mediaInput = document.getElementById('accord-edit-post-media');
     const needsMedia = post.post_type === 'video' || post.post_type === 'audio';
+    if (bodyInput) {
+        bodyInput.value = post.body || '';
+        bodyInput.required = !needsMedia;
+    }
+    if (bodyLabel) {
+        bodyLabel.textContent = needsMedia ? 'Content (Optional)' : 'Content *';
+    }
     mediaWrap?.classList.toggle('hidden', !needsMedia);
     if (mediaInput) {
         mediaInput.required = needsMedia;
@@ -1018,11 +1018,88 @@ function toggleMobileModalShareMenu(e, postId) {
     if (isHidden) menu.classList.remove('hidden');
 }
 
+let _lockedMobileBodyScrollY = 0;
+let _isMobileModalBodyLocked = false;
+
+function lockMobileModalBodyScroll() {
+    if (_isMobileModalBodyLocked) return;
+    _lockedMobileBodyScrollY = window.scrollY || window.pageYOffset || 0;
+    _isMobileModalBodyLocked = true;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${_lockedMobileBodyScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+}
+
+function unlockMobileModalBodyScroll() {
+    if (_activeMobilePostId || _activeMobileVideoId) return;
+    if (!_isMobileModalBodyLocked) return;
+    _isMobileModalBodyLocked = false;
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    window.scrollTo(0, _lockedMobileBodyScrollY);
+}
+
+function resetMobileModalViewportGeometry(modal) {
+    if (!modal) return;
+    modal.style.top = '';
+    modal.style.left = '';
+    modal.style.right = '';
+    modal.style.bottom = '';
+    modal.style.width = '';
+    modal.style.height = '';
+}
+
+function syncActiveMobileModalViewport() {
+    const textModal = document.getElementById('accord-mobile-post-modal');
+    const videoModal = document.getElementById('accord-mobile-video-modal');
+    const activeModals = [textModal, videoModal].filter((m) => m && !m.classList.contains('hidden'));
+    if (!activeModals.length) return;
+
+    const vv = window.visualViewport;
+    activeModals.forEach((modal) => {
+        if (vv) {
+            modal.style.top = `${vv.offsetTop}px`;
+            modal.style.left = `${vv.offsetLeft}px`;
+            modal.style.width = `${vv.width}px`;
+            modal.style.height = `${vv.height}px`;
+            modal.style.right = 'auto';
+            modal.style.bottom = 'auto';
+        } else {
+            modal.style.height = '100dvh';
+        }
+    });
+
+    if (videoModal && !videoModal.classList.contains('hidden')) {
+        const sheet = document.getElementById('mobile-video-comments-sheet');
+        if (sheet) {
+            if (vv && vv.height < window.innerHeight * 0.8) {
+                sheet.style.height = `${Math.max(240, Math.floor(vv.height * 0.9))}px`;
+            } else {
+                sheet.style.height = '';
+            }
+        }
+    }
+}
+
+if (typeof window !== 'undefined' && window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncActiveMobileModalViewport);
+    window.visualViewport.addEventListener('scroll', syncActiveMobileModalViewport);
+}
+
 function ensureMobileTextPostModalDom() {
     if (document.getElementById('accord-mobile-post-modal')) return;
     const modal = document.createElement('div');
     modal.id = 'accord-mobile-post-modal';
-    modal.className = 'fixed inset-0 z-[45] bg-white hidden flex-col md:hidden';
+    modal.className = 'fixed inset-0 z-[45] bg-white hidden flex-col md:hidden overflow-hidden';
     modal.addEventListener('click', closeMobileModalMenus);
     document.body.appendChild(modal);
 }
@@ -1116,7 +1193,7 @@ function renderMobileTextPostModalContent(postId) {
 
     modal.innerHTML = `
         <!-- Sticky Top Bar -->
-        <div class="shrink-0 bg-white border-b border-slate-200/80 px-2.5 py-2.5 flex items-center justify-between gap-2">
+        <div class="shrink-0 bg-white border-b border-slate-200/80 px-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 flex items-center justify-between gap-2">
             <div class="flex items-center gap-2 min-w-0 flex-1">
                 <button type="button" onclick="closeMobileTextPostModal()" class="w-9 h-9 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 transition-colors" aria-label="Back to feed">
                     <i class="fa-solid fa-chevron-left text-base"></i>
@@ -1253,8 +1330,8 @@ function renderMobileTextPostModalContent(postId) {
                 <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
                     ${escapeShareHtml(myAvatarInitial)}
                 </div>
-                <form onsubmit="submitMobileModalComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                    <input type="text" id="mobile-modal-comment-input" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                <form onsubmit="submitMobileModalComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="mobile-modal-comment-input" onfocus="setTimeout(syncActiveMobileModalViewport, 120)" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-xs leading-snug text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
                     <button type="submit" id="mobile-modal-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
                         <i class="fa-solid fa-paper-plane"></i>
                     </button>
@@ -1277,9 +1354,10 @@ async function openMobileTextPostModal(postId, options = {}) {
     renderMobileTextPostModalContent(postId);
 
     const modal = document.getElementById('accord-mobile-post-modal');
+    lockMobileModalBodyScroll();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    document.body.style.overflow = 'hidden';
+    syncActiveMobileModalViewport();
 
     if (!_mobileModalHistoryPushed) {
         try {
@@ -1311,8 +1389,9 @@ function closeMobileTextPostModal({ fromPopState = false } = {}) {
 
     modal.classList.add('hidden');
     modal.classList.remove('flex');
-    document.body.style.overflow = '';
+    resetMobileModalViewportGeometry(modal);
     _activeMobilePostId = null;
+    unlockMobileModalBodyScroll();
 
     if (!fromPopState && _mobileModalHistoryPushed) {
         _mobileModalHistoryPushed = false;
@@ -1730,8 +1809,8 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
         </div>
 
         <!-- Scrollable Comment Bottom Sheet -->
-        <div id="mobile-video-comments-backdrop" onclick="closeMobileVideoCommentsSheet()" class="fixed inset-0 z-40 bg-black/45 hidden transition-opacity duration-200"></div>
-        <div id="mobile-video-comments-sheet" onclick="event.stopPropagation()" class="fixed inset-x-0 bottom-0 z-50 h-[72dvh] bg-white rounded-t-2xl shadow-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
+        <div id="mobile-video-comments-backdrop" onclick="closeMobileVideoCommentsSheet()" class="absolute inset-0 z-40 bg-black/45 hidden transition-opacity duration-200"></div>
+        <div id="mobile-video-comments-sheet" onclick="event.stopPropagation()" class="absolute inset-x-0 bottom-0 z-50 h-[72%] max-h-[92%] bg-white rounded-t-2xl shadow-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
             <!-- Drag Handle & Header -->
             <div id="mobile-video-sheet-header" class="shrink-0 pt-2.5 pb-2.5 px-4 border-b border-slate-200/80 touch-none">
                 <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-2.5"></div>
@@ -1759,8 +1838,8 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
                     <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
                         ${escapeShareHtml(myAvatarInitial)}
                     </div>
-                    <form onsubmit="submitMobileVideoComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                        <input type="text" id="mobile-video-comment-input" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                    <form onsubmit="submitMobileVideoComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                        <input type="text" id="mobile-video-comment-input" onfocus="setTimeout(syncActiveMobileModalViewport, 120)" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-xs leading-snug text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
                         <button type="submit" id="mobile-video-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
                             <i class="fa-solid fa-paper-plane"></i>
                         </button>
@@ -1922,9 +2001,10 @@ async function openMobileVideoModal(postId, options = {}) {
     renderMobileVideoModalContent(postId);
 
     const modal = document.getElementById('accord-mobile-video-modal');
+    lockMobileModalBodyScroll();
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    document.body.style.overflow = 'hidden';
+    syncActiveMobileModalViewport();
 
     if (!_mobileModalHistoryPushed) {
         try {
@@ -1955,9 +2035,10 @@ function closeMobileVideoModal({ fromPopState = false } = {}) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
     modal.innerHTML = '';
-    document.body.style.overflow = '';
+    resetMobileModalViewportGeometry(modal);
     _activeMobileVideoId = null;
     _mobileVideoCommentsOpen = false;
+    unlockMobileModalBodyScroll();
 
     if (!fromPopState && _mobileModalHistoryPushed) {
         _mobileModalHistoryPushed = false;
@@ -1979,6 +2060,7 @@ async function openMobileVideoCommentsSheet(postId, { focusInput = false } = {})
     _mobileVideoCommentsOpen = true;
     backdrop.classList.remove('hidden');
     sheet.style.transform = '';
+    syncActiveMobileModalViewport();
     requestAnimationFrame(() => {
         sheet.classList.remove('translate-y-full');
     });
@@ -1999,6 +2081,7 @@ function closeMobileVideoCommentsSheet() {
 
     _mobileVideoCommentsOpen = false;
     sheet.style.transform = '';
+    sheet.style.height = '';
     sheet.classList.add('translate-y-full');
     backdrop.classList.add('hidden');
 }

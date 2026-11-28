@@ -1201,15 +1201,17 @@ function togglePostTypeFields() {
     }
     const contentInput = document.getElementById('post-content');
     const contentLabel = document.getElementById('post-content-label');
-    const isAudio = type === 'audio';
+    const isContentOptional = needsUrl;
     if (contentInput) {
-        contentInput.required = !isAudio;
-        contentInput.placeholder = isAudio
-            ? 'Add an optional message, reflection, or sermon note...'
+        contentInput.required = !isContentOptional;
+        contentInput.placeholder = isContentOptional
+            ? (type === 'audio'
+                ? 'Add an optional message, reflection, or sermon note...'
+                : 'Add an optional message, reflection, or video note...')
             : 'Write your testimony, reflection, or text post...';
     }
     if (contentLabel) {
-        contentLabel.textContent = isAudio ? 'Message / Story (Optional)' : 'Message / Story *';
+        contentLabel.textContent = isContentOptional ? 'Message / Story (Optional)' : 'Message / Story *';
     }
     const urlLabel = document.getElementById('post-url-label');
     if (urlLabel) {
