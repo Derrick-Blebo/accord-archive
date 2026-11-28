@@ -437,6 +437,10 @@ function renderSharedCommentsHtml(comments) {
     }).join('');
 }
 
+const _sharedMobilePostRegistry = new Map();
+let _activeMobilePostId = null;
+let _mobileModalHistoryPushed = false;
+
 function createSharedFeedCardElement(post, options = {}) {
     const {
         repost = null,
@@ -462,6 +466,29 @@ function createSharedFeedCardElement(post, options = {}) {
         Array.isArray(window.editableFeedPageIds) &&
         window.editableFeedPageIds.includes(String(post.author_id))
     );
+
+    const isTextPost = post.post_type === 'text' || post.post_type === 'testimony';
+    const enableMobileFullscreen = showOpenFullPostLink !== false && isTextPost;
+    if (enableMobileFullscreen) {
+        _sharedMobilePostRegistry.set(String(post.id), {
+            post,
+            options: {
+                repost,
+                isLiked,
+                isReposted,
+                commentsCount,
+                myAvatarInitial,
+                authorHandle,
+                authorAvatarUrl,
+                reposterHandle,
+                currentUserId: resolvedViewerId,
+                canManage
+            }
+        });
+        if (_activeMobilePostId && String(_activeMobilePostId) === String(post.id)) {
+            setTimeout(() => syncMobileModalFromRegistry(String(post.id)), 0);
+        }
+    }
 
     const card = document.createElement('article');
     card.className = 'bg-white border border-slate-200/80 rounded-xl sm:rounded-2xl shadow-sm overflow-visible';
@@ -634,7 +661,7 @@ function createSharedFeedCardElement(post, options = {}) {
 
         <!-- Post Content -->
         ${shownBody ? `
-        <div class="px-4 pb-3 space-y-1.5">
+        <div ${enableMobileFullscreen ? `onclick="handleSharedTextPostBodyClick(event, '${post.id}')" class="px-4 pb-3 space-y-1.5 cursor-pointer md:cursor-auto active:bg-slate-50/70 md:active:bg-transparent transition-colors"` : `class="px-4 pb-3 space-y-1.5"`}>
             <p id="post-body-${post.id}" class="text-[14px] text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeShareHtml(shownBody)}</p>
             ${isLongBody ? `<button type="button" id="post-see-more-${post.id}" onclick="toggleExpandPostBody('${post.id}')" class="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline">See more</button>` : ''}
         </div>` : ''}
@@ -651,7 +678,7 @@ function createSharedFeedCardElement(post, options = {}) {
                 <span id="like-count-${post.id}">${likesCount}</span>
             </div>
             <div class="flex items-center gap-3">
-                <button type="button" onclick="toggleInlineComments('${post.id}')" class="hover:underline">
+                <button type="button" onclick="handleSharedCommentTrigger('${post.id}')" class="hover:underline">
                     <span id="comment-count-${post.id}">${commentsCount}</span> ${commentsCount === 1 ? 'comment' : 'comments'}
                 </button>
                 <span id="repost-count-label-${post.id}">${repostsCount} ${repostsCount === 1 ? 'repost' : 'reposts'}</span>
@@ -665,7 +692,7 @@ function createSharedFeedCardElement(post, options = {}) {
                 <span>Like</span>
             </button>
 
-            <button type="button" onclick="toggleInlineComments('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
+            <button type="button" onclick="handleSharedCommentTrigger('${post.id}')" class="py-2 rounded-lg hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] font-semibold text-slate-600 transition-colors">
                 <i class="fa-regular fa-comment text-sm"></i>
                 <span>Comment</span>
             </button>
@@ -885,5 +912,512 @@ async function executeSharedDeletePost(postId, onDeleted) {
     }
 
     if (typeof showToast === 'function') showToast('Post deleted.');
+    if (_activeMobilePostId && String(_activeMobilePostId) === String(postId)) {
+        closeMobileTextPostModal();
+    }
     if (typeof onDeleted === 'function') onDeleted(postId);
 }
+
+// ==========================================
+// MOBILE FULL-SCREEN TEXT POST MODAL
+// ==========================================
+
+function handleSharedTextPostBodyClick(e, postId) {
+    if (window.innerWidth >= 768) return;
+    if (e.target && e.target.closest('a, button, input, textarea, select')) return;
+    openMobileTextPostModal(postId);
+}
+
+function handleSharedCommentTrigger(postId) {
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (entry && window.innerWidth < 768) {
+        openMobileTextPostModal(postId, { focusComment: true });
+        return;
+    }
+    if (typeof toggleInlineComments === 'function') {
+        toggleInlineComments(postId);
+    }
+}
+
+function closeMobileModalMenus() {
+    document.querySelectorAll('.mobile-modal-menu').forEach(el => el.classList.add('hidden'));
+}
+
+function toggleMobileModalPostMenu(e, postId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`mobile-modal-post-menu-${postId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    closeMobileModalMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+function toggleMobileModalShareMenu(e, postId) {
+    e.stopPropagation();
+    const menu = document.getElementById(`mobile-modal-share-menu-${postId}`);
+    if (!menu) return;
+    const isHidden = menu.classList.contains('hidden');
+    closeMobileModalMenus();
+    if (isHidden) menu.classList.remove('hidden');
+}
+
+function ensureMobileTextPostModalDom() {
+    if (document.getElementById('accord-mobile-post-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'accord-mobile-post-modal';
+    modal.className = 'fixed inset-0 z-[45] bg-white hidden flex-col md:hidden';
+    modal.addEventListener('click', closeMobileModalMenus);
+    document.body.appendChild(modal);
+}
+
+function getLiveCardPostState(postId, fallbackOptions = {}, post = {}) {
+    const likeCountEl = document.getElementById(`like-count-${postId}`);
+    const likeBtnEl = document.getElementById(`like-btn-${postId}`);
+    const commentCountEl = document.getElementById(`comment-count-${postId}`);
+    const repostCountEl = document.getElementById(`repost-count-label-${postId}`);
+    const repostBtnEl = document.getElementById(`repost-btn-${postId}`);
+
+    const likesCount = likeCountEl ? (Number(likeCountEl.textContent) || 0) : (Number(post.likes_count) || 0);
+    const isLiked = likeBtnEl ? likeBtnEl.classList.contains('text-rose-600') : Boolean(fallbackOptions.isLiked);
+    const commentsCount = commentCountEl ? (Number(commentCountEl.textContent) || 0) : (Number(fallbackOptions.commentsCount) || 0);
+    const repostsCount = repostCountEl
+        ? (parseInt(repostCountEl.textContent, 10) || 0)
+        : (Number(post.reposts_count) || 0);
+    const isReposted = repostBtnEl ? repostBtnEl.classList.contains('text-emerald-600') : Boolean(fallbackOptions.isReposted);
+
+    return { likesCount, isLiked, commentsCount, repostsCount, isReposted };
+}
+
+function renderMobileTextPostModalContent(postId) {
+    const modal = document.getElementById('accord-mobile-post-modal');
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (!modal || !entry) return;
+
+    const { post, options } = entry;
+    const {
+        repost = null,
+        myAvatarInitial = 'U',
+        authorHandle = '',
+        authorAvatarUrl = '',
+        reposterHandle = '',
+        canManage = false
+    } = options;
+
+    const live = getLiveCardPostState(postId, options, post);
+    const postUrl = getPostShareUrl(post.id);
+    const dateFormatted = formatSharedFeedTimeAgo(post.created_at);
+    const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Anonymous');
+    const isVerifiedAuthor = post.author_role === 'ministry_minister' && !post.is_anonymous;
+    const authorProfileUrl = (!post.is_anonymous && post.author_id)
+        ? `user.html?id=${encodeURIComponent(post.author_id)}`
+        : null;
+    const typeMeta = getSharedPostTypeMeta(post.post_type);
+    const bodyText = String(post.body || '');
+    const linkedBookId = extractSharedBookId(bodyText);
+
+    const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
+        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
+
+    const avatarInner = `
+        <div class="relative w-9 h-9 rounded-full bg-accord-lightBlue text-accord-blue font-bold flex items-center justify-center text-sm shrink-0">
+            ${avatarVisual}
+            ${isVerifiedAuthor ? `<span title="Verified Ministry / Minister" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-accord-blue text-white flex items-center justify-center ring-2 ring-white"><i class="fa-solid fa-check text-[7px]"></i></span>` : ''}
+        </div>
+    `;
+
+    const authorAvatarHtml = authorProfileUrl
+        ? `<a href="${escapeShareHtml(authorProfileUrl)}" class="shrink-0">${avatarInner}</a>`
+        : avatarInner;
+
+    const authorNameHtml = authorProfileUrl
+        ? `<a href="${escapeShareHtml(authorProfileUrl)}" class="text-[14px] font-bold text-slate-900 hover:underline truncate">${escapeShareHtml(displayAuthor)}</a>`
+        : `<span class="text-[14px] font-bold text-slate-900 truncate">${escapeShareHtml(displayAuthor)}</span>`;
+
+    const handleHtml = (!post.is_anonymous && authorHandle)
+        ? `<span class="text-[11px] text-slate-500 font-medium truncate">${escapeShareHtml(authorHandle)}</span>`
+        : '';
+
+    let repostBannerHtml = '';
+    if (repost) {
+        const reposterName = repost.profiles?.full_name || repost.reposter_name || 'Member';
+        const repHandle = repost.profiles?.handle || reposterHandle || '';
+        const reposterUrl = `user.html?id=${encodeURIComponent(repost.user_id)}`;
+        const quoteHtml = repost.quote_text
+            ? `<p class="text-xs italic text-slate-700 bg-slate-50 border-l-2 border-emerald-500 pl-3 py-1.5 rounded-r-lg mt-1.5">"${escapeShareHtml(repost.quote_text)}"</p>`
+            : '';
+        repostBannerHtml = `
+            <div class="px-4 pt-3 pb-2 border-b border-slate-100 bg-slate-50/50">
+                <a href="${escapeShareHtml(reposterUrl)}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-emerald-700 flex-wrap">
+                    <i class="fa-solid fa-retweet text-emerald-600"></i>
+                    <span><strong class="text-slate-900">${escapeShareHtml(reposterName)}</strong>${repHandle ? ` <span class="text-slate-400 font-normal">${escapeShareHtml(repHandle)}</span>` : ''} reposted</span>
+                </a>
+                ${quoteHtml}
+            </div>
+        `;
+    }
+
+    modal.innerHTML = `
+        <!-- Sticky Top Bar -->
+        <div class="shrink-0 bg-white border-b border-slate-200/80 px-2.5 py-2.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+                <button type="button" onclick="closeMobileTextPostModal()" class="w-9 h-9 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 transition-colors" aria-label="Back to feed">
+                    <i class="fa-solid fa-chevron-left text-base"></i>
+                </button>
+                ${authorAvatarHtml}
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        ${authorNameHtml}
+                        ${isVerifiedAuthor ? '<i class="fa-solid fa-circle-check text-accord-blue text-[11px]" title="Verified Ministry / Minister"></i>' : ''}
+                        ${handleHtml}
+                    </div>
+                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span>${dateFormatted}</span>
+                        ${post.edited_at ? `<span class="text-[10px] text-slate-400 italic">(edited)</span>` : ''}
+                        <span>·</span>
+                        <span class="inline-flex items-center gap-1 font-semibold ${typeMeta.textColor}">
+                            <i class="fa-solid ${typeMeta.icon} text-[10px]"></i>
+                            <span>${typeMeta.label}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="relative shrink-0">
+                <button type="button" onclick="toggleMobileModalPostMenu(event, '${post.id}')" class="w-9 h-9 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" aria-label="Post options">
+                    <i class="fa-solid fa-ellipsis text-base"></i>
+                </button>
+                <div id="mobile-modal-post-menu-${post.id}" onclick="event.stopPropagation()" class="mobile-modal-menu hidden absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                    <a href="${escapeShareHtml(postUrl)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
+                        <span>Open Full Post</span>
+                    </a>
+                    ${canManage ? `
+                    <button type="button" onclick="closeMobileModalMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
+                        <span>Edit Post</span>
+                    </button>
+                    <a href="promote.html?post=${encodeURIComponent(post.id)}" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-accord-gold hover:bg-amber-50/70 flex items-center gap-2.5">
+                        <i class="fa-solid fa-bullhorn w-3.5 text-center"></i>
+                        <span>Promote Post</span>
+                    </a>` : ''}
+                    <button type="button" onclick="closeMobileModalMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                        <span>Send to Chat</span>
+                    </button>
+                    <button type="button" onclick="closeMobileModalMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                        <span>Copy Link / Share</span>
+                    </button>
+                    ${canManage ? `
+                    <button type="button" onclick="closeMobileModalMenus(); handleDeletePostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                        <i class="fa-regular fa-trash-can w-3.5 text-center"></i>
+                        <span>Delete Post</span>
+                    </button>` : `
+                    <button type="button" onclick="closeMobileModalMenus(); openReportModal('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 border-t border-slate-100 mt-1 pt-2">
+                        <i class="fa-regular fa-flag w-3.5 text-center"></i>
+                        <span>Flag Post</span>
+                    </button>`}
+                </div>
+            </div>
+        </div>
+
+        <!-- Scrollable Full Post + All Comments -->
+        <div id="mobile-modal-scroll-area" class="flex-1 overflow-y-auto overscroll-contain bg-white">
+            ${repostBannerHtml}
+
+            <div class="px-4 pt-4 pb-3 space-y-3">
+                <p id="mobile-modal-post-body-${post.id}" class="text-[16px] text-slate-900 leading-relaxed whitespace-pre-wrap break-words">${escapeShareHtml(bodyText)}</p>
+                ${linkedBookId ? `<div class="feed-book-link-preview" data-book-id="${escapeShareHtml(linkedBookId)}"></div>` : ''}
+            </div>
+
+            <!-- Engagement Summary Row -->
+            <div class="px-4 py-2 flex items-center justify-between text-xs text-slate-500">
+                <div class="flex items-center gap-1.5">
+                    <span class="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px]">
+                        <i class="fa-solid fa-heart"></i>
+                    </span>
+                    <span id="mobile-modal-like-count-${post.id}">${live.likesCount}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="mobile-modal-comment-count-label-${post.id}">
+                        <span id="mobile-modal-comment-count-${post.id}">${live.commentsCount}</span> ${live.commentsCount === 1 ? 'comment' : 'comments'}
+                    </span>
+                    <span id="mobile-modal-repost-count-label-${post.id}">${live.repostsCount} ${live.repostsCount === 1 ? 'repost' : 'reposts'}</span>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="mx-4 border-t border-b border-slate-200/80 py-1 grid grid-cols-4 gap-1">
+                <button type="button" onclick="handleMobileModalLike('${post.id}')" id="mobile-modal-like-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isLiked ? 'text-rose-600' : 'text-slate-600'}">
+                    <i class="${live.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm"></i>
+                    <span>Like</span>
+                </button>
+
+                <button type="button" onclick="document.getElementById('mobile-modal-comment-input')?.focus()" class="py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors">
+                    <i class="fa-regular fa-comment text-sm"></i>
+                    <span>Comment</span>
+                </button>
+
+                <button type="button" onclick="handleRepostClick('${post.id}')" id="mobile-modal-repost-btn-${post.id}" class="py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isReposted ? 'text-emerald-600' : 'text-slate-600'}">
+                    <i class="fa-solid fa-retweet text-sm"></i>
+                    <span>Repost</span>
+                </button>
+
+                <div class="relative">
+                    <button type="button" onclick="toggleMobileModalShareMenu(event, '${post.id}')" class="w-full py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors">
+                        <i class="fa-solid fa-share text-sm"></i>
+                        <span>Share</span>
+                    </button>
+                    <div id="mobile-modal-share-menu-${post.id}" onclick="event.stopPropagation()" class="mobile-modal-menu hidden absolute right-0 bottom-11 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30">
+                        <button type="button" onclick="closeMobileModalMenus(); handleSendPostToChat('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-accord-lightBlue/60 flex items-center gap-2.5">
+                            <i class="fa-regular fa-paper-plane w-3.5 text-center text-accord-blue"></i>
+                            <span>Send to Chat</span>
+                        </button>
+                        <button type="button" onclick="closeMobileModalMenus(); handleShareClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="fa-solid fa-link w-3.5 text-center text-emerald-600"></i>
+                            <span>Copy Link / Share</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Comments Section -->
+            <div class="px-4 py-3.5 space-y-3 pb-6">
+                <div id="mobile-modal-comments-list" class="space-y-3">
+                    <p class="text-xs text-slate-400 text-center py-4">Loading comments...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sticky Bottom Comment Input -->
+        <div class="shrink-0 bg-white border-t border-slate-200 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
+                    ${escapeShareHtml(myAvatarInitial)}
+                </div>
+                <form onsubmit="submitMobileModalComment(event, '${post.id}')" class="flex-1 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                    <input type="text" id="mobile-modal-comment-input" placeholder="Write a comment..." class="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                    <button type="submit" id="mobile-modal-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    `;
+
+    if (modal.querySelector('.feed-book-link-preview[data-book-id]')) {
+        hydrateSharedBookLinkPreviews(modal);
+    }
+}
+
+async function openMobileTextPostModal(postId, options = {}) {
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (!entry) return;
+
+    ensureMobileTextPostModalDom();
+    _activeMobilePostId = String(postId);
+    renderMobileTextPostModalContent(postId);
+
+    const modal = document.getElementById('accord-mobile-post-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+
+    if (!_mobileModalHistoryPushed) {
+        try {
+            window.history.pushState({ accordMobilePostModal: String(postId) }, '');
+            _mobileModalHistoryPushed = true;
+        } catch (_) {}
+    }
+
+    if (typeof markPostAsViewed === 'function') {
+        markPostAsViewed(postId);
+    }
+
+    await loadMobileModalComments(postId);
+
+    if (options.focusComment) {
+        setTimeout(() => {
+            document.getElementById('mobile-modal-comment-input')?.focus();
+        }, 60);
+    }
+}
+
+function closeMobileTextPostModal({ fromPopState = false } = {}) {
+    const modal = document.getElementById('accord-mobile-post-modal');
+    if (!modal || modal.classList.contains('hidden')) {
+        _activeMobilePostId = null;
+        _mobileModalHistoryPushed = false;
+        return;
+    }
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    _activeMobilePostId = null;
+
+    if (!fromPopState && _mobileModalHistoryPushed) {
+        _mobileModalHistoryPushed = false;
+        if (window.history.state && window.history.state.accordMobilePostModal) {
+            try {
+                window.history.back();
+            } catch (_) {}
+        }
+    } else {
+        _mobileModalHistoryPushed = false;
+    }
+}
+
+function syncMobileModalFromRegistry(postId) {
+    if (!_activeMobilePostId || String(_activeMobilePostId) !== String(postId)) return;
+    const entry = _sharedMobilePostRegistry.get(String(postId));
+    if (!entry) return;
+
+    const { post, options } = entry;
+    const live = getLiveCardPostState(postId, options, post);
+
+    const bodyEl = document.getElementById(`mobile-modal-post-body-${postId}`);
+    if (bodyEl) bodyEl.textContent = String(post.body || '');
+
+    const likeCountEl = document.getElementById(`mobile-modal-like-count-${postId}`);
+    if (likeCountEl) likeCountEl.textContent = live.likesCount;
+
+    const likeBtnEl = document.getElementById(`mobile-modal-like-btn-${postId}`);
+    if (likeBtnEl) {
+        likeBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isLiked ? 'text-rose-600' : 'text-slate-600'}`;
+        const icon = likeBtnEl.querySelector('i');
+        if (icon) icon.className = `${live.isLiked ? 'fa-solid' : 'fa-regular'} fa-heart text-sm`;
+    }
+
+    const repostLabelEl = document.getElementById(`mobile-modal-repost-count-label-${postId}`);
+    if (repostLabelEl) repostLabelEl.textContent = `${live.repostsCount} ${live.repostsCount === 1 ? 'repost' : 'reposts'}`;
+
+    const repostBtnEl = document.getElementById(`mobile-modal-repost-btn-${postId}`);
+    if (repostBtnEl) {
+        repostBtnEl.className = `py-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors ${live.isReposted ? 'text-emerald-600' : 'text-slate-600'}`;
+    }
+}
+
+async function handleMobileModalLike(postId) {
+    if (typeof togglePostLike === 'function') {
+        await togglePostLike(postId);
+    }
+    syncMobileModalFromRegistry(postId);
+}
+
+async function loadMobileModalComments(postId, { scrollToBottom = false } = {}) {
+    const listEl = document.getElementById('mobile-modal-comments-list');
+    const client = window.supabaseClient;
+    if (!listEl || !client) return;
+
+    const { data, error } = await client
+        .from('post_comments')
+        .select('id, author_name, comment_text, created_at')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        listEl.innerHTML = `<p class="text-xs text-red-500 text-center py-3">Could not load comments.</p>`;
+        return;
+    }
+
+    const comments = data || [];
+    listEl.innerHTML = renderSharedCommentsHtml(comments);
+
+    const countLabelEl = document.getElementById(`mobile-modal-comment-count-label-${postId}`);
+    if (countLabelEl) {
+        countLabelEl.innerHTML = `<span id="mobile-modal-comment-count-${postId}">${comments.length}</span> ${comments.length === 1 ? 'comment' : 'comments'}`;
+    }
+    const cardCountEl = document.getElementById(`comment-count-${postId}`);
+    if (cardCountEl) cardCountEl.textContent = comments.length;
+
+    if (scrollToBottom) {
+        const scrollArea = document.getElementById('mobile-modal-scroll-area');
+        if (scrollArea) {
+            scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
+        }
+    }
+}
+
+async function submitMobileModalComment(e, postId) {
+    e.preventDefault();
+    const client = window.supabaseClient;
+    if (!client) return;
+
+    const { data: { session } } = await client.auth.getSession();
+    if (!session?.user) {
+        if (typeof showToast === 'function') showToast('Please sign in to comment on posts.', true);
+        setTimeout(() => {
+            window.location.href = `signin.html?next=${encodeURIComponent(window.location.pathname.split('/').pop() + window.location.search)}`;
+        }, 800);
+        return;
+    }
+
+    const input = document.getElementById('mobile-modal-comment-input');
+    const submitBtn = document.getElementById('mobile-modal-comment-submit');
+    const text = input?.value.trim() || '';
+    if (!text) return;
+
+    const activeCtx = typeof window.getAccordActiveContext === 'function' ? window.getAccordActiveContext() : null;
+    if (activeCtx?.isSwitched && !activeCtx.permissions?.can_post) {
+        if (typeof showToast === 'function') showToast('You do not have permission to comment on behalf of this verified page.', true);
+        return;
+    }
+
+    const commentAuthorId = activeCtx?.isSwitched ? activeCtx.activeProfileId : session.user.id;
+    let authorName = activeCtx?.isSwitched
+        ? (activeCtx.activeProfile?.full_name || 'Verified Page')
+        : (session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Member');
+
+    if (!activeCtx?.isSwitched) {
+        const { data: prof } = await client.from('profiles').select('full_name').eq('id', session.user.id).maybeSingle();
+        if (prof?.full_name) authorName = prof.full_name;
+    }
+
+    input.value = '';
+    if (submitBtn) submitBtn.disabled = true;
+
+    const { error } = await client.from('post_comments').insert([{
+        post_id: postId,
+        user_id: session.user.id,
+        author_id: commentAuthorId,
+        author_name: authorName,
+        comment_text: text
+    }]);
+
+    if (submitBtn) submitBtn.disabled = false;
+
+    if (error) {
+        if (typeof showToast === 'function') showToast(`Could not post comment: ${error.message}`, true);
+        input.value = text;
+        return;
+    }
+
+    if (typeof markPostAsViewed === 'function') {
+        markPostAsViewed(postId);
+    }
+
+    if (typeof commentCountsByPost === 'object' && commentCountsByPost !== null) {
+        commentCountsByPost[String(postId)] = (commentCountsByPost[String(postId)] || 0) + 1;
+    }
+
+    await loadMobileModalComments(postId, { scrollToBottom: true });
+
+    const inlineContainer = document.getElementById(`inline-comments-${postId}`);
+    if (inlineContainer && !inlineContainer.classList.contains('hidden') && typeof loadInlineComments === 'function') {
+        loadInlineComments(postId);
+    }
+}
+
+window.addEventListener('popstate', () => {
+    if (_activeMobilePostId && !(window.history.state && window.history.state.accordMobilePostModal === _activeMobilePostId)) {
+        closeMobileTextPostModal({ fromPopState: true });
+    }
+});
+
+window.addEventListener('resize', () => {
+    if (_activeMobilePostId && window.innerWidth >= 768) {
+        closeMobileTextPostModal();
+    }
+});
