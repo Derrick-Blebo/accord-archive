@@ -370,7 +370,7 @@ async function hydrateSharedAudioLinkPreviews(rootEl = document) {
             titleEl.textContent = meta.title;
         }
         if (meta.image && thumbWrap) {
-            thumbWrap.innerHTML = `<img src="${escapeShareHtml(meta.image)}" alt="${escapeShareHtml(meta.title || 'Audio cover')}" class="w-full h-full object-cover">`;
+            thumbWrap.innerHTML = `<img loading="lazy" decoding="async" src="${escapeShareHtml(meta.image)}" alt="${escapeShareHtml(meta.title || 'Audio cover')}" class="w-full h-full object-cover">`;
         }
     }));
 }
@@ -536,7 +536,7 @@ function createSharedFeedCardElement(post, options = {}) {
     }
 
     const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
-        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
         : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
 
     const avatarInner = `
@@ -565,38 +565,59 @@ function createSharedFeedCardElement(post, options = {}) {
         const embedUrl = getSharedYouTubeEmbedUrl(post.media_url);
         const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url);
         const thumbUrl = getSharedVideoThumbnailUrl(post.media_url);
-        const desktopVideoHtml = isDirectVideo
-            ? `<video controls playsinline preload="metadata" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-contain"></video>`
-            : `<iframe src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>`;
+        const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 768;
 
         if (showOpenFullPostLink !== false) {
-            const mobilePreviewVisual = isDirectVideo
-                ? `<video playsinline muted preload="metadata" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-cover pointer-events-none"></video>`
-                : (thumbUrl
-                    ? `<img src="${escapeShareHtml(thumbUrl)}" alt="${escapeShareHtml(post.body ? String(post.body).slice(0, 60) : 'Video')}" class="w-full h-full object-cover">`
-                    : `<iframe src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0 pointer-events-none"></iframe>`);
+            if (isMobileViewport) {
+                // On mobile/iOS PWA, never mount hidden desktop iframes or preload videos in the feed DOM;
+                // each video opens its player on-demand inside openMobileVideoModal.
+                const mobilePreviewVisual = isDirectVideo
+                    ? `<video playsinline muted preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-cover pointer-events-none"></video>`
+                    : (thumbUrl
+                        ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(thumbUrl)}" alt="${escapeShareHtml(post.body ? String(post.body).slice(0, 60) : 'Video')}" class="w-full h-full object-cover">`
+                        : `<div class="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-white/25"></i></div>`);
 
-            mediaHtml = `
-                <div class="relative w-full aspect-video bg-black hidden md:block">
-                    ${desktopVideoHtml}
-                </div>
-                <div onclick="openMobileVideoModal('${post.id}')" role="button" tabindex="0" aria-label="Watch video in full screen" class="relative w-full aspect-video bg-black md:hidden cursor-pointer overflow-hidden group">
-                    ${mobilePreviewVisual}
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center">
-                        <span class="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
-                            <i class="fa-solid fa-play text-lg ml-0.5"></i>
+                mediaHtml = `
+                    <div onclick="openMobileVideoModal('${post.id}')" role="button" tabindex="0" aria-label="Watch video in full screen" class="relative w-full aspect-video bg-black cursor-pointer overflow-hidden group">
+                        ${mobilePreviewVisual}
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent flex items-center justify-center">
+                            <span class="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center shadow-lg group-active:scale-95 transition-transform">
+                                <i class="fa-solid fa-play text-lg ml-0.5"></i>
+                            </span>
+                        </div>
+                        <span class="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                            <i class="fa-solid fa-expand text-[9px]"></i>
+                            <span>Full view</span>
                         </span>
                     </div>
-                    <span class="absolute bottom-2.5 right-2.5 bg-black/65 backdrop-blur-sm text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <i class="fa-solid fa-expand text-[9px]"></i>
-                        <span>Full view</span>
-                    </span>
-                </div>
-            `;
+                `;
+            } else {
+                const desktopVideoHtml = isDirectVideo
+                    ? `<video controls playsinline preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-contain"></video>`
+                    : (thumbUrl
+                        ? `<button type="button" onclick="this.outerHTML='<iframe src=\\'${escapeShareHtml(embedUrl + (embedUrl.includes('?') ? '&' : '?') + 'autoplay=1')}\\' class=\\'w-full h-full border-0\\' allow=\\'autoplay; encrypted-media; picture-in-picture\\' allowfullscreen></iframe>'" aria-label="Play video" class="relative w-full h-full block group cursor-pointer overflow-hidden bg-black">
+                               <img loading="lazy" decoding="async" src="${escapeShareHtml(thumbUrl)}" alt="${escapeShareHtml(post.body ? String(post.body).slice(0, 60) : 'Video')}" class="w-full h-full object-cover">
+                               <span class="absolute inset-0 bg-black/25 group-hover:bg-black/35 transition-colors flex items-center justify-center">
+                                   <span class="w-16 h-16 rounded-full bg-black/65 border border-white/30 text-white flex items-center justify-center shadow-xl group-hover:scale-105 transition-transform">
+                                       <i class="fa-solid fa-play text-xl ml-0.5"></i>
+                                   </span>
+                               </span>
+                           </button>`
+                        : `<iframe loading="lazy" src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>`);
+
+                mediaHtml = `
+                    <div class="relative w-full aspect-video bg-black">
+                        ${desktopVideoHtml}
+                    </div>
+                `;
+            }
         } else {
+            const singlePostVideoHtml = isDirectVideo
+                ? `<video controls playsinline preload="metadata" src="${escapeShareHtml(post.media_url)}" class="w-full h-full object-contain"></video>`
+                : `<iframe loading="lazy" src="${escapeShareHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>`;
             mediaHtml = `
                 <div class="relative w-full aspect-video bg-black">
-                    ${desktopVideoHtml}
+                    ${singlePostVideoHtml}
                 </div>
             `;
         }
@@ -605,7 +626,7 @@ function createSharedFeedCardElement(post, options = {}) {
         if (isDirectAudio) {
             mediaHtml = `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
                    ${post.media_title ? `<p class="text-xs font-bold text-accord-slate truncate">${escapeShareHtml(post.media_title)}</p>` : ''}
-                   <audio controls src="${escapeShareHtml(post.media_url)}" class="w-full"></audio>
+                   <audio controls preload="none" src="${escapeShareHtml(post.media_url)}" class="w-full"></audio>
                </div>`;
         } else {
             const pInfo = getSharedAudioPlatformInfo(post.media_url);
@@ -615,7 +636,7 @@ function createSharedFeedCardElement(post, options = {}) {
             mediaHtml = `<a href="${escapeShareHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" ${needsHydrate ? `data-audio-meta-url="${escapeShareHtml(post.media_url)}"` : ''} class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-center space-x-3.5 transition-colors group">
                    <div data-audio-thumb class="w-14 h-14 rounded-xl overflow-hidden ${pInfo.color} flex items-center justify-center shrink-0 border border-slate-200/70">
                        ${pulledThumb
-                           ? `<img src="${escapeShareHtml(pulledThumb)}" alt="${escapeShareHtml(pulledTitle || pInfo.label)}" class="w-full h-full object-cover">`
+                           ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(pulledThumb)}" alt="${escapeShareHtml(pulledTitle || pInfo.label)}" class="w-full h-full object-cover">`
                            : `<i class="${pInfo.icon} text-xl"></i>`}
                    </div>
                    <div class="flex-grow min-w-0">
@@ -1150,7 +1171,7 @@ function renderMobileTextPostModalContent(postId) {
     const linkedBookId = extractSharedBookId(bodyText);
 
     const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
-        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
         : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
 
     const avatarInner = `
@@ -1654,7 +1675,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '' } = {}) {
     const hasMultiple = videoList.length > 1;
 
     const avatarVisual = (!post.is_anonymous && authorAvatarUrl)
-        ? `<img src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
+        ? `<img loading="lazy" decoding="async" src="${escapeShareHtml(authorAvatarUrl)}" alt="${escapeShareHtml(displayAuthor)}" class="w-full h-full object-cover rounded-full">`
         : `<span>${escapeShareHtml(displayAuthor.charAt(0).toUpperCase())}</span>`;
 
     const avatarInner = `

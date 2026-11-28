@@ -21,6 +21,8 @@ let feedBookPreviewCache = new Map();
 let managedVerifiedPages = []; // Verified ministry/minister pages where currentUser is a page admin
 let suggestedAccounts = [];
 let dismissedSuggestionIds = new Set();
+const FEED_PAGE_SIZE = 12;
+let feedRenderState = null;
 
 function getVoterKey() {
     if (currentUser?.id) return `user_${currentUser.id}`;
@@ -181,9 +183,9 @@ async function loadFeedPosts() {
     `;
 
     const requests = [
-        supabaseClient.from('feed_posts').select('*').eq('is_approved', true).order('created_at', { ascending: false }),
+        supabaseClient.from('feed_posts').select('*').eq('is_approved', true).order('created_at', { ascending: false }).limit(150),
         supabaseClient.from('post_likes').select('post_id').eq('voter_key', getVoterKey()),
-        supabaseClient.from('post_comments').select('post_id'),
+        supabaseClient.from('post_comments').select('post_id').limit(2500),
         supabaseClient
             .from('post_reposts')
             .select('id, post_id, user_id, quote_text, created_at, profiles(id, full_name, handle, account_type, upgrade_status)')
@@ -406,7 +408,6 @@ async function renderFeedStream() {
             ...rawSponsoredCards.filter(p => p.promo_type === 'post' && p._targetPost?.post_type === currentTab),
             ...rawSponsoredCards.filter(p => !(p.promo_type === 'post' && p._targetPost?.post_type === currentTab))
         ];
-    let adIdx = 0;
     const postAdChunkSize = 4;
     const suggestionsAfterPosts = 3;
     const suggestionsTargetIdx = Math.min(suggestionsAfterPosts, visibleItems.length) - 1;
@@ -414,21 +415,64 @@ async function renderFeedStream() {
         ? window.createAccordInlineAdElement
         : window.createAccordSponsoredCardElement;
 
-    visibleItems.forEach((item, idx) => {
-        streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
-        if (idx === suggestionsTargetIdx && suggestionsSection) {
-            streamContainer.appendChild(suggestionsSection);
-        }
-        if ((idx + 1) % postAdChunkSize === 0 && sponsoredCards.length > 0 && typeof createFeedAdEl === 'function') {
-            const promo = sponsoredCards[adIdx % sponsoredCards.length];
-            adIdx++;
-            streamContainer.appendChild(createFeedAdEl(promo));
-        }
-    });
-    if (adIdx === 0 && sponsoredCards.length > 0 && typeof createFeedAdEl === 'function') {
-        streamContainer.appendChild(createFeedAdEl(sponsoredCards[0]));
-    }
+    feedRenderState = {
+        visibleItems,
+        sponsoredCards,
+        createFeedAdEl,
+        postAdChunkSize,
+        suggestionsTargetIdx,
+        suggestionsSection,
+        renderedCount: 0,
+        adIdx: 0
+    };
+
+    appendNextFeedBatch();
     renderFeedSuggestions();
+}
+
+function appendNextFeedBatch() {
+    const streamContainer = document.getElementById('feed-stream');
+    if (!streamContainer || !feedRenderState) return;
+
+    document.getElementById('feed-load-more-wrap')?.remove();
+
+    const state = feedRenderState;
+    const startIdx = state.renderedCount;
+    const endIdx = Math.min(startIdx + FEED_PAGE_SIZE, state.visibleItems.length);
+
+    for (let idx = startIdx; idx < endIdx; idx++) {
+        const item = state.visibleItems[idx];
+        streamContainer.appendChild(renderFeedCard(item.post, item.repost || null));
+        if (idx === state.suggestionsTargetIdx && state.suggestionsSection) {
+            streamContainer.appendChild(state.suggestionsSection);
+        }
+        if ((idx + 1) % state.postAdChunkSize === 0 && state.sponsoredCards.length > 0 && typeof state.createFeedAdEl === 'function') {
+            const promo = state.sponsoredCards[state.adIdx % state.sponsoredCards.length];
+            state.adIdx++;
+            streamContainer.appendChild(state.createFeedAdEl(promo));
+        }
+    }
+
+    state.renderedCount = endIdx;
+
+    if (endIdx >= state.visibleItems.length && state.adIdx === 0 && state.sponsoredCards.length > 0 && typeof state.createFeedAdEl === 'function') {
+        streamContainer.appendChild(state.createFeedAdEl(state.sponsoredCards[0]));
+        state.adIdx++;
+    }
+
+    if (state.renderedCount < state.visibleItems.length) {
+        const remaining = state.visibleItems.length - state.renderedCount;
+        const wrap = document.createElement('div');
+        wrap.id = 'feed-load-more-wrap';
+        wrap.className = 'pt-1 pb-2 flex justify-center';
+        wrap.innerHTML = `
+            <button type="button" onclick="appendNextFeedBatch()" class="px-6 py-2.5 rounded-full bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200 shadow-sm text-xs font-bold text-accord-slate transition-all">
+                Load more posts (${remaining} remaining)
+            </button>
+        `;
+        streamContainer.appendChild(wrap);
+    }
+
     window.observeAccordAds?.();
     hydrateFeedBookLinkPreviews();
     setupFeedViewObserver();

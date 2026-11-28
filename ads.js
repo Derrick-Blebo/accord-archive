@@ -645,14 +645,14 @@
             if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(post.media_url)) {
                 return `
                     <div class="relative w-full aspect-video bg-black">
-                        <video controls playsinline preload="metadata" src="${escapeAdHtml(post.media_url)}" class="w-full h-full object-contain"></video>
+                        <video controls playsinline preload="none" src="${escapeAdHtml(post.media_url)}" class="w-full h-full object-contain"></video>
                     </div>
                 `;
             }
             const embedUrl = getSponsoredYouTubeEmbedUrl(post.media_url);
             return `
                 <div class="relative w-full aspect-video bg-black">
-                    <iframe src="${escapeAdHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
+                    <iframe loading="lazy" src="${escapeAdHtml(embedUrl)}" class="w-full h-full border-0" allowfullscreen></iframe>
                 </div>
             `;
         }
@@ -661,7 +661,7 @@
             const isDirectAudio = /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(post.media_url);
             return isDirectAudio
                 ? `<div class="mx-4 mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                       <audio controls src="${escapeAdHtml(post.media_url)}" class="w-full"></audio>
+                       <audio controls preload="none" src="${escapeAdHtml(post.media_url)}" class="w-full"></audio>
                    </div>`
                 : `<a href="${escapeAdHtml(post.media_url)}" target="_blank" rel="noopener noreferrer" onclick="trackAccordAdClick('${promo.id}')" class="mx-4 mb-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3.5 flex items-center space-x-3.5 transition-colors">
                        <div class="w-11 h-11 bg-accord-goldLight rounded-xl flex items-center justify-center text-accord-gold shrink-0">
