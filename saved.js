@@ -7,11 +7,14 @@ let currentUser = null;
 let allBooks = [];
 let allTestimonies = [];
 let allPlaylists = [];
+let allSavedPosts = [];
 let savedBookmarks = [];
 let savedTestimonyIds = [];
 let savedPlaylistIds = [];
+let savedPostIds = [];
 let purchasedBookIds = [];
 let currentFilter = 'all';
+let currentPostTypeFilter = 'all';
 
 document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -37,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadSavedData() {
-    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes, musicConfigRes, sermonsConfigRes, playlistBookmarksRes] = await Promise.all([
+    const [booksRes, testimoniesRes, bookmarksRes, testimonyBookmarksRes, purchasesRes, musicConfigRes, sermonsConfigRes, playlistBookmarksRes, savedPostIdSet] = await Promise.all([
         supabaseClient.from('books').select('*').is('deleted_at', null).eq('is_visible', true),
         supabaseClient.from('testimonies').select('*').eq('is_approved', true),
         supabaseClient.from('user_bookmarks').select('book_title').eq('user_id', currentUser.id),
@@ -45,8 +48,24 @@ async function loadSavedData() {
         supabaseClient.from('user_purchases').select('book_id').eq('user_id', currentUser.id),
         supabaseClient.from('books').select('description').eq('title', '__ACCORD_MUSIC_CONFIG__').maybeSingle(),
         supabaseClient.from('books').select('description').eq('title', '__ACCORD_SERMONS_CONFIG__').maybeSingle(),
-        supabaseClient.from('user_playlist_bookmarks').select('playlist_id').eq('user_id', currentUser.id)
+        supabaseClient.from('user_playlist_bookmarks').select('playlist_id').eq('user_id', currentUser.id),
+        typeof loadSharedSavedPostIds === 'function' ? loadSharedSavedPostIds(currentUser.id) : Promise.resolve(new Set())
     ]);
+
+    savedPostIds = Array.from(savedPostIdSet || []);
+    allSavedPosts = [];
+    if (savedPostIds.length > 0) {
+        const { data: postsData } = await supabaseClient
+            .from('feed_posts')
+            .select('*')
+            .in('id', savedPostIds)
+            .eq('is_approved', true);
+        const byId = new Map((postsData || []).map(p => [String(p.id), p]));
+        allSavedPosts = savedPostIds
+            .map(id => byId.get(String(id)))
+            .filter(Boolean)
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
 
     document.getElementById('saved-loading').classList.add('hidden');
 
@@ -92,7 +111,7 @@ async function loadSavedData() {
 
 function setSavedFilter(filter) {
     currentFilter = filter;
-    ['all', 'purchased', 'books', 'testimonies', 'playlists'].forEach(f => {
+    ['all', 'posts', 'purchased', 'books', 'testimonies', 'playlists'].forEach(f => {
         const btn = document.getElementById(`sfilter-${f}`);
         if (btn) {
             btn.className = f === filter
@@ -103,10 +122,25 @@ function setSavedFilter(filter) {
     renderSavedPages();
 }
 
+function setSavedPostTypeFilter(postType) {
+    currentPostTypeFilter = postType;
+    ['all', 'text', 'video', 'audio', 'testimony'].forEach(t => {
+        const btn = document.getElementById(`spost-type-${t}`);
+        if (btn) {
+            btn.className = t === postType
+                ? "px-3 py-1 rounded-lg text-[11px] font-bold transition-all bg-white text-accord-slate shadow-sm"
+                : "px-3 py-1 rounded-lg text-[11px] font-bold transition-all text-accord-muted hover:text-accord-slate";
+        }
+    });
+    renderSavedPages();
+}
+
 function renderSavedPages() {
+    const postsGrid = document.getElementById('saved-posts-grid');
     const booksGrid = document.getElementById('saved-books-grid');
     const testimoniesGrid = document.getElementById('saved-testimonies-grid');
     const playlistsGrid = document.getElementById('saved-playlists-grid');
+    const postsSection = document.getElementById('saved-posts-section');
     const booksSection = document.getElementById('saved-books-section');
     const testimoniesSection = document.getElementById('saved-testimonies-section');
     const playlistsSection = document.getElementById('saved-playlists-section');
@@ -114,9 +148,14 @@ function renderSavedPages() {
     const emptyState = document.getElementById('saved-empty-state');
     const subtitle = document.getElementById('saved-subtitle');
 
+    if (postsGrid) postsGrid.innerHTML = '';
     booksGrid.innerHTML = '';
     testimoniesGrid.innerHTML = '';
     if (playlistsGrid) playlistsGrid.innerHTML = '';
+
+    const matchedPosts = currentPostTypeFilter === 'all'
+        ? allSavedPosts
+        : allSavedPosts.filter(p => (p.post_type || 'text') === currentPostTypeFilter);
 
     const purchasedBooks = allBooks.filter(b => purchasedBookIds.includes(Number(b.id)));
     const bookmarkedBooks = allBooks.filter(b => savedBookmarks.includes(b.title));
@@ -131,7 +170,7 @@ function renderSavedPages() {
     const matchedPlaylists = allPlaylists.filter(p => savedPlaylistIds.includes(String(p.id)));
 
     if (subtitle) {
-        subtitle.innerText = `You have ${purchasedBooks.length} purchased book(s), ${bookmarkedBooks.length} bookmarked publication(s), ${matchedTestimonies.length} saved testimony(ies), and ${matchedPlaylists.length} saved playlist(s).`;
+        subtitle.innerText = `You have ${allSavedPosts.length} saved post(s), ${purchasedBooks.length} purchased book(s), ${bookmarkedBooks.length} bookmarked publication(s), ${matchedTestimonies.length} saved testimony(ies), and ${matchedPlaylists.length} saved playlist(s).`;
     }
     if (headingBooks) {
         headingBooks.innerText = currentFilter === 'purchased'
@@ -139,20 +178,93 @@ function renderSavedPages() {
             : 'Purchased & Saved Publications';
     }
 
+    const showPosts = currentFilter === 'all' || currentFilter === 'posts';
     const showBooks = currentFilter === 'all' || currentFilter === 'purchased' || currentFilter === 'books';
     const showTestimonies = currentFilter === 'all' || currentFilter === 'testimonies';
     const showPlaylists = currentFilter === 'all' || currentFilter === 'playlists';
 
+    if (postsSection) {
+        const hasAnySavedPosts = allSavedPosts.length > 0;
+        postsSection.style.display = showPosts && (matchedPosts.length > 0 || (currentFilter === 'posts' && hasAnySavedPosts)) ? 'block' : 'none';
+    }
     booksSection.style.display = showBooks && matchedBooks.length > 0 ? 'block' : 'none';
     testimoniesSection.style.display = showTestimonies && matchedTestimonies.length > 0 ? 'block' : 'none';
     if (playlistsSection) {
         playlistsSection.style.display = showPlaylists && matchedPlaylists.length > 0 ? 'block' : 'none';
     }
 
-    if ((showBooks && matchedBooks.length > 0) || (showTestimonies && matchedTestimonies.length > 0) || (showPlaylists && matchedPlaylists.length > 0)) {
+    if ((showPosts && matchedPosts.length > 0) || (showBooks && matchedBooks.length > 0) || (showTestimonies && matchedTestimonies.length > 0) || (showPlaylists && matchedPlaylists.length > 0)) {
         emptyState.classList.add('hidden');
+    } else if (showPosts && currentFilter === 'posts' && allSavedPosts.length > 0 && matchedPosts.length === 0) {
+        emptyState.classList.add('hidden');
+        if (postsGrid) {
+            postsGrid.innerHTML = `<div class="col-span-full bg-white border border-slate-200 rounded-2xl p-8 text-center text-xs text-accord-muted">No saved ${escapeHTML(currentPostTypeFilter)} posts yet.</div>`;
+        }
     } else {
         emptyState.classList.remove('hidden');
+    }
+
+    // Render Saved Posts (Text, Video, Audio, Testimony)
+    if (showPosts && postsGrid) {
+        matchedPosts.forEach(post => {
+            const typeMeta = typeof getSharedPostTypeMeta === 'function'
+                ? getSharedPostTypeMeta(post.post_type)
+                : { label: post.post_type || 'Post', icon: 'fa-align-left', textColor: 'text-accord-blue' };
+            const displayAuthor = post.is_anonymous ? 'Anonymous' : (post.author_name || 'Member');
+            const postUrl = `post.html?id=${encodeURIComponent(post.id)}`;
+            const safePostId = escapeHTML(post.id).replace(/'/g, "\\'");
+            const videoThumb = post.post_type === 'video' && post.media_url && typeof getSharedVideoThumbnailUrl === 'function'
+                ? getSharedVideoThumbnailUrl(post.media_url)
+                : '';
+
+            let mediaPreviewHtml = '';
+            if (post.post_type === 'video' && post.media_url) {
+                mediaPreviewHtml = videoThumb
+                    ? `<div class="relative w-full h-36 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200/80">
+                           <img src="${escapeHTML(videoThumb)}" alt="Video thumbnail" class="w-full h-full object-cover">
+                           <span class="absolute inset-0 bg-black/25 flex items-center justify-center">
+                               <span class="w-10 h-10 rounded-full bg-black/65 text-white flex items-center justify-center"><i class="fa-solid fa-play text-xs ml-0.5"></i></span>
+                           </span>
+                       </div>`
+                    : `<div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+                           <i class="fa-solid fa-video text-rose-500"></i>
+                           <span class="truncate">Video Post</span>
+                       </div>`;
+            } else if (post.post_type === 'audio' && post.media_url) {
+                const audioTitle = String(post.media_title || '').trim() || 'Audio Teaching / Stream';
+                mediaPreviewHtml = `<div class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+                        <i class="fa-solid fa-circle-play text-amber-600 text-base shrink-0"></i>
+                        <span class="truncate">${escapeHTML(audioTitle)}</span>
+                    </div>`;
+            }
+
+            const card = document.createElement('div');
+            card.className = "bg-white border border-slate-200/90 hover:border-accord-blue rounded-3xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between gap-4";
+            card.innerHTML = `
+                <div onclick="window.location.href='${postUrl}'" class="cursor-pointer space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-bold ${typeMeta.textColor}">
+                            <i class="fa-solid ${typeMeta.icon}"></i>
+                            <span>${escapeHTML(typeMeta.label)}</span>
+                        </span>
+                        <span class="text-[10px] font-semibold text-accord-muted shrink-0">${new Date(post.created_at).toLocaleDateString()}</span>
+                    </div>
+                    ${mediaPreviewHtml}
+                    <p class="text-xs font-bold text-accord-slate truncate">By ${escapeHTML(displayAuthor)}</p>
+                    ${post.body ? `<p class="text-xs text-accord-muted leading-relaxed line-clamp-3 whitespace-pre-wrap">${escapeHTML(post.body)}</p>` : ''}
+                </div>
+                <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
+                    <a href="${postUrl}" class="text-accord-blue hover:underline inline-flex items-center gap-1">
+                        <span>Open Post</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </a>
+                    <button type="button" onclick="removeSavedPost('${safePostId}')" class="text-red-500 hover:text-red-600 p-1" title="Remove from Saved">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
+            postsGrid.appendChild(card);
+        });
     }
 
     // Render Saved & Purchased Books
@@ -346,6 +458,26 @@ async function removePlaylistBookmark(playlistId) {
         }).then(() => {});
     }
     loadSavedData();
+}
+
+async function removeSavedPost(postId) {
+    if (typeof toggleSavePost === 'function') {
+        await toggleSavePost(postId);
+    }
+    savedPostIds = savedPostIds.filter(id => id !== String(postId));
+    allSavedPosts = allSavedPosts.filter(p => String(p.id) !== String(postId));
+    renderSavedPages();
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    const msgEl = document.getElementById('toast-message');
+    if (!toast || !msgEl) return;
+    msgEl.textContent = message;
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    setTimeout(() => {
+        toast.classList.add('translate-y-24', 'opacity-0');
+    }, 2600);
 }
 
 function escapeHTML(str) {

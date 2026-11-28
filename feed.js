@@ -197,7 +197,8 @@ async function loadFeedPosts() {
     if (currentUser?.id) {
         requests.push(
             supabaseClient.from('account_follows').select('following_id').eq('follower_id', currentUser.id),
-            supabaseClient.from('post_views').select('post_id').eq('user_id', currentUser.id)
+            supabaseClient.from('post_views').select('post_id').eq('user_id', currentUser.id),
+            typeof loadSharedSavedPostIds === 'function' ? loadSharedSavedPostIds(currentUser.id) : Promise.resolve()
         );
     }
 

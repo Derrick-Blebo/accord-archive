@@ -126,7 +126,10 @@ async function loadMinistryPage() {
             .eq('voter_key', getVoterKey()),
         supabaseClient
             .from('post_comments')
-            .select('post_id')
+            .select('post_id'),
+        (currentUser?.id && typeof loadSharedSavedPostIds === 'function')
+            ? loadSharedSavedPostIds(currentUser.id)
+            : Promise.resolve()
     ]);
 
     ministryPosts = postsRes.data || [];
@@ -377,6 +380,12 @@ function renderMinistryPosts() {
                     <i class="fa-regular fa-comment"></i>
                     <span>${commentsCount}</span>
                 </a>
+                ${typeof toggleSavePost === 'function' ? (() => {
+                    const isSaved = typeof isPostSavedShared === 'function' && isPostSavedShared(post.id);
+                    return `<button type="button" data-save-post-btn="${escapeHtml(post.id)}" data-save-btn-variant="ministry" onclick="toggleSavePost('${escapeHtml(post.id)}')" class="ml-auto px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${isSaved ? 'bg-amber-50 text-accord-gold border border-amber-200' : 'bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200'}" aria-label="${isSaved ? 'Remove from Saved' : 'Save Post'}" title="${isSaved ? 'Saved' : 'Save Post'}">
+                        <i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i>
+                    </button>`;
+                })() : ''}
             </div>
         `;
         stream.appendChild(card);

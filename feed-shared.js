@@ -33,6 +33,174 @@ async function shareOrCopyPost(post) {
 }
 
 // ==========================================
+// REUSABLE SAVE POST HELPERS (ALL POST TYPES)
+// ==========================================
+
+window._sharedSavedPostIds = window._sharedSavedPostIds || new Set();
+
+function getSavedPostsStorageKey(userId) {
+    return userId ? `accord_saved_posts_${userId}` : 'accord_saved_posts_guest';
+}
+
+function readLocalSavedPostIds(userId) {
+    if (!userId) return [];
+    try {
+        const raw = localStorage.getItem(getSavedPostsStorageKey(userId));
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr.map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeLocalSavedPostIds(userId, idsSet) {
+    if (!userId) return;
+    try {
+        localStorage.setItem(getSavedPostsStorageKey(userId), JSON.stringify(Array.from(idsSet)));
+    } catch {}
+}
+
+function isPostSavedShared(postId) {
+    if (!postId) return false;
+    return window._sharedSavedPostIds instanceof Set && window._sharedSavedPostIds.has(String(postId));
+}
+
+function updateSharedSavePostButtons(postId, isSaved) {
+    const idStr = String(postId);
+    document.querySelectorAll(`[data-save-post-btn="${CSS.escape(idStr)}"]`).forEach(btn => {
+        btn.setAttribute('aria-label', isSaved ? 'Remove from Saved' : 'Save Post');
+        btn.setAttribute('title', isSaved ? 'Saved' : 'Save Post');
+        const variant = btn.dataset.saveBtnVariant || 'card';
+        if (variant === 'ministry') {
+            btn.className = isSaved
+                ? 'px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 bg-amber-50 text-accord-gold border border-amber-200'
+                : 'px-3.5 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 text-accord-slate border border-slate-200';
+        } else {
+            btn.className = isSaved
+                ? 'w-8 h-8 rounded-full hover:bg-amber-50 flex items-center justify-center transition-colors text-accord-gold'
+                : 'w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors text-slate-400 hover:text-accord-slate';
+        }
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = isSaved ? 'fa-solid fa-bookmark text-sm' : 'fa-regular fa-bookmark text-sm';
+        }
+    });
+
+    document.querySelectorAll(`[data-save-post-menu-btn="${CSS.escape(idStr)}"]`).forEach(btn => {
+        const icon = btn.querySelector('i');
+        const label = btn.querySelector('span');
+        if (icon) {
+            icon.className = isSaved
+                ? 'fa-solid fa-bookmark w-3.5 text-center text-accord-gold'
+                : 'fa-regular fa-bookmark w-3.5 text-center text-accord-gold';
+        }
+        if (label) {
+            label.textContent = isSaved ? 'Saved (Remove)' : 'Save Post';
+        }
+    });
+}
+
+async function loadSharedSavedPostIds(userId) {
+    if (!userId) {
+        window._sharedSavedPostIds = new Set();
+        return window._sharedSavedPostIds;
+    }
+
+    const localIds = readLocalSavedPostIds(userId);
+    const merged = new Set(localIds);
+
+    const client = window.supabaseClient;
+    if (client) {
+        try {
+            const { data, error } = await client
+                .from('user_saved_posts')
+                .select('post_id')
+                .eq('user_id', userId);
+            if (!error && Array.isArray(data)) {
+                const remoteIds = data.map(r => String(r.post_id));
+                const nextSet = new Set(remoteIds);
+                localIds.forEach(id => nextSet.add(id));
+                window._sharedSavedPostIds = nextSet;
+                writeLocalSavedPostIds(userId, nextSet);
+                return nextSet;
+            }
+        } catch {}
+    }
+
+    window._sharedSavedPostIds = merged;
+    return merged;
+}
+
+async function toggleSavePost(postId) {
+    if (!postId) return;
+    const idStr = String(postId);
+    const client = window.supabaseClient;
+
+    let userId = window.currentFeedUserId || null;
+    if (!userId && client?.auth?.getSession) {
+        try {
+            const { data: { session } } = await client.auth.getSession();
+            userId = session?.user?.id || null;
+        } catch {}
+    }
+
+    if (!userId) {
+        if (typeof showToast === 'function') {
+            showToast('Please sign in to save posts.', true);
+        }
+        const nextUrl = encodeURIComponent((window.location.pathname.split('/').pop() || 'feed.html') + window.location.search);
+        setTimeout(() => { window.location.href = `signin.html?next=${nextUrl}`; }, 800);
+        return;
+    }
+
+    if (!(window._sharedSavedPostIds instanceof Set)) {
+        window._sharedSavedPostIds = new Set(readLocalSavedPostIds(userId));
+    }
+
+    const wasSaved = window._sharedSavedPostIds.has(idStr);
+    const nowSaved = !wasSaved;
+
+    if (nowSaved) {
+        window._sharedSavedPostIds.add(idStr);
+    } else {
+        window._sharedSavedPostIds.delete(idStr);
+    }
+    writeLocalSavedPostIds(userId, window._sharedSavedPostIds);
+    updateSharedSavePostButtons(idStr, nowSaved);
+
+    if (client) {
+        try {
+            if (nowSaved) {
+                const { error } = await client
+                    .from('user_saved_posts')
+                    .upsert({ user_id: userId, post_id: idStr }, { onConflict: 'user_id,post_id' });
+                if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
+                    console.warn('Could not sync saved post to Supabase:', error.message);
+                }
+            } else {
+                const { error } = await client
+                    .from('user_saved_posts')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', idStr);
+                if (error && error.code !== '42P01' && error.code !== 'PGRST205') {
+                    console.warn('Could not remove saved post from Supabase:', error.message);
+                }
+            }
+        } catch {}
+    }
+
+    if (typeof showToast === 'function') {
+        showToast(nowSaved ? 'Post saved to your library.' : 'Removed from saved posts.');
+    }
+}
+
+window.loadSharedSavedPostIds = loadSharedSavedPostIds;
+window.isPostSavedShared = isPostSavedShared;
+window.updateSharedSavePostButtons = updateSharedSavePostButtons;
+window.toggleSavePost = toggleSavePost;
+
+// ==========================================
 // REUSABLE "SEND TO CHAT" MODAL
 // Works on feed.html, post.html, index.html, book.html, user.html
 // ==========================================
@@ -601,6 +769,7 @@ function createSharedFeedCardElement(post, options = {}) {
         repost = null,
         isLiked = false,
         isReposted = false,
+        isSaved = undefined,
         commentsCount = 0,
         myAvatarInitial = 'U',
         authorHandle = '',
@@ -657,6 +826,7 @@ function createSharedFeedCardElement(post, options = {}) {
     card.setAttribute('data-post-id', String(post.id));
 
     const postUrl = getPostShareUrl(post.id);
+    const resolvedIsSaved = typeof isSaved === 'boolean' ? isSaved : isPostSavedShared(post.id);
     const likesCount = Number(post.likes_count) || 0;
     const repostsCount = Number(post.reposts_count) || 0;
     const dateFormatted = formatSharedFeedTimeAgo(post.created_at);
@@ -896,8 +1066,12 @@ function createSharedFeedCardElement(post, options = {}) {
                 </div>
             </div>
 
-            <!-- 3-Dots More Menu -->
-            <div class="relative shrink-0">
+            <!-- Bookmark & 3-Dots More Menu -->
+            <div class="flex items-center gap-0.5 shrink-0">
+                <button type="button" data-save-post-btn="${escapeShareHtml(post.id)}" onclick="toggleSavePost('${escapeShareHtml(post.id)}')" class="w-8 h-8 rounded-full ${resolvedIsSaved ? 'hover:bg-amber-50 text-accord-gold' : 'hover:bg-slate-100 text-slate-400 hover:text-accord-slate'} flex items-center justify-center transition-colors" aria-label="${resolvedIsSaved ? 'Remove from Saved' : 'Save Post'}" title="${resolvedIsSaved ? 'Saved' : 'Save Post'}">
+                    <i class="${resolvedIsSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm"></i>
+                </button>
+                <div class="relative shrink-0">
                 <button type="button" onclick="toggleFeedPostMenu(event, '${post.id}')" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors" aria-label="Post options">
                     <i class="fa-solid fa-ellipsis text-sm"></i>
                 </button>
@@ -907,6 +1081,10 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
                         <span>Open Full Post</span>
                     </a>` : ''}
+                    <button type="button" data-save-post-menu-btn="${escapeShareHtml(post.id)}" onclick="closeAllFeedPostMenus(); toggleSavePost('${escapeShareHtml(post.id)}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="${resolvedIsSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark w-3.5 text-center text-accord-gold"></i>
+                        <span>${resolvedIsSaved ? 'Saved (Remove)' : 'Save Post'}</span>
+                    </button>
                     ${canManage ? `
                     <button type="button" onclick="closeAllFeedPostMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                         <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
@@ -933,6 +1111,7 @@ function createSharedFeedCardElement(post, options = {}) {
                         <i class="fa-regular fa-flag w-3.5 text-center"></i>
                         <span>Flag Post</span>
                     </button>`}
+                </div>
                 </div>
             </div>
         </div>
@@ -1465,6 +1644,10 @@ function renderMobileTextPostModalContent(postId) {
                         <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
                         <span>Open Full Post</span>
                     </a>
+                    <button type="button" data-save-post-menu-btn="${escapeShareHtml(post.id)}" onclick="closeMobileModalMenus(); toggleSavePost('${escapeShareHtml(post.id)}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                        <i class="${isPostSavedShared(post.id) ? 'fa-solid' : 'fa-regular'} fa-bookmark w-3.5 text-center text-accord-gold"></i>
+                        <span>${isPostSavedShared(post.id) ? 'Saved (Remove)' : 'Save Post'}</span>
+                    </button>
                     ${canManage ? `
                     <button type="button" onclick="closeMobileModalMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                         <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>
@@ -2382,6 +2565,10 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
                             <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-center text-slate-400"></i>
                             <span>Open Full Post</span>
                         </a>
+                        <button type="button" data-save-post-menu-btn="${escapeShareHtml(post.id)}" onclick="closeMobileModalMenus(); toggleSavePost('${escapeShareHtml(post.id)}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+                            <i class="${isPostSavedShared(post.id) ? 'fa-solid' : 'fa-regular'} fa-bookmark w-3.5 text-center text-accord-gold"></i>
+                            <span>${isPostSavedShared(post.id) ? 'Saved (Remove)' : 'Save Post'}</span>
+                        </button>
                         ${canManage ? `
                         <button type="button" onclick="closeMobileModalMenus(); handleEditPostClick('${post.id}')" class="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
                             <i class="fa-regular fa-pen-to-square w-3.5 text-center text-accord-blue"></i>

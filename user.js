@@ -161,7 +161,8 @@ async function loadUnifiedProfile() {
     if (viewerUser?.id) {
         requests.push(
             supabaseClient.from('profiles').select('id, full_name, handle').eq('id', viewerUser.id).maybeSingle(),
-            supabaseClient.from('post_reposts').select('post_id').eq('user_id', viewerUser.id)
+            supabaseClient.from('post_reposts').select('post_id').eq('user_id', viewerUser.id),
+            typeof loadSharedSavedPostIds === 'function' ? loadSharedSavedPostIds(viewerUser.id) : Promise.resolve()
         );
     }
 

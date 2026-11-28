@@ -770,7 +770,13 @@
                             </div>
                         </div>
                     </div>
-                    <a href="promote.html" class="text-[10px] font-semibold text-slate-400 hover:text-accord-blue shrink-0 pt-1">Advertise</a>
+                    <div class="flex items-center gap-2 shrink-0 pt-0.5">
+                        ${typeof toggleSavePost === 'function' ? (() => {
+                            const isSaved = typeof isPostSavedShared === 'function' && isPostSavedShared(post.id);
+                            return `<button type="button" data-save-post-btn="${escapeAdHtml(post.id)}" onclick="toggleSavePost('${escapeAdHtml(post.id)}')" class="w-8 h-8 rounded-full ${isSaved ? 'hover:bg-amber-50 text-accord-gold' : 'hover:bg-slate-100 text-slate-400 hover:text-accord-slate'} flex items-center justify-center transition-colors" aria-label="${isSaved ? 'Remove from Saved' : 'Save Post'}" title="${isSaved ? 'Saved' : 'Save Post'}"><i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark text-sm"></i></button>`;
+                        })() : ''}
+                        <a href="promote.html" class="text-[10px] font-semibold text-slate-400 hover:text-accord-blue shrink-0">Advertise</a>
+                    </div>
                 </div>
 
                 ${bodyText ? `

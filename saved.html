@@ -71,12 +71,13 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="serif-heading text-3xl font-bold text-accord-slate">Your Saved Library</h1>
-                <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your purchased books, bookmarked publications, and saved testimonies.</p>
+                <p id="saved-subtitle" class="text-xs text-accord-muted mt-1">Manage your purchased books, bookmarked publications, saved posts, and playlists.</p>
             </div>
 
             <!-- Filter Buttons to Switch Views -->
             <div class="inline-flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
                 <button type="button" onclick="setSavedFilter('all')" id="sfilter-all" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-accord-slate text-white shadow-sm">All Saved</button>
+                <button type="button" onclick="setSavedFilter('posts')" id="sfilter-posts" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Posts</button>
                 <button type="button" onclick="setSavedFilter('purchased')" id="sfilter-purchased" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Purchased</button>
                 <button type="button" onclick="setSavedFilter('books')" id="sfilter-books" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Books</button>
                 <button type="button" onclick="setSavedFilter('testimonies')" id="sfilter-testimonies" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-accord-muted hover:text-accord-slate">Saved Testimonies</button>
@@ -91,6 +92,21 @@
 
         <!-- Unified Container for Saved Items -->
         <div id="saved-content-container" class="space-y-10">
+            <!-- Saved Posts Grid (All Post Types: Text, Video, Audio, Testimony) -->
+            <div id="saved-posts-section" class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h2 id="heading-posts" class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Posts</h2>
+                    <div class="inline-flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                        <button type="button" onclick="setSavedPostTypeFilter('all')" id="spost-type-all" class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all bg-white text-accord-slate shadow-sm">All Types</button>
+                        <button type="button" onclick="setSavedPostTypeFilter('text')" id="spost-type-text" class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all text-accord-muted hover:text-accord-slate">Text</button>
+                        <button type="button" onclick="setSavedPostTypeFilter('video')" id="spost-type-video" class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all text-accord-muted hover:text-accord-slate">Video</button>
+                        <button type="button" onclick="setSavedPostTypeFilter('audio')" id="spost-type-audio" class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all text-accord-muted hover:text-accord-slate">Audio</button>
+                        <button type="button" onclick="setSavedPostTypeFilter('testimony')" id="spost-type-testimony" class="px-3 py-1 rounded-lg text-[11px] font-bold transition-all text-accord-muted hover:text-accord-slate">Testimony</button>
+                    </div>
+                </div>
+                <div id="saved-posts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            </div>
+
             <!-- Saved Books Grid (Restored to original home page card view) -->
             <div id="saved-books-section" class="space-y-4">
                 <h2 id="heading-books" class="text-xs font-extrabold uppercase tracking-wider text-accord-slate">Saved Publications & Books</h2>
@@ -151,8 +167,9 @@
     </div>
 
     <script src="audio-embed-shared.js"></script>
+    <script src="feed-shared.js"></script>
     <script src="playlists-shared.js?v=3"></script>
-    <script src="saved.js?v=4"></script>
+    <script src="saved.js?v=5"></script>
     <script src="ads.js"></script>
     <script src="footer.js?v=2"></script>
 </body>

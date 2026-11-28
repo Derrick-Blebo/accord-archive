@@ -257,7 +257,8 @@
             ];
             if (currentUser?.id) {
                 requests.push(
-                    supabaseClient.from('post_reposts').select('id').eq('post_id', postId).eq('user_id', currentUser.id).maybeSingle()
+                    supabaseClient.from('post_reposts').select('id').eq('post_id', postId).eq('user_id', currentUser.id).maybeSingle(),
+                    typeof loadSharedSavedPostIds === 'function' ? loadSharedSavedPostIds(currentUser.id) : Promise.resolve()
                 );
             }
 
