@@ -451,30 +451,27 @@ function formatSharedFeedTimeAgo(dateStr) {
     return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getSharedYouTubeEmbedUrl(url) {
-    if (!url) return '';
-    let videoId = '';
-    if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1]?.split('?')[0];
-    else if (url.includes('watch?v=')) videoId = url.split('watch?v=')[1]?.split('&')[0];
-    else if (url.includes('embed/')) videoId = url.split('embed/')[1]?.split('?')[0];
-    else if (url.includes('/shorts/')) videoId = url.split('/shorts/')[1]?.split('?')[0];
-    else if (url.includes('/live/')) videoId = url.split('/live/')[1]?.split('?')[0];
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
-}
-
-function getSharedVideoThumbnailUrl(url) {
+function extractSharedYouTubeVideoId(url) {
     if (!url) return '';
     const str = String(url).trim();
     let videoId = '';
     if (str.includes('youtu.be/')) videoId = str.split('youtu.be/')[1]?.split(/[?&#]/)[0];
-    else if (str.includes('watch?v=')) videoId = str.split('watch?v=')[1]?.split(/[?&#]/)[0];
+    else if (str.includes('watch?v=')) videoId = str.split('watch?v=')[1]?.split(/[&?#]/)[0];
     else if (str.includes('embed/')) videoId = str.split('embed/')[1]?.split(/[?&#]/)[0];
     else if (str.includes('/shorts/')) videoId = str.split('/shorts/')[1]?.split(/[?&#]/)[0];
     else if (str.includes('/live/')) videoId = str.split('/live/')[1]?.split(/[?&#]/)[0];
-    if (videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
-        return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-    }
-    return '';
+    return videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(videoId) ? videoId : '';
+}
+
+function getSharedYouTubeEmbedUrl(url) {
+    if (!url) return '';
+    const videoId = extractSharedYouTubeVideoId(url);
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+}
+
+function getSharedVideoThumbnailUrl(url) {
+    const videoId = extractSharedYouTubeVideoId(url);
+    return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
 }
 
 function extractSharedBookId(text) {
@@ -2141,6 +2138,7 @@ function getSharedFeedAutoplayEmbedUrl(url, { startTime = 0, mute = true } = {})
     const embed = getSharedYouTubeEmbedUrl(url);
     if (!embed) return '';
     if (embed.includes('youtube.com/embed/')) {
+        const videoId = extractSharedYouTubeVideoId(url);
         const sep = embed.includes('?') ? '&' : '?';
         const params = [
             'autoplay=1',
@@ -2150,6 +2148,7 @@ function getSharedFeedAutoplayEmbedUrl(url, { startTime = 0, mute = true } = {})
             'modestbranding=1',
             'loop=1'
         ];
+        if (videoId) params.push(`playlist=${encodeURIComponent(videoId)}`);
         if (mute) params.push('mute=1');
         if (startTime > 0) params.push(`start=${Math.floor(startTime)}`);
         if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
@@ -2436,7 +2435,7 @@ if (typeof window !== 'undefined') {
                 }
             }
             if (typeof data.info.muted === 'boolean' && _activeMobileVideoId) {
-                const modalIframe = document.getElementById('mobile-video-player');
+                const modalIframe = document.getElementById('mobile-video-yt-player');
                 if (modalIframe && modalIframe.tagName === 'IFRAME' && modalIframe.contentWindow === event.source && modalIframe.dataset.ytReady === '1') {
                     const isNowUnmuted = !data.info.muted && (typeof data.info.volume !== 'number' || data.info.volume > 0);
                     const initialSyncAt = Number(modalIframe.dataset.ytInitialSyncAt || 0);
@@ -2459,7 +2458,7 @@ if (typeof window !== 'undefined') {
                     }
                 }
             } else if (data.info === 2 || data.info === -1 || data.info === 5) {
-                const modalIframe = document.getElementById('mobile-video-player');
+                const modalIframe = document.getElementById('mobile-video-yt-player');
                 if (
                     modalIframe &&
                     modalIframe.tagName === 'IFRAME' &&
@@ -2478,7 +2477,7 @@ if (typeof window !== 'undefined') {
         }
 
         if (data.event === 'onReady') {
-            const modalIframe = document.getElementById('mobile-video-player');
+            const modalIframe = document.getElementById('mobile-video-yt-player');
             if (modalIframe && modalIframe.tagName === 'IFRAME' && modalIframe.contentWindow === event.source) {
                 modalIframe.dataset.ytReady = '1';
                 modalIframe.dataset.ytInitialSyncAt = String(Date.now());
@@ -2527,15 +2526,167 @@ function getMobileVideoList() {
 }
 
 function ensureMobileVideoModalDom() {
-    if (document.getElementById('accord-mobile-video-modal')) return;
-    const modal = document.createElement('div');
-    modal.id = 'accord-mobile-video-modal';
-    modal.className = 'fixed inset-0 z-[46] bg-black hidden flex-col md:hidden overflow-hidden select-none';
-    modal.addEventListener('click', closeMobileModalMenus);
-    document.body.appendChild(modal);
+    let modal = document.getElementById('accord-mobile-video-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'accord-mobile-video-modal';
+        modal.className = 'fixed inset-0 z-[46] bg-black hidden flex-col md:hidden overflow-hidden select-none';
+        modal.addEventListener('click', closeMobileModalMenus);
+        document.body.appendChild(modal);
+    }
+
+    if (document.getElementById('mobile-video-player-slot')) return;
+
+    modal.innerHTML = `
+        <div id="mobile-video-ambient-slot" class="contents"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/80 pointer-events-none"></div>
+        <div id="mobile-video-top-bar" class="relative z-30 shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-between"></div>
+        <div id="mobile-video-stage" class="relative z-10 flex-1 flex items-center justify-center touch-none transition-transform duration-200 ease-out">
+            <div id="mobile-video-player-slot" class="w-full flex items-center justify-center">
+                <video id="mobile-video-direct-player" controls playsinline loop class="hidden w-full max-h-[62dvh] object-contain bg-black"></video>
+                <div id="mobile-video-yt-wrap" class="hidden w-full aspect-video bg-black shadow-2xl">
+                    <iframe id="mobile-video-yt-player" class="w-full h-full border-0" allow="autoplay *; encrypted-media *; picture-in-picture" allowfullscreen></iframe>
+                </div>
+            </div>
+            <div id="mobile-video-stage-overlays" class="contents"></div>
+        </div>
+        <div id="mobile-video-comment-bar" class="relative z-20 shrink-0 px-3.5 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/75 border-t border-white/10"></div>
+        <div id="mobile-video-comments-sheet-slot" class="contents"></div>
+    `;
+
+    const stage = document.getElementById('mobile-video-stage');
+    if (stage) {
+        attachMobileVideoSwipeHandlers(stage);
+    }
+
+    const directPlayer = document.getElementById('mobile-video-direct-player');
+    if (directPlayer) {
+        directPlayer.addEventListener('volumechange', () => {
+            if (!_activeMobileVideoId || directPlayer.classList.contains('hidden')) return;
+            const isNowUnmuted = !directPlayer.muted && directPlayer.volume > 0;
+            _activeMobileVideoModalOptions.unmuted = isNowUnmuted;
+            _mobileFeedVideoUnmutedPref = isNowUnmuted;
+        });
+    }
+
+    const ytPlayer = document.getElementById('mobile-video-yt-player');
+    if (ytPlayer) {
+        const syncModalYouTubePlayback = () => {
+            const activePostId = ytPlayer.dataset.ytPostId || '';
+            if (!activePostId || String(_activeMobileVideoId) !== String(activePostId)) return;
+            registerYouTubeIframeListener(ytPlayer, `modal-${activePostId}`);
+            ytPlayer.dataset.ytInitialSyncAt = String(Date.now());
+            sendYouTubePlayerCommand(ytPlayer, 'playVideo');
+            if (_activeMobileVideoModalOptions.unmuted && ytPlayer.dataset.ytFallbackMuted !== '1') {
+                ytPlayer.dataset.ytUnmuteAttempted = '1';
+                sendYouTubePlayerCommand(ytPlayer, 'unMute');
+            } else {
+                sendYouTubePlayerCommand(ytPlayer, 'mute');
+            }
+        };
+        ytPlayer.addEventListener('load', () => {
+            const currentSrc = ytPlayer.getAttribute('src') || '';
+            if (!currentSrc || currentSrc === 'about:blank') return;
+            const loadedPostId = ytPlayer.dataset.ytPostId || '';
+            syncModalYouTubePlayback();
+            [150, 400, 850, 1400].forEach((delay) => {
+                setTimeout(() => {
+                    if (String(_activeMobileVideoId) !== String(loadedPostId)) return;
+                    if (ytPlayer.dataset.ytReady !== '1') {
+                        syncModalYouTubePlayback();
+                    } else {
+                        sendYouTubePlayerCommand(ytPlayer, 'playVideo');
+                    }
+                }, delay);
+            });
+        });
+    }
+}
+
+function syncMobileVideoModalPlayer(postId, post, { startTime = 0, unmuted = false } = {}) {
+    const directPlayer = document.getElementById('mobile-video-direct-player');
+    const ytWrap = document.getElementById('mobile-video-yt-wrap');
+    const ytPlayer = document.getElementById('mobile-video-yt-player');
+    if (!directPlayer || !ytWrap || !ytPlayer) return;
+
+    const mediaUrl = post.media_url || '';
+    const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(mediaUrl);
+
+    if (isDirectVideo) {
+        const ytSrc = ytPlayer.getAttribute('src') || '';
+        if (ytSrc && ytSrc !== 'about:blank') {
+            sendYouTubePlayerCommand(ytPlayer, 'pauseVideo');
+        }
+        ytWrap.classList.add('hidden');
+        directPlayer.classList.remove('hidden');
+
+        pauseAllOtherAccordMedia(directPlayer);
+
+        const prevSrc = directPlayer.getAttribute('src') || '';
+        if (prevSrc !== mediaUrl) {
+            directPlayer.src = mediaUrl;
+            directPlayer.load();
+        }
+        directPlayer.muted = !unmuted;
+
+        if (startTime > 0) {
+            if (directPlayer.readyState >= 1) {
+                try { directPlayer.currentTime = startTime; } catch (_) {}
+            } else {
+                directPlayer.addEventListener('loadedmetadata', () => {
+                    if (String(_activeMobileVideoId) !== String(postId)) return;
+                    try { directPlayer.currentTime = startTime; } catch (_) {}
+                }, { once: true });
+            }
+        }
+
+        directPlayer.play().catch((err) => {
+            if (String(_activeMobileVideoId) !== String(postId) || err?.name === 'AbortError') return;
+            directPlayer.muted = true;
+            directPlayer.play().catch(() => {});
+        });
+        return;
+    }
+
+    try {
+        directPlayer.pause();
+        directPlayer.removeAttribute('src');
+        directPlayer.load();
+    } catch (_) {}
+    directPlayer.classList.add('hidden');
+    ytWrap.classList.remove('hidden');
+
+    pauseAllOtherAccordMedia(ytPlayer);
+
+    ytPlayer.dataset.ytPostId = String(postId);
+    ytPlayer.dataset.ytUnmuteAttempted = '0';
+    ytPlayer.dataset.ytFallbackMuted = '0';
+    ytPlayer.dataset.ytInitialSyncAt = String(Date.now());
+
+    const ytVideoId = extractSharedYouTubeVideoId(mediaUrl);
+    const currentYtSrc = ytPlayer.getAttribute('src') || '';
+    if (ytPlayer.dataset.ytReady === '1' && ytVideoId && currentYtSrc.includes('youtube.com/embed/')) {
+        registerYouTubeIframeListener(ytPlayer, `modal-${postId}`);
+        sendYouTubePlayerCommand(ytPlayer, 'loadVideoById', [{ videoId: ytVideoId, startSeconds: Math.floor(startTime) || 0 }]);
+        sendYouTubePlayerCommand(ytPlayer, 'playVideo');
+        if (unmuted) {
+            ytPlayer.dataset.ytUnmuteAttempted = '1';
+            sendYouTubePlayerCommand(ytPlayer, 'unMute');
+        } else {
+            sendYouTubePlayerCommand(ytPlayer, 'mute');
+        }
+        return;
+    }
+
+    ytPlayer.dataset.ytReady = '0';
+    // Always start YouTube embeds muted in the URL so browser autoplay policy allows immediate playback;
+    // unMute is applied via YouTube IFrame API in onReady/load when unmuted=true, with muted fallback if blocked.
+    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(mediaUrl, { startTime, mute: true });
+    ytPlayer.src = autoplayEmbedUrl;
 }
 
 function renderMobileVideoModalContent(postId, { slideDirection = '', startTime = 0, unmuted = false } = {}) {
+    ensureMobileVideoModalDom();
     const modal = document.getElementById('accord-mobile-video-modal');
     const entry = _sharedMobilePostRegistry.get(String(postId));
     if (!modal || !entry) return;
@@ -2558,11 +2709,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
         ? `user.html?id=${encodeURIComponent(post.author_id)}`
         : null;
 
-    const isDirectVideo = /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(post.media_url || '');
     const thumbUrl = getSharedVideoThumbnailUrl(post.media_url || '');
-    // Always start YouTube embeds muted in the URL so browser autoplay policy allows immediate playback on swipe;
-    // unMute is applied via YouTube IFrame API in onReady/load when unmuted=true, with muted fallback if blocked.
-    const autoplayEmbedUrl = getSharedAutoplayVideoEmbedUrl(post.media_url || '', { startTime, mute: true });
 
     const videoList = getMobileVideoList();
     const currentIdx = videoList.indexOf(String(postId));
@@ -2582,23 +2729,18 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
     const bodyText = String(post.body || '').trim();
     const isLongCaption = bodyText.length > 90;
 
-    const playerHtml = isDirectVideo
-        ? `<video id="mobile-video-player" src="${escapeShareHtml(post.media_url)}" controls autoplay ${unmuted ? '' : 'muted'} playsinline loop class="w-full max-h-[62dvh] object-contain bg-black"></video>`
-        : `<div class="w-full aspect-video bg-black shadow-2xl">
-               <iframe id="mobile-video-player" src="${escapeShareHtml(autoplayEmbedUrl)}" class="w-full h-full border-0" allow="autoplay *; encrypted-media *; picture-in-picture" allowfullscreen></iframe>
-           </div>`;
-
     const ambientBgHtml = thumbUrl
         ? `<img src="${escapeShareHtml(thumbUrl)}" alt="" class="absolute inset-0 w-full h-full object-cover blur-3xl scale-125 opacity-55 pointer-events-none">`
         : `<div class="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-800 to-black pointer-events-none"></div>`;
 
-    modal.innerHTML = `
-        <!-- Ambient Blurred Backdrop -->
-        ${ambientBgHtml}
-        <div class="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/80 pointer-events-none"></div>
+    const ambientSlot = document.getElementById('mobile-video-ambient-slot');
+    if (ambientSlot) {
+        ambientSlot.innerHTML = ambientBgHtml;
+    }
 
-        <!-- Top Overlay Bar -->
-        <div class="relative z-30 shrink-0 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-between">
+    const topBar = document.getElementById('mobile-video-top-bar');
+    if (topBar) {
+        topBar.innerHTML = `
             <button type="button" onclick="closeMobileVideoModal()" class="w-10 h-10 rounded-full bg-black/30 hover:bg-black/50 active:bg-black/70 text-white flex items-center justify-center transition-colors" aria-label="Back to feed">
                 <i class="fa-solid fa-chevron-left text-lg"></i>
             </button>
@@ -2650,12 +2792,12 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
                     </div>
                 </div>
             </div>
-        </div>
+        `;
+    }
 
-        <!-- Swipeable Video Stage -->
-        <div id="mobile-video-stage" class="relative z-10 flex-1 flex items-center justify-center touch-none transition-transform duration-200 ease-out" style="${slideDirection === 'up' ? 'transform: translateY(36px); opacity: 0.7;' : slideDirection === 'down' ? 'transform: translateY(-36px); opacity: 0.7;' : ''}">
-            ${playerHtml}
-
+    const stageOverlays = document.getElementById('mobile-video-stage-overlays');
+    if (stageOverlays) {
+        stageOverlays.innerHTML = `
             <!-- Right-Side Vertical Action Rail (Facebook Video Style) -->
             <div class="absolute right-3 bottom-5 z-20 flex flex-col items-center gap-4">
                 <button type="button" onclick="handleMobileVideoLike('${post.id}')" id="mobile-video-like-btn-${post.id}" class="flex flex-col items-center gap-1 active:scale-90 transition-transform" aria-label="Like video">
@@ -2717,66 +2859,78 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
                     <span>Swipe up or down for more videos</span>
                 </p>` : ''}
             </div>
-        </div>
+        `;
+    }
 
-        <!-- Bottom "Add a comment" Trigger Bar -->
-        <div class="relative z-20 shrink-0 px-3.5 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/75 border-t border-white/10">
+    const commentBar = document.getElementById('mobile-video-comment-bar');
+    if (commentBar) {
+        commentBar.innerHTML = `
             <button type="button" onclick="openMobileVideoCommentsSheet('${post.id}', { focusInput: true })" class="w-full flex items-center justify-between bg-white/15 hover:bg-white/20 active:bg-white/25 text-white/80 rounded-full px-4 py-2.5 text-xs transition-colors">
                 <span>Add a comment...</span>
                 <i class="fa-regular fa-comment text-sm text-white/75"></i>
             </button>
-        </div>
+        `;
+    }
 
-        <!-- Scrollable Comment Bottom Sheet -->
-        <div id="mobile-video-comments-backdrop" onclick="closeMobileVideoCommentsSheet()" class="absolute inset-0 z-40 bg-black/45 hidden transition-opacity duration-200"></div>
-        <div id="mobile-video-comments-sheet" onclick="event.stopPropagation()" class="absolute inset-x-0 bottom-0 z-50 h-[72%] max-h-[92%] bg-white rounded-t-2xl shadow-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
-            <!-- Drag Handle & Header -->
-            <div id="mobile-video-sheet-header" class="shrink-0 pt-2.5 pb-2.5 px-4 border-b border-slate-200/80 touch-none">
-                <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-2.5"></div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <h3 class="text-sm font-bold text-slate-900">All comments</h3>
-                        <span id="mobile-video-sheet-comment-count-${post.id}" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">${live.commentsCount}</span>
-                    </div>
-                    <button type="button" onclick="closeMobileVideoCommentsSheet()" class="w-8 h-8 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors" aria-label="Close comments">
-                        <i class="fa-solid fa-xmark text-base"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Scrollable Comments List -->
-            <div id="mobile-video-comments-scroll" class="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 bg-white">
-                <div id="mobile-video-comments-list" class="space-y-3">
-                    <p class="text-xs text-slate-400 text-center py-6">Loading comments...</p>
-                </div>
-            </div>
-
-            <!-- Sticky Comment Input -->
-            <div class="shrink-0 bg-white border-t border-slate-200 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
-                        ${escapeShareHtml(myAvatarInitial)}
-                    </div>
-                    <form onsubmit="submitMobileVideoComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
-                        <input type="text" id="mobile-video-comment-input" onfocus="setTimeout(syncActiveMobileModalViewport, 120)" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-xs leading-snug text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
-                        <button type="submit" id="mobile-video-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
-                            <i class="fa-solid fa-paper-plane"></i>
+    const sheetSlot = document.getElementById('mobile-video-comments-sheet-slot');
+    if (sheetSlot) {
+        sheetSlot.innerHTML = `
+            <div id="mobile-video-comments-backdrop" onclick="closeMobileVideoCommentsSheet()" class="absolute inset-0 z-40 bg-black/45 hidden transition-opacity duration-200"></div>
+            <div id="mobile-video-comments-sheet" onclick="event.stopPropagation()" class="absolute inset-x-0 bottom-0 z-50 h-[72%] max-h-[92%] bg-white rounded-t-2xl shadow-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
+                <!-- Drag Handle & Header -->
+                <div id="mobile-video-sheet-header" class="shrink-0 pt-2.5 pb-2.5 px-4 border-b border-slate-200/80 touch-none">
+                    <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-2.5"></div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold text-slate-900">All comments</h3>
+                            <span id="mobile-video-sheet-comment-count-${post.id}" class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">${live.commentsCount}</span>
+                        </div>
+                        <button type="button" onclick="closeMobileVideoCommentsSheet()" class="w-8 h-8 rounded-full hover:bg-slate-100 active:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors" aria-label="Close comments">
+                            <i class="fa-solid fa-xmark text-base"></i>
                         </button>
-                    </form>
+                    </div>
+                </div>
+
+                <!-- Scrollable Comments List -->
+                <div id="mobile-video-comments-scroll" class="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3 bg-white">
+                    <div id="mobile-video-comments-list" class="space-y-3">
+                        <p class="text-xs text-slate-400 text-center py-6">Loading comments...</p>
+                    </div>
+                </div>
+
+                <!-- Sticky Comment Input -->
+                <div class="shrink-0 bg-white border-t border-slate-200 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-accord-lightBlue text-accord-blue font-bold text-xs flex items-center justify-center shrink-0">
+                            ${escapeShareHtml(myAvatarInitial)}
+                        </div>
+                        <form onsubmit="submitMobileVideoComment(event, '${post.id}')" class="flex-1 min-w-0 flex items-center gap-1.5 bg-[#F0F2F5] rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-accord-blue/30">
+                            <input type="text" id="mobile-video-comment-input" onfocus="setTimeout(syncActiveMobileModalViewport, 120)" placeholder="Write a comment..." class="flex-1 min-w-0 bg-transparent text-[16px] sm:text-xs leading-snug text-slate-800 placeholder-slate-500 focus:outline-none py-1" required>
+                            <button type="submit" id="mobile-video-comment-submit" class="text-accord-blue hover:text-accord-darkBlue px-1.5 py-1 text-xs font-bold shrink-0" aria-label="Send comment">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 
     const stage = document.getElementById('mobile-video-stage');
     if (stage) {
         if (slideDirection) {
+            stage.style.transition = 'none';
+            stage.style.transform = slideDirection === 'up' ? 'translateY(36px)' : 'translateY(-36px)';
+            stage.style.opacity = '0.7';
             requestAnimationFrame(() => {
+                stage.style.transition = 'transform 200ms ease-out, opacity 200ms ease-out';
                 stage.style.transform = 'translateY(0)';
                 stage.style.opacity = '1';
             });
+        } else {
+            stage.style.transform = 'translateY(0)';
+            stage.style.opacity = '1';
         }
-        attachMobileVideoSwipeHandlers(stage);
     }
 
     const sheetHeader = document.getElementById('mobile-video-sheet-header');
@@ -2784,54 +2938,7 @@ function renderMobileVideoModalContent(postId, { slideDirection = '', startTime 
         attachMobileVideoSheetDragHandlers(sheetHeader);
     }
 
-    const modalPlayer = document.getElementById('mobile-video-player');
-    if (modalPlayer) {
-        pauseAllOtherAccordMedia(modalPlayer);
-        if (modalPlayer.tagName === 'VIDEO') {
-            modalPlayer.muted = !unmuted;
-            modalPlayer.addEventListener('volumechange', () => {
-                if (String(_activeMobileVideoId) !== String(postId)) return;
-                const isNowUnmuted = !modalPlayer.muted && modalPlayer.volume > 0;
-                _activeMobileVideoModalOptions.unmuted = isNowUnmuted;
-                _mobileFeedVideoUnmutedPref = isNowUnmuted;
-            });
-            if (startTime > 0) {
-                modalPlayer.addEventListener('loadedmetadata', () => {
-                    try { modalPlayer.currentTime = startTime; } catch (_) {}
-                }, { once: true });
-            }
-            modalPlayer.play().catch((err) => {
-                if (String(_activeMobileVideoId) !== String(postId) || err?.name === 'AbortError') return;
-                modalPlayer.muted = true;
-                modalPlayer.play().catch(() => {});
-            });
-        } else if (modalPlayer.tagName === 'IFRAME') {
-            const syncModalYouTubePlayback = () => {
-                if (String(_activeMobileVideoId) !== String(postId)) return;
-                registerYouTubeIframeListener(modalPlayer, `modal-${postId}`);
-                modalPlayer.dataset.ytInitialSyncAt = String(Date.now());
-                sendYouTubePlayerCommand(modalPlayer, 'playVideo');
-                if (_activeMobileVideoModalOptions.unmuted && modalPlayer.dataset.ytFallbackMuted !== '1') {
-                    modalPlayer.dataset.ytUnmuteAttempted = '1';
-                    sendYouTubePlayerCommand(modalPlayer, 'unMute');
-                } else {
-                    sendYouTubePlayerCommand(modalPlayer, 'mute');
-                }
-            };
-            modalPlayer.addEventListener('load', () => {
-                syncModalYouTubePlayback();
-                [150, 400, 850, 1400].forEach((delay) => {
-                    setTimeout(() => {
-                        if (modalPlayer.dataset.ytReady !== '1') {
-                            syncModalYouTubePlayback();
-                        } else if (String(_activeMobileVideoId) === String(postId)) {
-                            sendYouTubePlayerCommand(modalPlayer, 'playVideo');
-                        }
-                    }, delay);
-                });
-            });
-        }
-    }
+    syncMobileVideoModalPlayer(postId, post, { startTime, unmuted });
 }
 
 function toggleMobileVideoCaption(postId) {
@@ -2949,20 +3056,6 @@ function navigateMobileVideoByOffset(offset) {
         return;
     }
 
-    const currentPlayer = document.getElementById('mobile-video-player');
-    if (currentPlayer) {
-        if (currentPlayer.tagName === 'VIDEO') {
-            try {
-                currentPlayer.pause();
-                currentPlayer.removeAttribute('src');
-                currentPlayer.load();
-            } catch (_) {}
-        } else if (currentPlayer.tagName === 'IFRAME') {
-            sendYouTubePlayerCommand(currentPlayer, 'pauseVideo');
-            try { currentPlayer.src = 'about:blank'; } catch (_) {}
-        }
-    }
-
     const nextPostId = videoList[nextIdx];
     _activeMobileVideoId = String(nextPostId);
     _mobileVideoCommentsOpen = false;
@@ -3026,6 +3119,22 @@ function closeMobileVideoModal({ fromPopState = false } = {}) {
         _activeMobileVideoId = null;
         _mobileVideoCommentsOpen = false;
         return;
+    }
+
+    const directPlayer = document.getElementById('mobile-video-direct-player');
+    if (directPlayer) {
+        try {
+            directPlayer.pause();
+            directPlayer.removeAttribute('src');
+            directPlayer.load();
+        } catch (_) {}
+    }
+    const ytPlayer = document.getElementById('mobile-video-yt-player');
+    if (ytPlayer) {
+        sendYouTubePlayerCommand(ytPlayer, 'pauseVideo');
+        ytPlayer.dataset.ytReady = '0';
+        ytPlayer.dataset.ytPostId = '';
+        try { ytPlayer.src = 'about:blank'; } catch (_) {}
     }
 
     modal.classList.add('hidden');
