@@ -381,7 +381,8 @@ async function renderFeedStream() {
     updateFeedSearchSummary(visibleItems.length);
 
     if (isSearching && feedSearchScope === 'people') {
-        streamContainer.innerHTML = '';
+        window.teardownActiveMobileFeedVideo?.();
+    streamContainer.innerHTML = '';
         suggestionsSection?.classList.add('hidden');
         return;
     }
@@ -398,6 +399,7 @@ async function renderFeedStream() {
         return;
     }
 
+    window.teardownActiveMobileFeedVideo?.();
     streamContainer.innerHTML = '';
     const rawSponsoredCards = typeof window.getAccordSponsoredFeedCards === 'function'
         ? await window.getAccordSponsoredFeedCards()
@@ -476,6 +478,7 @@ function appendNextFeedBatch() {
     window.observeAccordAds?.();
     hydrateFeedBookLinkPreviews();
     setupFeedViewObserver();
+    window.setupMobileFeedVideoObserver?.();
 }
 
 function extractBookIdFromText(text) {
