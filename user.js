@@ -476,36 +476,6 @@ function setProfileTab(tab) {
     renderProfileStream();
 }
 
-function getPublicProfileAudioEmbedUrl(url) {
-    const raw = String(url || '').trim();
-    if (!raw) return '';
-    if (raw.includes('embed.podcasts.apple.com')) return raw;
-    if (raw.includes('podcasts.apple.com')) {
-        return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
-    }
-    if (raw.includes('embed.music.apple.com')) return raw;
-    if (raw.includes('music.apple.com')) {
-        return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
-    }
-    if (raw.includes('open.spotify.com/embed/')) return raw;
-    if (raw.includes('open.spotify.com/')) {
-        return raw.replace('open.spotify.com/', 'open.spotify.com/embed/');
-    }
-    if (raw.includes('audiomack.com/')) {
-        if (raw.includes('/embed/')) return raw;
-        return raw.replace('audiomack.com/', 'audiomack.com/embed/');
-    }
-    if (raw.includes('youtube.com/watch?v=')) {
-        const id = raw.split('v=')[1]?.split('&')[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    if (raw.includes('youtu.be/')) {
-        const id = raw.split('youtu.be/')[1]?.split(/[?&#]/)[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    return '';
-}
-
 function buildPinnedAudioStreamCard(profile) {
     const url = String(profile?.audio_stream_url || '').trim();
     if (!url) return null;
@@ -517,8 +487,48 @@ function buildPinnedAudioStreamCard(profile) {
         music: { label: 'Music', icon: 'fa-solid fa-music', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
     }[categoryRaw] || { label: 'Audio', icon: 'fa-solid fa-headphones', badgeClass: 'bg-accord-lightBlue text-accord-blue border-blue-200' };
 
-    const embedUrl = getPublicProfileAudioEmbedUrl(url);
-    const height = embedUrl.includes('embed.podcasts.apple.com') || embedUrl.includes('embed.music.apple.com') ? '450' : (embedUrl.includes('youtube.com/embed') ? '315' : '352');
+    const target = window.AccordAudioEmbed?.resolveInAppAudioTarget(url) || {
+        kind: 'external',
+        embedUrl: '',
+        rawUrl: url,
+        platform: 'external',
+        label: 'Stream',
+        icon: categoryMeta.icon,
+        height: 352
+    };
+    const platformLabel = (target.label && target.label !== 'External') ? target.label : 'Stream';
+    const openInText = platformLabel === 'Stream' ? 'Open Stream' : `Open in ${platformLabel}`;
+    const embedSrc = target.embedUrl || target.rawUrl || url;
+    const height = target.height || (String(embedSrc).includes('embed.podcasts.apple.com') || String(embedSrc).includes('embed.music.apple.com') ? 450 : (String(embedSrc).includes('youtube.com/embed') ? 315 : 352));
+
+    let playerHtml = `
+        <a href="${escapeProfileHtml(url)}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-accord-lightBlue text-accord-blue flex items-center justify-center shrink-0">
+                    <i class="${categoryMeta.icon}"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileHtml(profile.full_name || 'Main Audio Page')}</p>
+                    <p class="text-[11px] text-accord-blue truncate">${escapeProfileHtml(url)}</p>
+                </div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 shrink-0"></i>
+        </a>
+    `;
+
+    if (target.kind === 'audio' && embedSrc) {
+        playerHtml = `
+            <div class="rounded-xl p-3 bg-slate-50 border border-slate-200/80">
+                <audio controls preload="metadata" class="w-full" src="${escapeProfileHtml(embedSrc)}"></audio>
+            </div>
+        `;
+    } else if (target.kind === 'iframe' && target.embedUrl) {
+        playerHtml = `
+            <div class="rounded-xl overflow-hidden bg-slate-50 border border-slate-200/80">
+                <iframe src="${escapeProfileHtml(target.embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" loading="lazy" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
+            </div>
+        `;
+    }
 
     const card = document.createElement('div');
     card.className = 'bg-white border-2 border-accord-blue/25 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5';
@@ -535,26 +545,11 @@ function buildPinnedAudioStreamCard(profile) {
                 </span>
             </div>
             <a href="${escapeProfileHtml(url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-accord-blue hover:text-white text-accord-slate text-[11px] font-bold transition-colors">
-                <span>Open Stream</span>
+                <span>${escapeProfileHtml(openInText)}</span>
                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
             </a>
         </div>
-        ${embedUrl
-            ? `<div class="rounded-xl overflow-hidden bg-slate-50 border border-slate-200/80">
-                   <iframe src="${escapeProfileHtml(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" loading="lazy" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
-               </div>`
-            : `<a href="${escapeProfileHtml(url)}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors">
-                   <div class="flex items-center gap-3 min-w-0">
-                       <div class="w-10 h-10 rounded-xl bg-accord-lightBlue text-accord-blue flex items-center justify-center shrink-0">
-                           <i class="${categoryMeta.icon}"></i>
-                       </div>
-                       <div class="min-w-0">
-                           <p class="text-xs font-bold text-accord-slate truncate">${escapeProfileHtml(profile.full_name || 'Main Audio Page')}</p>
-                           <p class="text-[11px] text-accord-blue truncate">${escapeProfileHtml(url)}</p>
-                       </div>
-                   </div>
-                   <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-400 shrink-0"></i>
-               </a>`}
+        ${playerHtml}
     `;
     return card;
 }
@@ -591,6 +586,7 @@ function renderProfileStream() {
     }
 
     const myAvatarInitial = (viewerProfile?.full_name || viewerUser?.email || 'U').charAt(0).toUpperCase();
+    window.teardownActiveMobileFeedVideo?.();
     stream.innerHTML = '';
     if (pinnedAudioCard) {
         stream.appendChild(pinnedAudioCard);
@@ -611,6 +607,7 @@ function renderProfileStream() {
         stream.appendChild(card);
     });
     hydrateSharedBookLinkPreviews(stream);
+    window.setupMobileFeedVideoObserver?.();
 }
 
 function closeAllFeedPostMenus() {

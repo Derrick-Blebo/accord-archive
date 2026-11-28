@@ -275,10 +275,14 @@ function renderSavedPages() {
                     <span class="inline-block bg-accord-lightBlue text-accord-blue text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full">${escapeHTML(pl.genre || (hubPage === 'sermons.html' ? 'Sermon Audio' : 'Curated Playlist'))}</span>
                     <h3 class="font-bold text-accord-slate text-sm leading-snug truncate">${escapeHTML(pl.title)}</h3>
                     <p class="text-[11px] text-accord-muted truncate">${escapeHTML(pl.curator || 'SoundSpace PR')}</p>
-                    <div class="flex items-center gap-2 pt-1">
-                        <a href="${escapeHTML(plLink)}" target="${plLink.startsWith('http') ? '_blank' : '_self'}" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold transition-all">
+                    <div class="flex flex-wrap items-center gap-2 pt-1">
+                        <button type="button" class="saved-play-in-app-btn inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-accord-blue hover:bg-accord-darkBlue text-white text-[11px] font-bold transition-all">
                             <i class="fa-solid fa-play text-[9px]"></i>
-                            <span>Listen</span>
+                            <span>Play in App</span>
+                        </button>
+                        <a href="${escapeHTML(plLink)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-all">
+                            <span>Open App</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
                         </a>
                         <a href="${hubPage}" class="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accord-slate text-[11px] font-bold transition-all">${hubPage === 'sermons.html' ? 'All Sermons' : 'All Playlists'}</a>
                         <button type="button" onclick="removePlaylistBookmark('${safeId}')" class="ml-auto text-red-500 hover:text-red-600 p-1.5" title="Remove Saved Playlist">
@@ -287,6 +291,25 @@ function renderSavedPages() {
                     </div>
                 </div>
             `;
+            const playBtn = card.querySelector('.saved-play-in-app-btn');
+            if (playBtn) {
+                playBtn.addEventListener('click', () => {
+                    const platformLinks = window.AccordPlaylists?.getPlaylistPlatformLinks
+                        ? window.AccordPlaylists.getPlaylistPlatformLinks(pl)
+                        : null;
+                    if (window.AccordPlaylists?.openMediaPlayerModal) {
+                        window.AccordPlaylists.openMediaPlayerModal(
+                            pl.title,
+                            pl.curator || '',
+                            plLink,
+                            platformLinks,
+                            { playlistId: pl.id, playlistTitle: pl.title, pageSource: 'saved' }
+                        );
+                    } else if (plLink) {
+                        window.open(plLink, '_blank', 'noopener,noreferrer');
+                    }
+                });
+            }
             playlistsGrid.appendChild(card);
         });
     }

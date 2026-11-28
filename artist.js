@@ -12,41 +12,6 @@ function escapeHTML(str) {
         .replace(/"/g, '&quot;');
 }
 
-function getEmbedUrl(url) {
-    const raw = String(url || '').trim();
-    if (!raw) return '';
-
-    if (raw.includes('embed.podcasts.apple.com')) return raw;
-    if (raw.includes('podcasts.apple.com')) {
-        return raw.replace('https://podcasts.apple.com', 'https://embed.podcasts.apple.com').replace('http://podcasts.apple.com', 'https://embed.podcasts.apple.com');
-    }
-    if (raw.includes('embed.music.apple.com')) return raw;
-    if (raw.includes('music.apple.com')) {
-        return raw.replace('https://music.apple.com', 'https://embed.music.apple.com').replace('http://music.apple.com', 'https://embed.music.apple.com');
-    }
-    if (raw.includes('open.spotify.com/embed/')) return raw;
-    if (raw.includes('open.spotify.com/')) {
-        return raw.replace('open.spotify.com/', 'open.spotify.com/embed/');
-    }
-    if (raw.includes('youtube.com/watch?v=')) {
-        const id = raw.split('v=')[1]?.split('&')[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    if (raw.includes('youtu.be/')) {
-        const id = raw.split('youtu.be/')[1]?.split(/[?&#]/)[0];
-        return id ? `https://www.youtube.com/embed/${id}` : '';
-    }
-    if (raw.includes('youtube.com/playlist?list=')) {
-        const listId = raw.split('list=')[1]?.split('&')[0];
-        return listId ? `https://www.youtube.com/embed/videoseries?list=${listId}` : '';
-    }
-    if (raw.includes('audiomack.com/')) {
-        if (raw.includes('/embed/')) return raw;
-        return raw.replace('audiomack.com/', 'audiomack.com/embed/');
-    }
-    return '';
-}
-
 async function fetchMusicConfig() {
     try {
         const { data, error } = await supabaseClient
@@ -93,8 +58,26 @@ function renderSongs(artist) {
     container.innerHTML = songs.map((song, idx) => {
         const songTitle = song.title || `Track ${idx + 1}`;
         const songLink = song.link || '';
-        const embedUrl = getEmbedUrl(songLink);
-        const height = embedUrl.includes('embed.music.apple.com') ? '175' : (embedUrl.includes('youtube.com/embed') ? '315' : '152');
+        const target = songLink
+            ? (window.AccordAudioEmbed?.resolveInAppAudioTarget(songLink) || { kind: 'external', embedUrl: '', rawUrl: songLink, platform: 'external', label: 'Stream', icon: 'fa-solid fa-music', height: 152 })
+            : { kind: 'external', embedUrl: '', rawUrl: '', platform: 'external', label: 'Stream', icon: 'fa-solid fa-music', height: 152 };
+        const embedSrc = target.embedUrl || target.rawUrl || songLink;
+        const height = target.height || (String(embedSrc).includes('embed.music.apple.com') ? 175 : (String(embedSrc).includes('youtube.com/embed') ? 315 : 152));
+
+        let playerHtml = `<p class="text-xs text-accord-muted">Direct embed unavailable for this link. Use "Open Stream" above to listen.</p>`;
+        if (target.kind === 'audio' && embedSrc) {
+            playerHtml = `
+                <div class="rounded-2xl p-3 bg-slate-50 border border-slate-200/70">
+                    <audio controls preload="metadata" class="w-full" src="${escapeHTML(embedSrc)}"></audio>
+                </div>
+            `;
+        } else if (target.kind === 'iframe' && target.embedUrl) {
+            playerHtml = `
+                <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-200/70">
+                    <iframe src="${escapeHTML(target.embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" loading="lazy" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
+                </div>
+            `;
+        }
 
         return `
             <div class="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
@@ -115,13 +98,7 @@ function renderSongs(artist) {
                         </a>
                     ` : ''}
                 </div>
-                ${embedUrl ? `
-                    <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-200/70">
-                        <iframe src="${escapeHTML(embedUrl)}" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" frameborder="0" height="${height}" style="width:100%;overflow:hidden;border-radius:12px;background:transparent;" loading="lazy" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
-                    </div>
-                ` : `
-                    <p class="text-xs text-accord-muted">Direct embed unavailable for this link. Use "Open Stream" above to listen.</p>
-                `}
+                ${playerHtml}
             </div>
         `;
     }).join('');
